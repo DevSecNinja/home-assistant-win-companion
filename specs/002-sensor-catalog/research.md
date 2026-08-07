@@ -12,9 +12,8 @@ community automations written for the official app work against a Windows PC.
 | Sensor | `unique_id` | Type | In scope now |
 | --- | --- | --- | --- |
 | Active | `active` | binary_sensor | Yes |
-| SSID | `connectivity_ssid` | sensor | Yes |
-| BSSID | `connectivity_bssid` | sensor | Yes |
 | Connection Type | `connectivity_connection_type` | sensor | Yes |
+| SSID / BSSID | `connectivity_ssid` / `connectivity_bssid` | sensor | **Dropped** (see below) |
 | Last Update Trigger | `last_update_trigger` | sensor | Yes |
 | Battery Level / State | `battery_level` / `battery_state` | sensor | Already shipped |
 | Microphone / Camera in use | `microphone` / `camera` | binary_sensor | Deferred |
@@ -22,7 +21,7 @@ community automations written for the official app work against a Windows PC.
 | Storage / displays / audio output | `storage`, `displays_count`, … | sensor | Deferred |
 
 Windows-specific additions (no macOS equivalent) use new ids and are namespaced
-plainly: `screen_locked`, `ip_address`, `os_version`.
+plainly: `screen_locked`, `ip_address`, `os_version`, `last_boot`.
 
 ## Decision: Model "Active" exactly like macOS, with Windows event sources
 
@@ -98,3 +97,62 @@ phase but is a hard requirement for the deferred `frontmost_app` sensor.
 Already documented in feature 001: adding sensors does not require re-registration,
 but changing `app_data` does, and `update_registration` requires `app_version`,
 `device_name`, `manufacturer` and `model` together.
+
+
+## Decision: Disable sensors via `register_sensor`, never `update_sensor_states`
+
+**Rationale**: Home Assistant only reads the `disabled` flag in the re-registration
+branch of `webhook_register_sensor` (`homeassistant/components/mobile_app/webhook.py`),
+where it sets `disabled_by = RegistryEntryDisabler.INTEGRATION`. The
+`update_sensor_states` handler ignores it entirely, so a disable sent in a state
+batch is silently dropped - the entity keeps showing its last value.
+
+Two consequences:
+
+1. Disabling a sensor must be sent as a `register_sensor` call carrying
+   `disabled: true` (which also needs `name` and `type`, so the app retains those
+   for everything it has registered).
+2. The flag must always be sent **explicitly**. The handler treats a missing
+   `disabled` as "no change", so a sensor the user switches back on would stay
+   disabled in Home Assistant forever unless we send `disabled: false`.
+
+Note that disabled is not deleted: Home Assistant keeps the registry entry and
+shows it greyed out under the device. Removing it entirely is a manual action.
+
+## Decision: Wi-Fi SSID and BSSID are out of scope
+
+**Rationale**: Windows gates Wi-Fi network identifiers behind the Location
+capability, because an SSID/BSSID can be used to locate a machine.
+`WlanQueryInterface(wlan_intf_opcode_current_connection)` returns
+`ERROR_ACCESS_DENIED` (5) for an unpackaged desktop app that has not been granted
+location access, and there is no clean way for such an app to request it. The
+alternatives - hand-marshalled `wlanapi` interop that still fails, or scraping
+`netsh wlan show interfaces` output (locale-dependent and brittle) - are not worth
+the fragility.
+
+Dropped rather than worked around, and tracked in issue #2 instead.
+
+## Decision: Health is judged on reporting, not on the socket
+
+**Rationale**: The WebSocket can look perfectly healthy while sensor pushes fail,
+so "connected" is not a sufficient signal. The companion reports itself healthy
+only when it is connected, has no consecutive sync failures, and completed a
+successful push within 2.5x the sync interval. The verdict is shown in the app and
+in the tray tooltip, and a rolling file log
+(`%LOCALAPPDATA%\HaCompanion\logs\`) is user-openable for troubleshooting.
+
+**Note on apparent staleness**: Home Assistant only advances an entity's
+`last_updated` when the state or attributes actually change - a battery sitting at
+the same percentage will look "stale" for many minutes even though the companion is
+reporting on schedule. `last_reported` is the attribute that tracks every report.
+This is why the companion surfaces its own last-push time rather than relying on
+what Home Assistant displays.
+
+## Decision: Last update is shown in-app; the sensor reports the *reason*
+
+**Rationale**: Home Assistant already records when an entity last updated, so a
+timestamp sensor would duplicate it. The official apps instead expose
+`last_update_trigger`, whose state is *why* the app reported ("registration", or a
+trigger string). The companion mirrors that, and separately shows the actual last
+push time in its own status view where it is genuinely not otherwise available.
+

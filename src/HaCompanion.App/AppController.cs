@@ -260,7 +260,10 @@ public sealed class AppController : IAsyncDisposable
                 new ActiveSensorSource(config.Sensors),
                 new NetworkSensorSource(),
                 new SystemSensorSource(),
-                new LastUpdateSensorSource()
+                new LastUpdateSensorSource(),
+                new NotificationStateSensorSource(),
+                new CapabilityUsageSensorSource(config.Sensors),
+                new AudioDeviceSensorSource(config.Sensors)
             },
             config.Sensors);
         _catalog = catalog;
@@ -329,5 +332,4 @@ public sealed class AppController : IAsyncDisposable
         _http.Dispose();
     }
 }
-
 

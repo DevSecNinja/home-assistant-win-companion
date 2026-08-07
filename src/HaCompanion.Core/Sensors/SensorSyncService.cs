@@ -23,6 +23,16 @@ public sealed class SensorSyncService
     private readonly SensorCatalog _catalog;
     private readonly ILogger<SensorSyncService> _log;
 
+    /// <summary>
+    /// Serialises syncs. The periodic loop and change-driven pushes (idle timer,
+    /// session and power events, settings changes) all land here from different
+    /// threads, and they mutate <see cref="_registered"/>. Without this, two
+    /// concurrent syncs corrupt the dictionary or throw "collection was modified" -
+    /// which the caller logs as a transient failure, so it reads like a flaky
+    /// network rather than a bug.
+    /// </summary>
+    private readonly SemaphoreSlim _gate = new(1, 1);
+
     /// <summary>What we have registered, so a disabled sensor can be re-registered.</summary>
     private readonly Dictionary<string, (string Type, string Name)> _registered = new(StringComparer.Ordinal);
 
@@ -38,6 +48,19 @@ public sealed class SensorSyncService
 
     /// <summary>Registers (if needed) then pushes the latest sensor states.</summary>
     public async Task SyncAsync(string webhookId, SensorReadContext context, CancellationToken ct = default)
+    {
+        await _gate.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            await SyncCoreAsync(webhookId, context, ct).ConfigureAwait(false);
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    private async Task SyncCoreAsync(string webhookId, SensorReadContext context, CancellationToken ct)
     {
         var readings = _catalog.Read(context);
 
@@ -74,9 +97,19 @@ public sealed class SensorSyncService
         {
             await _client.UpdateSensorsAsync(webhookId, readings, ct).ConfigureAwait(false);
         }
-        catch (HomeAssistantRejectedException)
+        catch (HomeAssistantRejectedException ex)
         {
-            // A schema rejection is a bug in what we send, not stale registration:
+            // "not_registered" means Home Assistant has forgotten a sensor, usually
+            // because the entity was deleted there. Clearing local state lets the
+            // next sync re-register it; without this it would send updates for a
+            // sensor HA does not know about, forever.
+            if (ex.SensorsUnregistered)
+            {
+                _log.LogWarning(ex, "Home Assistant no longer knows these sensors; re-registering.");
+                _registered.Clear();
+            }
+
+            // A format rejection is a bug in what we send, not stale registration:
             // re-registering would loop forever. Surface it and leave state alone.
             throw;
         }

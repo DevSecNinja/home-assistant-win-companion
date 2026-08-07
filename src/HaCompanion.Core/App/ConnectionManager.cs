@@ -55,7 +55,7 @@ public sealed class ConnectionManager : IAsyncDisposable
         State == ConnectionState.Connected
         && ConsecutiveFailures == 0
         && LastSyncedAt is not null
-        && DateTimeOffset.UtcNow - LastSyncedAt.Value < _syncInterval * 2.5;
+        && _clock.UtcNow - LastSyncedAt.Value < _syncInterval * 2.5;
 
     public event Action<ConnectionState>? StateChanged;
     public event Action<NotificationMessage>? NotificationReceived;

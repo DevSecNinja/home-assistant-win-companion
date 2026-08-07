@@ -25,7 +25,18 @@ public sealed class HomeAssistantAuthException : Exception
 /// </summary>
 public sealed class HomeAssistantRejectedException : Exception
 {
-    public HomeAssistantRejectedException(string message) : base(message) { }
+    public HomeAssistantRejectedException(string message, bool sensorsUnregistered) : base(message)
+    {
+        SensorsUnregistered = sensorsUnregistered;
+    }
+
+    /// <summary>
+    /// True when the rejection was <c>not_registered</c> - Home Assistant has
+    /// forgotten a sensor (typically the user deleted the entity), so re-registering
+    /// will fix it. False for <c>invalid_format</c>, which is a bug in what we send
+    /// and would retry forever.
+    /// </summary>
+    public bool SensorsUnregistered { get; }
 }
 
 /// <summary>
@@ -131,14 +142,57 @@ public sealed class HomeAssistantClient : IHomeAssistantClient
         // Home Assistant reports per-sensor success in the body and still returns
         // HTTP 200 when an individual sensor is rejected, so a 200 alone does not
         // mean the update landed.
-        if (!string.IsNullOrWhiteSpace(body) && body.Contains("\"success\":false", StringComparison.OrdinalIgnoreCase))
+        var rejections = ParseRejections(body);
+        if (rejections.Count > 0)
         {
-            _log.LogWarning("Home Assistant rejected part of a sensor update: {Body}", body);
+            var unregistered = rejections.Any(r =>
+                r.Code.Contains("not_registered", StringComparison.OrdinalIgnoreCase));
+
+            var detail = string.Join("; ", rejections.Select(r => $"{r.UniqueId}: {r.Code}"));
+            _log.LogWarning("Home Assistant rejected sensor updates: {Detail}", detail);
             throw new HomeAssistantRejectedException(
-                "Home Assistant rejected one or more sensor updates: " + body);
+                "Home Assistant rejected sensor updates: " + detail, unregistered);
         }
 
         _log.LogDebug("Sensor update accepted ({Count} sensors).", sensors.Count);
+    }
+
+    /// <summary>
+    /// Reads the per-sensor results. Parsed rather than string-matched, so it does
+    /// not depend on Home Assistant's JSON spacing and cannot be fooled by a sensor
+    /// state that happens to contain the same text.
+    /// </summary>
+    private static List<(string UniqueId, string Code)> ParseRejections(string body)
+    {
+        var rejections = new List<(string, string)>();
+        if (string.IsNullOrWhiteSpace(body)) return rejections;
+
+        try
+        {
+            using var document = JsonDocument.Parse(body);
+            if (document.RootElement.ValueKind != JsonValueKind.Object) return rejections;
+
+            foreach (var entry in document.RootElement.EnumerateObject())
+            {
+                if (entry.Value.ValueKind != JsonValueKind.Object) continue;
+                if (!entry.Value.TryGetProperty("success", out var success)) continue;
+                if (success.ValueKind != JsonValueKind.False) continue;
+
+                var code = entry.Value.TryGetProperty("error", out var error)
+                           && error.TryGetProperty("code", out var codeElement)
+                    ? codeElement.GetString() ?? "unknown"
+                    : "unknown";
+
+                rejections.Add((entry.Name, code));
+            }
+        }
+        catch (JsonException)
+        {
+            // An unparseable body is not evidence of rejection; the caller has
+            // already checked the status code.
+        }
+
+        return rejections;
     }
 
     /// <summary>

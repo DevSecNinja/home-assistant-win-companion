@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Http.Json;
 using HaCompanion.Core.Models;
 
@@ -68,6 +69,18 @@ public sealed class HaOAuthClient
     {
         using var content = new FormUrlEncodedContent(form);
         using var response = await _http.PostAsync(new Uri(_baseUri, "auth/token"), content, ct).ConfigureAwait(false);
+
+        // Home Assistant answers 400 (invalid_grant) when a refresh token has been
+        // revoked or has expired. That is terminal - retrying can never succeed - so
+        // it must surface as an auth failure. Left as a generic HTTP error it would
+        // land in the reconnect path and loop forever on "Reconnecting...", never
+        // prompting the user to sign in again.
+        if (response.StatusCode is HttpStatusCode.BadRequest or HttpStatusCode.Unauthorized)
+        {
+            throw new HomeAssistantAuthException(
+                "Home Assistant rejected the credentials; sign-in is required again.");
+        }
+
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadFromJsonAsync<TokenResponse>(ct).ConfigureAwait(false)
                ?? throw new InvalidOperationException("Empty token response from Home Assistant.");

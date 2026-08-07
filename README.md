@@ -191,3 +191,10 @@ as Windows toasts.
 
 Report vulnerabilities privately according to [SECURITY.md](SECURITY.md). Do not
 include Home Assistant credentials, URLs, configuration, or logs in a public issue.
+
+## Code signing
+
+Release binaries are intended to use free open-source Authenticode signing through
+[SignPath Foundation](https://signpath.org/) once the project meets its public
+repository and release-history requirements. See the
+[code signing decision](docs/code-signing.md).

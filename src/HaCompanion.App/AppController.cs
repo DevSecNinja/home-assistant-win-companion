@@ -266,6 +266,8 @@ public sealed class AppController : IAsyncDisposable
         _catalog = catalog;
 
         var sensors = new SensorSyncService(client, catalog,
+            config.RegisteredSensors,
+            () => _settings.Save(config),
             _loggerFactory.CreateLogger<SensorSyncService>());
 
         var connection = new ConnectionManager(ws, sensors, config.WebhookId!,

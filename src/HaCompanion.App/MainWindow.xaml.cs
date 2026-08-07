@@ -20,6 +20,7 @@ public sealed partial class MainWindow : Window
     private bool _exiting;
     private bool _connected;
     private int _sensorListBuildVersion;
+    private bool _suppressSensorToggle;
 
     public MainWindow()
     {
@@ -356,13 +357,79 @@ public sealed partial class MainWindow : Window
 
     private async void OnSensorToggled(object sender, RoutedEventArgs e)
     {
+        if (_suppressSensorToggle) return;
         if (sender is not ToggleSwitch { Tag: string uniqueId } toggle) return;
 
         var catalog = _controller.Catalog;
         if (catalog is null) return;
 
+        if (uniqueId == WinGetUpdateSensorSource.WinGetUpdatesId
+            && toggle.IsOn
+            && !catalog.IsEnabled(uniqueId))
+        {
+            toggle.IsEnabled = false;
+            var installed = await _controller.IsWinGetModuleInstalledAsync();
+            if (!ReferenceEquals(catalog, _controller.Catalog))
+            {
+                toggle.IsEnabled = true;
+                SetToggleState(toggle, false);
+                return;
+            }
+
+            if (!installed)
+            {
+                var dialog = new ContentDialog
+                {
+                    XamlRoot = Content.XamlRoot,
+                    Title = "Install WinGet client module?",
+                    Content = "WinGet Updates requires Microsoft's official "
+                              + "Microsoft.WinGet.Client PowerShell module. It is about 53 MB "
+                              + "and will be installed from PowerShell Gallery for your Windows "
+                              + "user account only.",
+                    PrimaryButtonText = "Install and enable",
+                    CloseButtonText = "Cancel",
+                    DefaultButton = ContentDialogButton.Primary
+                };
+
+                if (await dialog.ShowAsync() != ContentDialogResult.Primary)
+                {
+                    toggle.IsEnabled = true;
+                    SetToggleState(toggle, false);
+                    return;
+                }
+
+                var install = await _controller.InstallWinGetModuleAsync();
+                if (!ReferenceEquals(catalog, _controller.Catalog) || !install.Success)
+                {
+                    toggle.IsEnabled = true;
+                    SetToggleState(toggle, false);
+                    if (!install.Success && ReferenceEquals(catalog, _controller.Catalog))
+                    {
+                        var error = new ContentDialog
+                        {
+                            XamlRoot = Content.XamlRoot,
+                            Title = "Module installation failed",
+                            Content = install.Error ?? "The WinGet client module could not be installed.",
+                            CloseButtonText = "Close"
+                        };
+                        await error.ShowAsync();
+                    }
+                    return;
+                }
+            }
+
+            toggle.IsEnabled = true;
+        }
+
         catalog.SetEnabled(uniqueId, toggle.IsOn);
         await _controller.ApplySensorChangesAsync();
+    }
+
+    private void SetToggleState(ToggleSwitch toggle, bool isOn)
+    {
+        _suppressSensorToggle = true;
+        toggle.IsOn = isOn;
+        _suppressSensorToggle = false;
     }
 
     private async void OnIdleMinutesChanged(NumberBox sender, NumberBoxValueChangedEventArgs args)

@@ -1,0 +1,40 @@
+---
+name: Lint
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  lint:
+    # renovate: datasource=github-tags depName=DevSecNinja/.github
+    uses: DevSecNinja/.github/.github/workflows/lint.yml@27fd66740c629ea38380dcd3bf93e7bc74c54247 # v1.9.0
+    permissions:
+      contents: read
+      security-events: write
+    with:
+      # renovate: datasource=github-releases depName=jdx/mise
+      mise-version: "2026.7.12"
+      lint-config-dir: "."
+      lint-fail-on-error: true
+      upload-sarif: false
+      lint-dprint: false
+      lint-yamlfmt: false
+      lint-yamllint: true
+      lint-actionlint: true
+      lint-gitleaks: true
+      lint-go: false
+      lint-shellcheck: false
+      lint-shfmt: false
+      lint-checkov: true
+      lint-trivy: true
+      lint-zizmor: true
+      lint-config-drift: false

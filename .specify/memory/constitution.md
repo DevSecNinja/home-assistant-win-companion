@@ -1,3 +1,17 @@
+<!--
+Sync Impact Report
+- Version change: 1.0.0 -> 2.0.0
+- Modified principles:
+  - I. Native Windows Experience First: removed the obsolete WebView2 requirement
+    and made opening Home Assistant in the default browser the governing design.
+  - III. Spec-Driven Development -> Evidence-Driven Development: replaced the
+    mandatory artifact sequence with proportional, continuously corrected design
+    records based on implementation and protocol evidence.
+- Added sections: none.
+- Removed sections: none.
+- Follow-up TODOs: none.
+-->
+
 # Home Assistant Windows Companion Constitution
 
 ## Core Principles
@@ -7,10 +21,10 @@
 The application MUST feel like a first-class Windows app, not a wrapped web page.
 Use the Windows App SDK (WinUI 3) with Fluent design, Mica/backdrop material,
 light/dark theme that follows the system, and native affordances (system tray,
-toast notifications). Any embedded web content (the Home Assistant frontend) is
-hosted inside `WebView2`, but the shell, navigation, and OS integrations MUST be
-native. Reject solutions that degrade the native experience purely for
-cross-platform convenience.
+toast notifications). The companion MUST remain a focused native utility rather
+than embedding the Home Assistant frontend; actions that open Home Assistant MUST
+use the user's default browser. Reject solutions that degrade the native
+experience purely for cross-platform convenience.
 
 ### II. Security & Privacy of Credentials (NON-NEGOTIABLE)
 
@@ -21,13 +35,17 @@ control. Network calls MUST validate TLS by default. No telemetry or user data
 leaves the machine except calls to the user's own Home Assistant instance. Secrets
 MUST NOT appear in exception messages or diagnostic output.
 
-### III. Spec-Driven Development
+### III. Evidence-Driven Development
 
-Every feature starts as a specification under `specs/`, followed by a plan and a
-task list, before implementation. Code MUST trace back to a requirement (FR-xxx)
-or user story. Behavioral changes update the spec first. The Spec Kit workflow
-(constitution -> specify -> plan -> tasks -> implement) is the source of truth
-for scope.
+User-visible features and consequential protocol decisions MUST be recorded under
+`specs/` so their intent and evidence survive implementation. Planning artifacts
+MUST be proportional to the change: a full specification, plan, and task list are
+required for large or ambiguous features, while focused fixes MAY use an issue and
+targeted documentation. Discoveries made against real Windows or Home Assistant
+behavior MUST be written back promptly to the relevant specification, contract, or
+research record. Shipped behavior and verified upstream behavior take precedence
+over an earlier plan; stale design documents MUST be corrected rather than treated
+as authority.
 
 ### IV. Testable, Layered Architecture
 
@@ -47,26 +65,32 @@ issues.
 
 ## Additional Constraints
 
-- **Technology stack**: C# / .NET 9, Windows App SDK (WinUI 3), WebView2,
+- **Technology stack**: C# / .NET 9, Windows App SDK (WinUI 3),
   `System.Text.Json`. Target Windows 10 build 19041+ and Windows 11.
 - **Home Assistant integration**: Uses the documented native app integration
-  (`/api/mobile_app/registrations`, webhook `register_sensor`/`update_sensor`) and
+  (`/api/mobile_app/registrations`, webhook `register_sensor`/`update_sensor_states`) and
   the WebSocket API. No undocumented endpoints.
 - **Dependencies**: Prefer the .NET BCL and first-party Microsoft packages. Add
   third-party packages only when they remove meaningful complexity.
 
 ## Development Workflow
 
-- Specs, plans, and tasks are authored/updated before code for any behavioral change.
+- Large or ambiguous features have a specification, plan, and task list before
+  implementation. Focused changes MUST still have written scope in an issue or
+  specification.
+- Implementation discoveries MUST be reflected in the relevant design records
+  before the change is considered complete.
 - The solution MUST build with `dotnet build` on a clean checkout.
 - Core library unit tests MUST pass before a feature is considered done.
 - Secrets and personal Home Assistant URLs MUST never be committed.
 
 ## Governance
 
-This constitution supersedes ad-hoc practices for this repository. Amendments are
-made by updating this file with a version bump and a short rationale. Complexity
-that violates a principle MUST be justified in the plan's Complexity Tracking
-section or rejected.
+This constitution supersedes ad-hoc practices for this repository. Amendments MUST
+update this file with a semantic version bump, amendment date, and Sync Impact
+Report. Compliance MUST be reviewed when planning substantial features and when
+cross-checking shipped behavior against design records. Complexity that violates a
+principle MUST be justified in the feature plan or issue and explicitly approved,
+or rejected.
 
-**Version**: 1.0.0 | **Ratified**: 2026-08-06 | **Last Amended**: 2026-08-06
+**Version**: 2.0.0 | **Ratified**: 2026-08-06 | **Last Amended**: 2026-08-07

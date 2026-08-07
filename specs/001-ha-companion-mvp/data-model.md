@@ -14,8 +14,8 @@
 `WebhookId` and `CloudhookUrl` are held on this object in memory but are **never
 serialized** — see Secrets below.
 
-Validation: `BaseUrl` must be an absolute http/https URI. Non-local hosts must be
-https. `DeviceId` generated once and never changed.
+Validation: `BaseUrl` must be an absolute http/https URI. `DeviceId` is generated
+once and never changed.
 
 ### Secrets (stored only in Credential Locker, never settings.json)
 
@@ -50,7 +50,7 @@ unregistered, register again, and leave a duplicate device in Home Assistant.
 | os_name             | string | `Windows`                                      |
 | os_version          | string | Windows version string                         |
 | supports_encryption | bool   | `false` (MVP)                                  |
-| app_data            | object | omitted for MVP                                |
+| app_data            | object | `{ "push_websocket_channel": true }`           |
 
 ### DeviceRegistrationResponse
 
@@ -98,7 +98,6 @@ MVP sensor instances:
 | ------- | ------- | --------------------------------------- |
 | Title   | string  | Toast title                             |
 | Message | string  | Toast body                              |
-| Data    | object? | optional extra fields                   |
 
 ### ConnectionState (enum)
 

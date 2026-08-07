@@ -40,6 +40,13 @@ public sealed class ServerConfig
     /// </summary>
     public Sensors.SensorPreferences Sensors { get; set; } = new();
 
+    /// <summary>
+    /// What this installation has registered with Home Assistant, keyed by unique id.
+    /// Persisted so a sensor removed in a later version can be retired rather than
+    /// left behind as an entity that never updates again.
+    /// </summary>
+    public Dictionary<string, RegisteredSensor> RegisteredSensors { get; set; } = new(StringComparer.Ordinal);
+
     [JsonIgnore]
     public bool Registered => !string.IsNullOrEmpty(WebhookId);
 

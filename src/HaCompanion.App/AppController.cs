@@ -60,6 +60,7 @@ public sealed class AppController : IAsyncDisposable
     public async Task SignInAsync(string baseUrl, CancellationToken ct = default)
     {
         baseUrl = NormalizeBaseUrl(baseUrl);
+        baseUrl = await ResolveBaseUrlAsync(baseUrl, ct).ConfigureAwait(false);
 
         var tokens = await _login.SignInAsync(baseUrl, ct).ConfigureAwait(false);
         if (string.IsNullOrEmpty(tokens.RefreshToken))
@@ -162,9 +163,38 @@ public sealed class AppController : IAsyncDisposable
         if (!baseUrl.StartsWith("http://", StringComparison.OrdinalIgnoreCase) &&
             !baseUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
         {
-            baseUrl = "http://" + baseUrl;
+            // Default to HTTPS: an http:// guess against a TLS-only instance would be
+            // redirected, and redirects downgrade POSTs to GETs (breaking /auth/token).
+            baseUrl = "https://" + baseUrl;
         }
         return baseUrl.TrimEnd('/') + "/";
+    }
+
+    /// <summary>
+    /// Follows any redirects the server issues for the base URL (typically an
+    /// http → https upgrade) and returns the effective base URL. This matters
+    /// because redirects rewrite POSTs into GETs, which would make the
+    /// <c>/auth/token</c> exchange fail with 405 Method Not Allowed.
+    /// </summary>
+    private async Task<string> ResolveBaseUrlAsync(string baseUrl, CancellationToken ct)
+    {
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, baseUrl);
+            using var response = await _http
+                .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct)
+                .ConfigureAwait(false);
+
+            var finalUri = response.RequestMessage?.RequestUri;
+            if (finalUri is not null)
+                return finalUri.GetLeftPart(UriPartial.Authority) + "/";
+        }
+        catch
+        {
+            // Unreachable or non-HTTP failure: keep the user's URL and let the
+            // OAuth step surface a meaningful error.
+        }
+        return baseUrl;
     }
 
     public async ValueTask DisposeAsync()

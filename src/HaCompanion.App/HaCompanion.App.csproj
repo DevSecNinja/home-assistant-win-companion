@@ -11,6 +11,12 @@
     <UseWinUI>true</UseWinUI>
     <WinUISDKReferences>false</WinUISDKReferences>
     <EnableMsixTooling>true</EnableMsixTooling>
+    <!--
+      The companion ships unpackaged (xcopy-deployable). This makes the Windows App
+      SDK use the bootstrapper to locate the installed runtime instead of the
+      DeploymentManager, which requires MSIX package identity.
+    -->
+    <WindowsPackageType>None</WindowsPackageType>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>

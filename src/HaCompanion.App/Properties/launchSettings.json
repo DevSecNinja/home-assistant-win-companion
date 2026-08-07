@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "HaCompanion.App (Package)": {
+      "commandName": "MsixPackage"
+    },
+    "HaCompanion.App (Unpackaged)": {
+      "commandName": "Project"
+    }
+  }
+}

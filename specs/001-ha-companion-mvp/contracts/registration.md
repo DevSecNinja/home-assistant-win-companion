@@ -69,7 +69,9 @@ HA's schema — omitting any one fails validation and silently leaves push disab
 }
 ```
 
-Persist `webhook_id` (required) and any URLs. If a 404 is returned, the
+Persist `webhook_id` (required) and any URLs. **`webhook_id` is a capability secret**
+— it authenticates sensor and push traffic on its own — so it belongs in the platform
+secret store, not in settings.json. If a 404 is returned, the
 `mobile_app` integration is not loaded — surface an actionable error.
 
 ## Error handling

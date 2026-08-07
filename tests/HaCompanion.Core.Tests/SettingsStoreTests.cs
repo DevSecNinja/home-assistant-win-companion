@@ -25,8 +25,12 @@ public class SettingsStoreTests
 
             Assert.NotNull(loaded);
             Assert.Equal("https://ha.local:8123", loaded!.BaseUrl);
-            Assert.Equal("wh-1", loaded.WebhookId);
-            Assert.True(loaded.Registered);
+            Assert.Equal("dev-1", loaded.DeviceId);
+
+            // The webhook id is a capability secret and deliberately does NOT round
+            // trip through settings.json - SessionStore keeps it in the secret store.
+            Assert.Null(loaded.WebhookId);
+            Assert.DoesNotContain("wh-1", File.ReadAllText(path));
         }
         finally
         {

@@ -48,19 +48,14 @@ public sealed class NetworkSensorSource : ISensorSource
 
         if (enabled.Contains(ConnectionTypeId))
         {
-            var type = GetConnectionType();
+            var type = NetworkClassifier.Classify(GetOperationalAdapters());
             readings.Add(new Sensor
             {
                 UniqueId = ConnectionTypeId,
                 Type = "sensor",
                 Name = "Connection Type",
                 State = type,
-                Icon = type switch
-                {
-                    "Wi-Fi" => "mdi:wifi",
-                    "Ethernet" => "mdi:ethernet-cable",
-                    _ => "mdi:network-off"
-                }
+                Icon = NetworkClassifier.IconFor(type)
             });
         }
 
@@ -101,18 +96,20 @@ public sealed class NetworkSensorSource : ISensorSource
 
     private void OnNetworkChanged(object? sender, EventArgs e) => _onChanged?.Invoke();
 
-    private static string GetConnectionType()
-    {
-        var active = NetworkInterface.GetAllNetworkInterfaces()
-            .Where(n => n.OperationalStatus == OperationalStatus.Up
-                        && n.NetworkInterfaceType != NetworkInterfaceType.Loopback
-                        && n.NetworkInterfaceType != NetworkInterfaceType.Tunnel)
-            .ToList();
-
-        if (active.Any(n => n.NetworkInterfaceType == NetworkInterfaceType.Wireless80211)) return "Wi-Fi";
-        if (active.Count > 0) return "Ethernet";
-        return NotConnected;
-    }
+    /// <summary>Maps Windows adapters onto the platform-agnostic kinds Core classifies.</summary>
+    private static IEnumerable<NetworkAdapterKind> GetOperationalAdapters() =>
+        NetworkInterface.GetAllNetworkInterfaces()
+            .Where(n => n.OperationalStatus == OperationalStatus.Up)
+            .Select(n => n.NetworkInterfaceType switch
+            {
+                NetworkInterfaceType.Wireless80211 => NetworkAdapterKind.Wireless,
+                NetworkInterfaceType.Loopback => NetworkAdapterKind.Loopback,
+                NetworkInterfaceType.Tunnel => NetworkAdapterKind.Tunnel,
+                NetworkInterfaceType.Ethernet or NetworkInterfaceType.GigabitEthernet
+                    or NetworkInterfaceType.FastEthernetT or NetworkInterfaceType.FastEthernetFx
+                    => NetworkAdapterKind.Wired,
+                _ => NetworkAdapterKind.Other
+            });
 
     private static string? GetLocalIpAddress()
     {

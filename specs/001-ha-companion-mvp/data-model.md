@@ -20,7 +20,7 @@ https. `DeviceId` generated once and never changed.
 
 | Key             | Value                                        |
 | --------------- | -------------------------------------------- |
-| access_token    | Long-lived access token                      |
+| refresh_token   | OAuth2 refresh token (from `/auth/token`)    |
 | webhook_secret  | `secret` from registration (if encryption)   |
 
 ### DeviceRegistrationRequest (sent to `/api/mobile_app/registrations`)

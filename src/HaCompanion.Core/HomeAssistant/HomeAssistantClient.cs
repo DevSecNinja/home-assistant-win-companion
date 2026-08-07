@@ -27,27 +27,27 @@ public sealed class HomeAssistantClient : IHomeAssistantClient
 
     private readonly HttpClient _http;
     private readonly Uri _baseUri;
-    private readonly Func<string?> _tokenProvider;
+    private readonly IAccessTokenProvider _tokens;
     private readonly ILogger<HomeAssistantClient> _log;
 
     public HomeAssistantClient(
         HttpClient http,
         string baseUrl,
-        Func<string?> tokenProvider,
+        IAccessTokenProvider tokens,
         ILogger<HomeAssistantClient>? log = null)
     {
         _http = http ?? throw new ArgumentNullException(nameof(http));
         if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var uri))
             throw new ArgumentException("Base URL must be an absolute URI.", nameof(baseUrl));
         _baseUri = uri;
-        _tokenProvider = tokenProvider ?? throw new ArgumentNullException(nameof(tokenProvider));
+        _tokens = tokens ?? throw new ArgumentNullException(nameof(tokens));
         _log = log ?? NullLogger<HomeAssistantClient>.Instance;
     }
 
-    private HttpRequestMessage Authorized(HttpMethod method, string relative)
+    private async Task<HttpRequestMessage> AuthorizedAsync(HttpMethod method, string relative, CancellationToken ct)
     {
         var request = new HttpRequestMessage(method, new Uri(_baseUri, relative));
-        var token = _tokenProvider();
+        var token = await _tokens.GetAccessTokenAsync(ct).ConfigureAwait(false);
         if (!string.IsNullOrEmpty(token))
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         return request;
@@ -55,7 +55,7 @@ public sealed class HomeAssistantClient : IHomeAssistantClient
 
     public async Task<bool> ValidateAsync(CancellationToken ct = default)
     {
-        using var request = Authorized(HttpMethod.Get, "api/");
+        using var request = await AuthorizedAsync(HttpMethod.Get, "api/", ct).ConfigureAwait(false);
         using var response = await _http.SendAsync(request, ct).ConfigureAwait(false);
         if (response.StatusCode == HttpStatusCode.Unauthorized)
             throw new HomeAssistantAuthException("Home Assistant rejected the access token.");
@@ -65,7 +65,7 @@ public sealed class HomeAssistantClient : IHomeAssistantClient
     public async Task<DeviceRegistrationResponse> RegisterDeviceAsync(
         DeviceRegistrationRequest req, CancellationToken ct = default)
     {
-        using var request = Authorized(HttpMethod.Post, "api/mobile_app/registrations");
+        using var request = await AuthorizedAsync(HttpMethod.Post, "api/mobile_app/registrations", ct).ConfigureAwait(false);
         request.Content = JsonContent.Create(req, options: Json);
         using var response = await _http.SendAsync(request, ct).ConfigureAwait(false);
 

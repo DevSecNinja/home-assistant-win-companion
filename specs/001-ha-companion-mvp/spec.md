@@ -6,45 +6,49 @@
 
 **Status**: Draft
 
-**Input**: User description: "Windows Home Assistant companion MVP: WebView2 dashboard, system tray, toast notifications, and Windows status sensor reporting to Home Assistant"
+**Input**: User description: "Windows Home Assistant companion MVP: lean tray-resident companion (opens Home Assistant in the browser), OAuth2 loopback sign-in, system tray, toast notifications, and Windows status sensor reporting to Home Assistant"
 
 ## Overview
 
 A native Windows desktop companion for Home Assistant, analogous to the official
 iOS/macOS companion app. It lets a user connect their Windows PC to their Home
-Assistant instance, view their dashboards inside the app, receive notifications
-from Home Assistant as native Windows toasts, and expose the PC's status (battery,
-etc.) back to Home Assistant as sensors.
+Assistant instance, quickly open Home Assistant in their browser from the app or its
+tray icon, receive notifications from Home Assistant as native Windows toasts, and
+expose the PC's status (battery, etc.) back to Home Assistant as sensors.
 
 ## User Scenarios & Testing *(mandatory)*
 
-### User Story 1 - Connect and view my Home Assistant dashboard (Priority: P1)
+### User Story 1 - Connect and open my Home Assistant (Priority: P1)
 
 As a Home Assistant user, I want to open a native Windows app, connect it to my
-Home Assistant server, and see my normal dashboards, so I can control my home from
-my PC without keeping a browser tab open.
+Home Assistant server once, and quickly open my Home Assistant in my browser from
+the app or its tray icon, so I have a lightweight always-available companion
+without keeping a browser tab pinned.
 
-**Why this priority**: This is the core value of a companion app and the minimum
-viable product. Without it, nothing else is useful. It is independently valuable:
-a user gets a dockable, always-available Home Assistant window.
+**Why this priority**: This is the core connect-and-launch value and the minimum
+viable product. Without a validated connection nothing else works. It is
+independently valuable: a user gets a tray-resident companion with one-click access
+to their Home Assistant.
 
 **Independent Test**: Launch the app with no configuration, enter a Home Assistant
-URL and a long-lived access token, and confirm the Home Assistant dashboard loads
-and is interactive inside the app window. Relaunch and confirm it reconnects
-without re-entering credentials.
+URL, sign in through the browser, confirm the connection is established and saved,
+then click "Open Home Assistant" and confirm the instance opens in the default
+browser. Relaunch and confirm it resumes without re-entering credentials.
 
 **Acceptance Scenarios**:
 
 1. **Given** a fresh install with no saved server, **When** the user enters a
-   valid Home Assistant URL and access token, **Then** the app validates the
-   connection and displays the Home Assistant frontend in the main window.
-2. **Given** an invalid URL or token, **When** the user submits it, **Then** the
-   app shows a clear error and does not save the credentials.
+   valid Home Assistant URL and signs in via the browser, **Then** the app
+   establishes the connection, securely stores the refresh token, and shows a
+   connected status.
+2. **Given** an invalid URL or a cancelled/failed browser sign-in, **When** the
+   user submits it, **Then** the app shows a clear error and does not save any
+   credentials.
 3. **Given** a previously connected server, **When** the user relaunches the app,
-   **Then** the dashboard loads automatically using the securely stored token.
-4. **Given** the app is showing the dashboard, **When** the user navigates within
-   Home Assistant (e.g., opens a different view), **Then** navigation works as it
-   does in a browser.
+   **Then** it resumes automatically using the securely stored refresh token.
+4. **Given** the app is connected, **When** the user clicks "Open Home Assistant"
+   (in the window or the tray menu), **Then** the Home Assistant instance opens in
+   the user's default browser.
 
 ---
 
@@ -120,16 +124,19 @@ appears with the title and message.
 
 ### Functional Requirements
 
-- **FR-001**: The app MUST allow the user to enter a Home Assistant base URL and a
-  long-lived access token to establish a connection.
+- **FR-001**: The app MUST allow the user to enter a Home Assistant base URL and
+  sign in via Home Assistant's OAuth2 flow in their default web browser (no manual
+  token creation).
 - **FR-002**: The app MUST validate the connection before saving credentials and
   show a clear, actionable error on failure.
-- **FR-003**: The app MUST store the access token and derived registration secrets
-  using the Windows secure credential store (never plaintext).
-- **FR-004**: The app MUST display the Home Assistant frontend inside a native
-  window using an embedded web view, preserving in-app navigation.
-- **FR-005**: The app MUST automatically reconnect and reload the dashboard on
-  subsequent launches without re-entering credentials.
+- **FR-003**: The app MUST store the OAuth refresh token (and any derived secrets)
+  using the Windows secure credential store (never plaintext), and use it to
+  silently obtain short-lived access tokens.
+- **FR-004**: The app MUST provide a way to open the Home Assistant frontend in the
+  user's default web browser (from the window and the tray menu). It MUST NOT embed
+  a web view.
+- **FR-005**: The app MUST automatically reconnect on subsequent launches without
+  re-authenticating, by refreshing the stored refresh token.
 - **FR-006**: The app MUST run in the background with a system tray icon that
   provides at least: show/hide window, connection status, and exit.
 - **FR-007**: The app MUST register the PC with Home Assistant as a mobile_app
@@ -145,13 +152,13 @@ appears with the title and message.
 - **FR-012**: The app MUST surface connection state (connected / reconnecting /
   auth error / disconnected) to the user.
 - **FR-013**: The app MUST NOT log or display secrets (tokens, webhook secrets).
-- **FR-014**: The app MUST allow the user to sign out / disconnect, which removes
-  stored credentials.
+- **FR-014**: The app MUST allow the user to sign out / disconnect, which revokes
+  the refresh token with Home Assistant and removes stored credentials.
 
 ### Key Entities *(include if feature involves data)*
 
 - **Server Connection**: The configured Home Assistant instance — base URL,
-  connection status, and a reference to the stored access token.
+  connection status, and a reference to the stored OAuth refresh token.
 - **Device Registration**: The identity of this PC within Home Assistant — the
   `webhook_id`, optional cloud/remote URLs, encryption secret, and a stable device
   identifier.
@@ -165,8 +172,8 @@ appears with the title and message.
 
 ### Measurable Outcomes
 
-- **SC-001**: A first-time user can go from launching the app to seeing their live
-  dashboard in under 2 minutes given a URL and token.
+- **SC-001**: A first-time user can go from launching the app to a connected state
+  and opening Home Assistant in their browser in under 2 minutes.
 - **SC-002**: After the first successful connection, the PC and its battery sensors
   appear in Home Assistant within 1 minute.
 - **SC-003**: Battery-level and battery-state sensor values match the OS-reported
@@ -175,15 +182,15 @@ appears with the title and message.
   Windows toast within 10 seconds while the app is connected.
 - **SC-005**: After a simulated network drop of up to 2 minutes, the app
   automatically returns to the connected state without user intervention.
-- **SC-006**: No token or secret value is ever written to log output or the on-disk
-  configuration in plaintext (verified by inspection).
+- **SC-006**: No refresh/access token or secret value is ever written to log output
+  or the on-disk configuration in plaintext (verified by inspection).
 
 ## Assumptions
 
-- The user has a running Home Assistant instance reachable from the PC and can
-  create a long-lived access token (Profile -> Long-lived access tokens).
-- For the MVP, authentication uses a long-lived access token rather than the full
-  OAuth2 IndieAuth login flow (which may be added later).
+- The user has a running Home Assistant instance reachable from the PC and a normal
+  Home Assistant user account they can log in with via the browser.
+- Authentication uses Home Assistant's OAuth2 (IndieAuth) login flow with a loopback
+  redirect; no long-lived access token is created or pasted by the user.
 - For the MVP, notifications are delivered by the app maintaining a live connection
   to Home Assistant (WebSocket/event subscription) rather than a cloud push service,
   since Windows has no equivalent of the mobile push channel used on iOS/Android.

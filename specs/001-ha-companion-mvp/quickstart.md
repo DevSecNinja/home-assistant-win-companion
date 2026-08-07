@@ -6,8 +6,8 @@
 - .NET 9 SDK (`dotnet --version` ≥ 9.0).
 - A running Home Assistant instance with the `mobile_app` integration loaded
   (included in `default_config`).
-- A Home Assistant **long-lived access token**: Home Assistant → your profile →
-  Security → *Long-lived access tokens* → *Create token*.
+- Your Home Assistant account credentials (you'll sign in through your browser —
+  no token to create or paste).
 
 ## Build & run
 
@@ -27,15 +27,16 @@ dotnet run --project src/HaCompanion.App/HaCompanion.App.csproj
 
 1. On launch, the **Connect** view appears.
 2. Enter your Home Assistant base URL (e.g. `https://homeassistant.local:8123`).
-3. Paste your long-lived access token.
-4. Click **Connect**. The app validates the token, registers this PC as a device,
-   and loads your dashboard in the embedded view.
+3. Click **Sign in**. Your default browser opens the Home Assistant login page.
+4. Log in and approve the request. The browser redirects back to the app, which
+   registers this PC as a device and shows the lean **Status** view.
 
 ## Verify the user stories
 
-- **US1 (Dashboard)**: Your Home Assistant dashboard is visible and interactive in
-  the app window. Close and reopen the app — it reconnects without asking for the
-  token again.
+- **US1 (Connect & open HA)**: After signing in, the Status view shows the
+  connection state and battery. Click **Open Home Assistant** to launch your
+  instance in the default browser. Close and reopen the app — it resumes the
+  session without asking you to sign in again.
 - **US2 (Sensors)**: In Home Assistant → Settings → Devices & Services → *Mobile App*,
   a new device for your PC appears with **Battery Level** and **Battery State**
   sensors that update.

@@ -19,6 +19,7 @@ public sealed partial class MainWindow : Window
     private readonly DispatcherQueueTimer _statusTimer;
     private bool _exiting;
     private bool _connected;
+    private int _sensorListBuildVersion;
 
     public MainWindow()
     {
@@ -266,10 +267,10 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private void OnShowSettings(object sender, RoutedEventArgs e)
+    private async void OnShowSettings(object sender, RoutedEventArgs e)
     {
-        BuildSensorList();
-        ShowView(View.Settings);
+        if (await BuildSensorListAsync())
+            ShowView(View.Settings);
     }
 
     private void OnCloseSettings(object sender, RoutedEventArgs e) => ShowView(View.Status);
@@ -278,15 +279,22 @@ public sealed partial class MainWindow : Window
     /// Renders one toggle per catalog sensor. Built in code rather than bound so the
     /// list always reflects whatever sources the controller actually wired up.
     /// </summary>
-    private void BuildSensorList()
+    private async Task<bool> BuildSensorListAsync()
     {
-        SensorList.Children.Clear();
-
         var catalog = _controller.Catalog;
-        if (catalog is null) return;
+        if (catalog is null) return false;
 
+        var buildVersion = ++_sensorListBuildVersion;
+        var previews = await catalog.PreviewAsync();
+        if (buildVersion != _sensorListBuildVersion
+            || !ReferenceEquals(catalog, _controller.Catalog)
+            || _controller.State is ConnectionState.Disconnected or ConnectionState.AuthError)
+        {
+            return false;
+        }
+
+        SensorList.Children.Clear();
         IdleMinutesBox.Value = Math.Max(1, catalog.Preferences.IdleThresholdSeconds / 60);
-
         foreach (var definition in catalog.Definitions)
         {
             var toggle = new ToggleSwitch
@@ -322,6 +330,15 @@ public sealed partial class MainWindow : Window
                 FontSize = 12,
                 Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"]
             });
+            text.Children.Add(new TextBlock
+            {
+                Text = previews.TryGetValue(definition.UniqueId, out var value)
+                    ? $"Current value: {value}"
+                    : "Current value: Unavailable",
+                TextWrapping = TextWrapping.Wrap,
+                FontSize = 12,
+                Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"]
+            });
 
             var row = new Grid { Padding = new Thickness(0, 10, 0, 10) };
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -333,6 +350,8 @@ public sealed partial class MainWindow : Window
 
             SensorList.Children.Add(row);
         }
+
+        return true;
     }
 
     private async void OnSensorToggled(object sender, RoutedEventArgs e)

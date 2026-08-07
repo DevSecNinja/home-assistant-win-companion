@@ -195,10 +195,10 @@ disabled.
   device is required to add sensors.
 - Windows session, power and network events are available to an unpackaged desktop
   app without elevation.
-- Microphone/camera-in-use, frontmost app, storage, displays and Teams presence are
-  explicitly **out of scope** for this feature and are tracked for a later iteration.
-  Teams presence in particular would require Microsoft Graph and an Entra app
-  registration.
+- Microphone/camera-in-use and meeting-context sensors are delivered separately in
+  `specs/003-meeting-sensors/`. Frontmost app, storage, displays and Teams presence
+  remain out of scope. Teams presence in particular would require Microsoft Graph
+  and an Entra app registration.
 
 ## Delivery Notes
 

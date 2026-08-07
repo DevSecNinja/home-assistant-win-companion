@@ -68,16 +68,31 @@ Battery data comes from Win32 `GetSystemPowerStatus` (P/Invoke), which returns A
 line status, battery flag, and battery life percent, and works for laptops; desktops
 without a battery report "no system battery" → handled gracefully.
 
-## Decision: Notifications — WebSocket subscription → Windows toast
+## Decision: Notifications — mobile_app local push channel → Windows toast
 
 **Rationale**: Windows has no push channel equivalent to APNS/FCM used by the mobile
-apps. For the MVP, keep a live WebSocket to `/api/websocket`, authenticate with the
-access token, and `subscribe_events` for `persistent_notification` (and optionally a
-user-defined event). When such an event fires, render a native toast via the Windows
-App SDK `AppNotification` API. Toast activation restores the main window.
+apps. Home Assistant's `mobile_app` integration supports a **local push channel**
+over the app's own authenticated WebSocket, which fits Windows exactly: no cloud
+service and no inbound HTTP listener needed.
 
-**Alternatives considered**: Implementing an actual push receiver (out of scope; no
-Windows push transport for HA), or polling REST (higher latency, chattier).
+The registration declares `app_data.push_websocket_channel = true`; this is what
+makes HA's `supports_push()` return true and therefore what exposes the PC as a
+notify target (`notify.mobile_app_<device_name>` plus a notify entity). The app then
+sends `mobile_app/push_notification_channel` after `auth_ok` and renders each pushed
+notification as a native toast via the Windows App SDK `AppNotification` API. We
+request `support_confirm` and reply with `mobile_app/push_notification_confirm`,
+because HA tears the channel down if a notification is not acknowledged within 10s.
+
+**Rejected**: `subscribe_events` with `event_type=persistent_notification`. Home
+Assistant never fires such a bus event — `persistent_notification` uses an internal
+dispatcher signal (`persistent_notifications_updated`) — so this silently never
+fires. The supported equivalent is the `persistent_notification/subscribe`
+WebSocket command, which mirrors the notification drawer rather than delivering
+targeted notifications, so it does not serve US3.
+
+**Alternatives considered**: cloud push via `push_token`/`push_url` (needs HA's
+push proxy and an inbound URL; out of scope), or polling REST (higher latency,
+chattier).
 
 ## Decision: Secret storage — Windows Credential Locker (PasswordVault)
 

@@ -60,9 +60,14 @@
     <PropertyGroup> above to opt out.
   -->
   <ItemGroup>
+    <!-- 2.4.1 requires .NET 10; keep updates manual until the app moves runtimes. -->
     <PackageReference Include="H.NotifyIcon.WinUI" Version="2.3.0" />
     <PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.10" />
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.28000.2526" />
+    <!--
+      This must match the Windows App Runtime users install. Updating it changes
+      deployment prerequisites for the unpackaged app, so Renovate review is manual.
+    -->
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.3.1" />
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools.WinApp" Version="0.5.0" />
   </ItemGroup>

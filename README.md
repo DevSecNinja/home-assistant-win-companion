@@ -65,9 +65,9 @@ one that just works with stock Home Assistant.**
   native toasts, delivered over the `mobile_app` local push channel (Windows has no
   APNS/FCM equivalent).
 - **Opt-in sensor catalog** — battery, active/idle, screen locked, connection type,
-  IP address, OS version, last boot and the last-update trigger. Each sensor can be
-  switched on or off individually, shows the value it would report before you enable
-  it, and privacy-sensitive ones are off by default.
+  IP address, OS version, last boot and an optional last-update timestamp. Each
+  sensor can be switched on or off individually, and privacy-sensitive ones are off
+  by default.
 - **Health and logs** — a health verdict based on whether the app is actually
   reporting on schedule, plus a rolling local log you can open from the UI.
 - **Open Home Assistant** — one click (window or tray menu) to open your instance in
@@ -114,13 +114,15 @@ opens for login, then the app registers this PC and connects.
 
 | Project | Purpose |
 | --- | --- |
-| `src/HaCompanion.Core` | Platform-agnostic logic: HA REST/webhook client, OAuth, WebSocket protocol, sensors, reconnect. No UI dependency, fully unit-tested. |
+| `src/HaCompanion.Core` | Platform-agnostic logic: HA REST/webhook client, OAuth, WebSocket protocol, sensors, reconnect. No UI dependency and covered by unit tests. |
 | `src/HaCompanion.App` | WinUI 3 (Windows App SDK) shell: OAuth loopback listener, tray icon, toasts, Credential Locker, battery via `GetSystemPowerStatus`. |
 | `tests/HaCompanion.Core.Tests` | xUnit tests for the core library. |
 
-Secrets live only in the Windows Credential Locker. Non-secret config
-(base URL, device id, webhook id) goes to
-`%LOCALAPPDATA%\HaCompanion\settings.json`.
+Secrets live only in the Windows Credential Locker, including the refresh token,
+`webhook_id`, and any cloudhook URL. Non-secret config (base URL, device id, sensor
+choices, and registered-sensor metadata) goes to
+`%LOCALAPPDATA%\HaCompanion\settings.json`. Existing installs migrate a previously
+stored plaintext webhook id into the Credential Locker automatically.
 
 ## Notes on the Home Assistant APIs used
 
@@ -138,21 +140,29 @@ A few behaviours are easy to get wrong and are worth calling out:
   `app_data.push_websocket_channel = true` is what makes the PC a notify target;
   notifications then arrive over `mobile_app/push_notification_channel` and must be
   acknowledged within 10s.
+- **Disabled sensors remain in Home Assistant.** Switching a sensor off disables its
+  entity; it does not delete the entity-registry entry. Home Assistant shows it
+  greyed out, usually under "+N entities not shown", and excludes it from normal
+  pickers. This is expected and harmless. Sensors removed by a later app version
+  are retired the same way. Removing one entirely requires deleting the whole
+  Mobile App device, which invalidates the registration and forces this app to
+  register again.
 
 See [`specs/001-ha-companion-mvp/contracts/`](specs/001-ha-companion-mvp/contracts/)
 for the full API contracts.
 
 ## Spec-driven development
 
-This project is built with [GitHub Spec Kit](https://github.com/github/spec-kit).
-The specification, plan, research, data model, API contracts and task breakdown live
-in [`specs/001-ha-companion-mvp/`](specs/001-ha-companion-mvp/), and the project
-principles in [`.specify/memory/constitution.md`](.specify/memory/constitution.md).
+This project uses [GitHub Spec Kit](https://github.com/github/spec-kit) where the
+size and uncertainty of a feature justify the full workflow. Specifications,
+research, API contracts and historical implementation plans live in
+[`specs/`](specs/), and the project principles in
+[`.specify/memory/constitution.md`](.specify/memory/constitution.md).
 
 ## Status
 
-MVP, verified against a live Home Assistant instance: browser sign-in, device
-registration, session resume, battery sensors updating, and notifications arriving
+MVP, verified against a live Home Assistant instance: browser sign-in, secure
+session resume, selectable sensors, health reporting, and notifications arriving
 as Windows toasts.
 
 ## Credits
@@ -168,4 +178,3 @@ as Windows toasts.
 ## License
 
 [MIT](LICENSE) © Jean-Paul van Ravensberg
-

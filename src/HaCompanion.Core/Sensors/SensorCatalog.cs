@@ -88,7 +88,8 @@ public sealed class SensorCatalog
     /// the user exactly what a sensor would report before they switch it on.
     /// Purely local: nothing produced here is transmitted.
     /// </summary>
-    public IReadOnlyDictionary<string, string> Preview()
+    public async Task<IReadOnlyDictionary<string, string>> PreviewAsync(
+        CancellationToken cancellationToken = default)
     {
         var all = Definitions.Select(d => d.UniqueId).ToHashSet(StringComparer.Ordinal);
         var values = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -98,9 +99,13 @@ public sealed class SensorCatalog
             IReadOnlyList<Sensor> readings;
             try
             {
-                readings = source.Read(all, new SensorReadContext("Preview"));
+                readings = await source.PreviewAsync(all, cancellationToken).ConfigureAwait(false);
             }
-            catch
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception)
             {
                 continue; // A preview must never break the settings UI.
             }

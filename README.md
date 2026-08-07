@@ -167,5 +167,5 @@ as Windows toasts.
 
 ## License
 
-Not yet licensed.
+[MIT](LICENSE) © Jean-Paul van Ravensberg
 

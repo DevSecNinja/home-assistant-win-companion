@@ -127,9 +127,13 @@ disappear.
 - **FR-004**: A disabled sensor MUST NOT be collected, MUST NOT be transmitted, and
   its backing OS hook MUST NOT be registered (off means zero cost).
 - **FR-005**: Disabling a sensor MUST mark the corresponding Home Assistant entity
-  disabled rather than leaving a stale entity.
-- **FR-006**: Privacy-sensitive sensors (Wi-Fi SSID/BSSID, IP address) MUST default
+  disabled rather than leaving a stale entity. Enabling MUST re-enable it. (Both
+  must go through `register_sensor`; `update_sensor_states` ignores the flag.)
+- **FR-006**: Privacy-sensitive sensors (IP address, connection type) MUST default
   to off; presence and diagnostic sensors MAY default to on.
+- **FR-006a**: The catalog MUST show the current value each sensor would report,
+  computed locally and never transmitted, so the user can see what enabling it
+  would share.
 - **FR-007**: The app MUST report an `Active` binary sensor derived from idle, lock,
   screensaver, display-off, sleep and fast-user-switch state, exposing each
   sub-state as an attribute.
@@ -138,10 +142,21 @@ disappear.
   without restarting the app.
 - **FR-010**: State changes MUST be pushed promptly (not only on the periodic sync)
   while producing no additional traffic when nothing changes.
-- **FR-011**: The app MUST report optional `SSID`, `BSSID`, `Connection Type`,
-  `IP Address` and `OS Version` sensors.
-- **FR-012**: The app MUST report a last-update sensor reflecting the most recent
-  successful push, without that sensor itself triggering an extra push.
+- **FR-011**: The app MUST report optional `Connection Type`, `IP Address`,
+  `OS Version` and `Last Boot` sensors. Wi-Fi SSID/BSSID are out of scope
+  (Windows Location capability; see research.md).
+- **FR-012**: The app MUST display the time of its most recent successful push in
+  its own status view, and MUST report a `last_update_trigger` sensor whose state is
+  the *reason* for that push, without that sensor triggering an extra push.
+- **FR-012a**: The app MUST show a health verdict (in the window and the tray
+  tooltip) based on whether it is reporting on schedule, not merely connected.
+- **FR-012b**: The app MUST write a rolling local log the user can open from the UI,
+  containing no secrets.
+- **FR-012c**: The app MUST offer an explicit "update now" action.
+- **FR-012d**: Pausing reporting (Disconnect) MUST be reversible and MUST NOT
+  discard credentials. Removing the server MUST be a separate, confirmed action that
+  revokes the token and deletes stored configuration.
+- **FR-012e**: The status view MUST show which Home Assistant server is connected.
 - **FR-013**: String sensor states MUST be truncated to Home Assistant's 255
   character limit.
 - **FR-014**: Sensor identifiers MUST match the official companion app where an
@@ -183,3 +198,4 @@ disappear.
   explicitly **out of scope** for this feature and are tracked for a later iteration.
   Teams presence in particular would require Microsoft Graph and an Entra app
   registration.
+

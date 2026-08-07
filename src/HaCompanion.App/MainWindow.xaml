@@ -106,14 +106,12 @@
             <Button x:Name="UpdateNowButton" Content="Update now" Click="OnForcePush" HorizontalAlignment="Stretch" />
             <Button Content="Sensors…" Click="OnShowSettings" HorizontalAlignment="Stretch" />
             <Button x:Name="DisconnectButton" Content="Disconnect" Click="OnDisconnect" HorizontalAlignment="Stretch" />
-            <HyperlinkButton
-                Content="Open log file"
-                Click="OnOpenLog"
-                HorizontalAlignment="Center" />
-            <HyperlinkButton
+            <Button Content="Open log file" Click="OnOpenLog" HorizontalAlignment="Stretch" />
+            <Button
                 Content="Remove server…"
                 Click="OnRemoveServer"
-                HorizontalAlignment="Center" />
+                HorizontalAlignment="Stretch"
+                Foreground="{ThemeResource SystemFillColorCriticalBrush}" />
         </StackPanel>
 
         <!-- Sensor settings view -->

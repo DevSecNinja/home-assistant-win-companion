@@ -8,10 +8,11 @@
 | ------------- | -------- | ------------------------------------------------- |
 | BaseUrl       | string   | Home Assistant base URL, e.g. `https://ha.local:8123` |
 | DeviceId      | string   | Stable GUID for this install (registration `device_id`) |
-| WebhookId     | string?  | From registration response; null until registered |
 | RemoteUiUrl   | string?  | Optional Nabu Casa remote URL                     |
-| CloudhookUrl  | string?  | Optional Nabu Casa cloudhook URL                  |
-| Registered    | bool     | True once `/registrations` succeeded              |
+| Sensors       | object   | Per-sensor enablement and the idle threshold      |
+
+`WebhookId` and `CloudhookUrl` are held on this object in memory but are **never
+serialized** — see Secrets below.
 
 Validation: `BaseUrl` must be an absolute http/https URI. Non-local hosts must be
 https. `DeviceId` generated once and never changed.
@@ -21,7 +22,19 @@ https. `DeviceId` generated once and never changed.
 | Key             | Value                                        |
 | --------------- | -------------------------------------------- |
 | refresh_token   | OAuth2 refresh token (from `/auth/token`)    |
+| webhook_id      | Capability secret from registration          |
+| cloudhook_url   | Embeds the webhook id, so equally sensitive  |
 | webhook_secret  | `secret` from registration (if encryption)   |
+
+`webhook_id` is a **capability**, not an identifier: it needs no auth header, so
+anyone holding it can post sensor data and open the push notification channel to
+receive the user's notifications. Home Assistant classifies it the same way — its
+`safe_registration` helper strips `webhook_id`, `secret` and `cloudhook_url`.
+
+Installs created before this split carry the webhook id in settings.json.
+`SessionStore` migrates it into the secret store on load and rewrites the file
+without it. The migration is required: without it an existing install would look
+unregistered, register again, and leave a duplicate device in Home Assistant.
 
 ### DeviceRegistrationRequest (sent to `/api/mobile_app/registrations`)
 

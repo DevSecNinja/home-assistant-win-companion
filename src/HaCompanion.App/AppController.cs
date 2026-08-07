@@ -15,8 +15,8 @@ namespace HaCompanion_App;
 public sealed class AppController : IAsyncDisposable
 {
     private readonly HttpClient _http = new();
-    private readonly SettingsStore _settings = new();
     private readonly WindowsSecretStore _secrets = new();
+    private readonly SessionStore _settings;
     private readonly WindowsSystemStatusProvider _status = new();
     private readonly ToastNotifier _toasts = new();
     private readonly OAuthLoginService _login;
@@ -34,6 +34,7 @@ public sealed class AppController : IAsyncDisposable
     public AppController()
     {
         _login = new OAuthLoginService(_http);
+        _settings = new SessionStore(new SettingsStore(), _secrets);
     }
 
     public ConnectionState State => _connection?.State ?? ConnectionState.Disconnected;
@@ -326,4 +327,5 @@ public sealed class AppController : IAsyncDisposable
         _http.Dispose();
     }
 }
+
 

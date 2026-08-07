@@ -65,6 +65,22 @@ public sealed class SensorCatalog
         SyncRunningSources();
     }
 
+    /// <summary>Refreshes expensive enabled sources before an explicit user push.</summary>
+    public async Task RefreshAsync(CancellationToken cancellationToken = default)
+    {
+        var enabled = EnabledIds;
+        foreach (var source in _sources)
+        {
+            if (source is not IRefreshableSensorSource refreshable
+                || !source.Definitions.Any(definition => enabled.Contains(definition.UniqueId)))
+            {
+                continue;
+            }
+
+            await refreshable.RefreshAsync(cancellationToken).ConfigureAwait(false);
+        }
+    }
+
     /// <summary>Collects readings for every enabled sensor.</summary>
     public IReadOnlyList<Sensor> Read(SensorReadContext context)
     {

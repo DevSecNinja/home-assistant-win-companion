@@ -8,17 +8,19 @@ namespace HaCompanion.Core.HomeAssistant;
 
 /// <summary>
 /// Speaks the Home Assistant WebSocket API: authenticates with the access token,
-/// subscribes to persistent_notification events, and raises a
-/// <see cref="NotificationReceived"/> event for each one. A single call to
-/// <see cref="RunAsync"/> lives for the duration of one connection.
+/// opens a mobile_app local push notification channel, and raises a
+/// <see cref="NotificationReceived"/> event for each pushed notification. A single
+/// call to <see cref="RunAsync"/> lives for the duration of one connection.
 /// </summary>
 public sealed class HaWebSocketClient
 {
     private readonly Func<IHaSocket> _socketFactory;
     private readonly Uri _wsUri;
     private readonly IAccessTokenProvider _tokens;
+    private readonly string _webhookId;
     private readonly ILogger<HaWebSocketClient> _log;
     private int _messageId;
+    private int _channelId;
 
     public event Action<NotificationMessage>? NotificationReceived;
 
@@ -26,11 +28,13 @@ public sealed class HaWebSocketClient
         Func<IHaSocket> socketFactory,
         string baseUrl,
         IAccessTokenProvider tokens,
+        string webhookId,
         ILogger<HaWebSocketClient>? log = null)
     {
         _socketFactory = socketFactory ?? throw new ArgumentNullException(nameof(socketFactory));
         _wsUri = BuildWebSocketUri(baseUrl);
         _tokens = tokens ?? throw new ArgumentNullException(nameof(tokens));
+        _webhookId = webhookId ?? throw new ArgumentNullException(nameof(webhookId));
         _log = log ?? NullLogger<HaWebSocketClient>.Instance;
     }
 
@@ -77,11 +81,13 @@ public sealed class HaWebSocketClient
 
                 case "auth_ok":
                     _log.LogInformation("WebSocket authenticated.");
+                    _channelId = NextId();
                     await SendAsync(socket, new
                     {
-                        id = NextId(),
-                        type = "subscribe_events",
-                        event_type = "persistent_notification"
+                        id = _channelId,
+                        type = "mobile_app/push_notification_channel",
+                        webhook_id = _webhookId,
+                        support_confirm = true
                     }, ct).ConfigureAwait(false);
                     break;
 
@@ -89,7 +95,7 @@ public sealed class HaWebSocketClient
                     throw new HomeAssistantAuthException("Home Assistant rejected the WebSocket access token.");
 
                 case "event":
-                    HandleEvent(doc.RootElement);
+                    await HandleEventAsync(socket, doc.RootElement, ct).ConfigureAwait(false);
                     break;
 
                 case "pong":
@@ -99,13 +105,29 @@ public sealed class HaWebSocketClient
         }
     }
 
-    private void HandleEvent(JsonElement root)
+    /// <summary>
+    /// Handles a pushed notification. Home Assistant expects an explicit confirm
+    /// within 10s (we requested support_confirm), otherwise it tears the channel
+    /// down and falls back to cloud push.
+    /// </summary>
+    private async Task HandleEventAsync(IHaSocket socket, JsonElement root, CancellationToken ct)
     {
         if (!root.TryGetProperty("event", out var ev)) return;
-        if (!ev.TryGetProperty("data", out var data)) return;
 
-        var title = data.TryGetProperty("title", out var tt) ? tt.GetString() : null;
-        var message = data.TryGetProperty("message", out var mm) ? mm.GetString() : null;
+        var title = ev.TryGetProperty("title", out var tt) ? tt.GetString() : null;
+        var message = ev.TryGetProperty("message", out var mm) ? mm.GetString() : null;
+
+        if (ev.TryGetProperty("hass_confirm_id", out var cid) && cid.GetString() is { } confirmId)
+        {
+            await SendAsync(socket, new
+            {
+                id = NextId(),
+                type = "mobile_app/push_notification_confirm",
+                webhook_id = _webhookId,
+                confirm_id = confirmId
+            }, ct).ConfigureAwait(false);
+        }
+
         if (string.IsNullOrEmpty(message) && string.IsNullOrEmpty(title)) return;
 
         NotificationReceived?.Invoke(new NotificationMessage(

@@ -11,6 +11,12 @@ public interface IHomeAssistantClient
     /// <summary>Registers this device with the mobile_app integration.</summary>
     Task<DeviceRegistrationResponse> RegisterDeviceAsync(DeviceRegistrationRequest request, CancellationToken ct = default);
 
+    /// <summary>
+    /// Updates an existing registration's app_data (used to declare local push
+    /// support on instances where this device registered before that was added).
+    /// </summary>
+    Task UpdateRegistrationAsync(string webhookId, DeviceRegistrationRequest request, CancellationToken ct = default);
+
     /// <summary>Registers a single sensor (must be done before updating it).</summary>
     Task RegisterSensorAsync(string webhookId, Sensor sensor, CancellationToken ct = default);
 

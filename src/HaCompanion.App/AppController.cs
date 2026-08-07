@@ -136,18 +136,31 @@ public sealed class AppController : IAsyncDisposable
 
         var client = new HomeAssistantClient(_http, config.BaseUrl, tokenManager);
 
+        var registration = DeviceInfo.BuildRegistration(config.DeviceId);
         if (!config.Registered)
         {
-            var registration = await client.RegisterDeviceAsync(
-                DeviceInfo.BuildRegistration(config.DeviceId), ct).ConfigureAwait(false);
-            config.WebhookId = registration.WebhookId;
-            config.CloudhookUrl = registration.CloudhookUrl;
-            config.RemoteUiUrl = registration.RemoteUiUrl;
+            var response = await client.RegisterDeviceAsync(registration, ct).ConfigureAwait(false);
+            config.WebhookId = response.WebhookId;
+            config.CloudhookUrl = response.CloudhookUrl;
+            config.RemoteUiUrl = response.RemoteUiUrl;
             _settings.Save(config);
+        }
+        else
+        {
+            // Existing registrations may predate local-push support, which is what
+            // makes this PC show up as a notify target; re-declare it on every start.
+            try
+            {
+                await client.UpdateRegistrationAsync(config.WebhookId!, registration, ct).ConfigureAwait(false);
+            }
+            catch
+            {
+                // Non-fatal: sensors still work, notifications may not.
+            }
         }
 
         var ws = new HaWebSocketClient(
-            () => new ClientWebSocketAdapter(), config.BaseUrl, tokenManager);
+            () => new ClientWebSocketAdapter(), config.BaseUrl, tokenManager, config.WebhookId!);
         var sensors = new SensorSyncService(client, _status);
 
         var connection = new ConnectionManager(ws, sensors, config.WebhookId!);

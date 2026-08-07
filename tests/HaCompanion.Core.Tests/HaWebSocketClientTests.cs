@@ -41,10 +41,11 @@ public class HaWebSocketClientTests
     }
 
     [Fact]
-    public async Task Authenticates_subscribes_and_raises_notification()
+    public async Task Authenticates_opens_push_channel_and_raises_notification()
     {
         var socket = new FakeSocket();
-        var client = new HaWebSocketClient(() => socket, "https://ha.local:8123", new StaticTokenProvider("tok-abc"));
+        var client = new HaWebSocketClient(
+            () => socket, "https://ha.local:8123", new StaticTokenProvider("tok-abc"), "hook-123");
 
         NotificationMessage? received = null;
         client.NotificationReceived += n => received = n;
@@ -54,7 +55,7 @@ public class HaWebSocketClientTests
         socket.Enqueue("""{"type":"auth_required","ha_version":"2024.1"}""");
         socket.Enqueue("""{"type":"auth_ok"}""");
         socket.Enqueue("""{"id":1,"type":"result","success":true}""");
-        socket.Enqueue("""{"id":1,"type":"event","event":{"event_type":"persistent_notification","data":{"title":"Door","message":"Front door open"}}}""");
+        socket.Enqueue("""{"id":1,"type":"event","event":{"title":"Door","message":"Front door open"}}""");
         socket.Close();
 
         await run;
@@ -65,11 +66,12 @@ public class HaWebSocketClientTests
             Assert.Equal("auth", authDoc.RootElement.GetProperty("type").GetString());
             Assert.Equal("tok-abc", authDoc.RootElement.GetProperty("access_token").GetString());
         }
-        // Second frame subscribes to persistent_notification events.
+        // Second frame opens the mobile_app local push channel.
         using (var subDoc = JsonDocument.Parse(socket.Sent[1]))
         {
-            Assert.Equal("subscribe_events", subDoc.RootElement.GetProperty("type").GetString());
-            Assert.Equal("persistent_notification", subDoc.RootElement.GetProperty("event_type").GetString());
+            Assert.Equal("mobile_app/push_notification_channel", subDoc.RootElement.GetProperty("type").GetString());
+            Assert.Equal("hook-123", subDoc.RootElement.GetProperty("webhook_id").GetString());
+            Assert.True(subDoc.RootElement.GetProperty("support_confirm").GetBoolean());
         }
 
         Assert.NotNull(received);
@@ -78,10 +80,36 @@ public class HaWebSocketClientTests
     }
 
     [Fact]
+    public async Task Confirms_notifications_that_request_confirmation()
+    {
+        var socket = new FakeSocket();
+        var client = new HaWebSocketClient(
+            () => socket, "https://ha.local:8123", new StaticTokenProvider("tok"), "hook-xyz");
+
+        var run = client.RunAsync(CancellationToken.None);
+        socket.Enqueue("""{"type":"auth_required"}""");
+        socket.Enqueue("""{"type":"auth_ok"}""");
+        socket.Enqueue("""{"id":1,"type":"event","event":{"message":"Hi","hass_confirm_id":"abc123"}}""");
+        socket.Close();
+
+        await run;
+
+        var confirm = socket.Sent
+            .Select(s => JsonDocument.Parse(s))
+            .FirstOrDefault(d => d.RootElement.GetProperty("type").GetString()
+                                 == "mobile_app/push_notification_confirm");
+
+        Assert.NotNull(confirm);
+        Assert.Equal("abc123", confirm!.RootElement.GetProperty("confirm_id").GetString());
+        Assert.Equal("hook-xyz", confirm.RootElement.GetProperty("webhook_id").GetString());
+    }
+
+    [Fact]
     public async Task Auth_invalid_throws_auth_exception()
     {
         var socket = new FakeSocket();
-        var client = new HaWebSocketClient(() => socket, "https://ha.local:8123", new StaticTokenProvider("bad"));
+        var client = new HaWebSocketClient(
+            () => socket, "https://ha.local:8123", new StaticTokenProvider("bad"), "hook");
 
         var run = client.RunAsync(CancellationToken.None);
         socket.Enqueue("""{"type":"auth_required"}""");

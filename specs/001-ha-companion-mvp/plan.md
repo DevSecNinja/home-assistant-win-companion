@@ -138,9 +138,10 @@ layer and provides the concrete Windows implementations of the core abstractions
    (device_class battery, unit %) and `battery_state` (charging/discharging/…).
    Update on a timer and on OS power-status change.
 4. **Notifications**: Maintain a WebSocket connection (`/api/websocket`), authenticate
-   with the access token, and subscribe to `persistent_notification` creation events
-   to render Windows toasts. This replaces mobile push, which Windows lacks an
-   equivalent for. Documented as an MVP assumption.
+   with the access token, and open a `mobile_app/push_notification_channel` (local
+   push) to render Windows toasts, confirming each delivery. Registration declares
+   `app_data.push_websocket_channel` so the PC becomes a notify target. This
+   replaces mobile push, which Windows lacks an equivalent for.
 5. **Open Home Assistant**: Instead of embedding a web view, the companion provides
    an "Open Home Assistant" action (window button + tray menu) that launches the
    configured base URL in the user's default browser via `Process.Start` with

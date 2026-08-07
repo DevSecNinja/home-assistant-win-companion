@@ -11,6 +11,9 @@ public sealed class PowerShellWinGetUpdateProvider : IWinGetUpdateProvider
     private static readonly TimeSpan InstallTimeout = TimeSpan.FromMinutes(10);
 
     private const string ModuleName = "Microsoft.WinGet.Client";
+    private const string RequiredModuleVersion = "1.29.280";
+    private const string RequiredPackageSha256 =
+        "726602001E6137EFFF66AA73C197C6AB6396AE2F9634D0ADAADA17EC5068EE46";
     private static string PowerShellPath { get; } = Path.Combine(
         Environment.SystemDirectory,
         "WindowsPowerShell",
@@ -20,10 +23,10 @@ public sealed class PowerShellWinGetUpdateProvider : IWinGetUpdateProvider
     public async Task<bool> IsModuleInstalledAsync(
         CancellationToken cancellationToken = default)
     {
-        const string script =
-            "$module = Get-Module -ListAvailable -Name Microsoft.WinGet.Client "
-            + "| Sort-Object Version -Descending | Select-Object -First 1; "
-            + "[Console]::Out.Write($(if ($null -ne $module) { 'true' } else { 'false' }))";
+        var script = ValidationFunction
+            + "try { Get-ValidatedWinGetModule | Out-Null; "
+            + "[Console]::Out.Write('true') } "
+            + "catch { [Console]::Out.Write('false') }";
 
         var result = await RunAsync(script, TimeSpan.FromSeconds(30), cancellationToken)
             .ConfigureAwait(false);
@@ -34,16 +37,50 @@ public sealed class PowerShellWinGetUpdateProvider : IWinGetUpdateProvider
     public async Task<WinGetModuleInstallResult> InstallModuleAsync(
         CancellationToken cancellationToken = default)
     {
-        const string script =
-            "$ErrorActionPreference = 'Stop'; "
-            + "[Net.ServicePointManager]::SecurityProtocol = "
-            + "[Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12; "
-            + "if (-not (Get-PackageProvider -Name NuGet -ListAvailable -ErrorAction SilentlyContinue)) { "
-            + "Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 "
-            + "-Scope CurrentUser -Force -Confirm:$false | Out-Null }; "
-            + "Install-Module -Name Microsoft.WinGet.Client -Repository PSGallery "
-            + "-Scope CurrentUser -Force -AllowClobber -Confirm:$false -ErrorAction Stop; "
-            + "[Console]::Out.Write('installed')";
+        var script = $$"""
+            $ErrorActionPreference = 'Stop'
+            [Net.ServicePointManager]::SecurityProtocol =
+              [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+
+            $moduleRoot = Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'WindowsPowerShell\Modules'
+            $target = Join-Path $moduleRoot '{{ModuleName}}\{{RequiredModuleVersion}}'
+            $work = Join-Path ([IO.Path]::GetTempPath()) ([Guid]::NewGuid().ToString('N'))
+            $package = Join-Path $work '{{ModuleName}}.nupkg'
+            $expanded = Join-Path $work 'expanded'
+
+            try {
+              New-Item -ItemType Directory -Path $expanded -Force | Out-Null
+              Invoke-WebRequest `
+                -Uri 'https://www.powershellgallery.com/api/v2/package/{{ModuleName}}/{{RequiredModuleVersion}}' `
+                -OutFile $package -UseBasicParsing
+
+              $actualHash = (Get-FileHash -Path $package -Algorithm SHA256).Hash
+              if ($actualHash -ne '{{RequiredPackageSha256}}') {
+                throw 'The WinGet client module package failed integrity verification.'
+              }
+
+              Add-Type -AssemblyName System.IO.Compression.FileSystem
+              [IO.Compression.ZipFile]::ExtractToDirectory($package, $expanded)
+
+              if (Test-Path $target) {
+                Remove-Item $target -Recurse -Force
+              }
+              New-Item -ItemType Directory -Path $target -Force | Out-Null
+              Get-ChildItem $expanded -Force |
+                Where-Object { $_.Name -notin '_rels', 'package', '[Content_Types].xml' -and
+                               $_.Extension -ne '.nuspec' } |
+                Copy-Item -Destination $target -Recurse -Force
+              Set-Content -Path (Join-Path $target '.package.sha256') `
+                -Value '{{RequiredPackageSha256}}' -NoNewline -Encoding Ascii
+            }
+            finally {
+              Remove-Item $work -Recurse -Force -ErrorAction SilentlyContinue
+            }
+
+            {{ValidationFunction}}
+            Get-ValidatedWinGetModule | Out-Null
+            [Console]::Out.Write('installed')
+            """;
 
         var result = await RunAsync(script, InstallTimeout, cancellationToken)
             .ConfigureAwait(false);
@@ -69,10 +106,12 @@ public sealed class PowerShellWinGetUpdateProvider : IWinGetUpdateProvider
                 DateTimeOffset.UtcNow);
         }
 
-        const string script =
+        var script =
             "$ErrorActionPreference = 'Stop'; "
             + "$OutputEncoding = [Console]::OutputEncoding = New-Object Text.UTF8Encoding($false); "
-            + "Import-Module Microsoft.WinGet.Client -ErrorAction Stop; "
+            + ValidationFunction
+            + "$module = Get-ValidatedWinGetModule; "
+            + "Import-Module -Name $module.Path -Force -ErrorAction Stop; "
             + "$updates = @(Get-WinGetPackage -ErrorAction Stop "
             + "| Where-Object IsUpdateAvailable "
             + "| ForEach-Object { [pscustomobject]@{ "
@@ -166,4 +205,38 @@ public sealed class PowerShellWinGetUpdateProvider : IWinGetUpdateProvider
     }
 
     private readonly record struct ProcessResult(int ExitCode, string Output, bool TimedOut);
+
+    private static string ValidationFunction { get; } = $$"""
+        function Get-ValidatedWinGetModule {
+          $module = Get-Module -ListAvailable -FullyQualifiedName @{
+            ModuleName = '{{ModuleName}}'
+            RequiredVersion = '{{RequiredModuleVersion}}'
+          } | Select-Object -First 1
+          if ($null -eq $module) {
+            throw 'The required WinGet client module version is not installed.'
+          }
+
+          $moduleRoot = Split-Path -Parent $module.Path
+          $provenance = Join-Path $moduleRoot '.package.sha256'
+          if (-not (Test-Path $provenance) -or
+              (Get-Content $provenance -Raw).Trim() -ne '{{RequiredPackageSha256}}') {
+            throw 'The WinGet client module was not installed from the audited package.'
+          }
+
+          $manifestSignature = Get-AuthenticodeSignature -FilePath $module.Path
+          if ($manifestSignature.Status -ne 'Valid' -or
+              $manifestSignature.SignerCertificate.Subject -notmatch 'O=Microsoft Corporation') {
+            throw 'The WinGet client module manifest is not signed by Microsoft.'
+          }
+
+          $invalidFiles = @(Get-ChildItem $moduleRoot -Recurse -File |
+            Where-Object { $_.Extension -in '.dll', '.ps1', '.psd1', '.psm1' } |
+            Where-Object { (Get-AuthenticodeSignature -FilePath $_.FullName).Status -ne 'Valid' })
+          if ($invalidFiles.Count -ne 0) {
+            throw 'The WinGet client module contains unsigned executable files.'
+          }
+
+          return $module
+        }
+        """;
 }

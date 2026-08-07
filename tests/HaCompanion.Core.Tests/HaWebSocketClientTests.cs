@@ -44,7 +44,7 @@ public class HaWebSocketClientTests
     public async Task Authenticates_subscribes_and_raises_notification()
     {
         var socket = new FakeSocket();
-        var client = new HaWebSocketClient(() => socket, "https://ha.local:8123", () => "tok-abc");
+        var client = new HaWebSocketClient(() => socket, "https://ha.local:8123", new StaticTokenProvider("tok-abc"));
 
         NotificationMessage? received = null;
         client.NotificationReceived += n => received = n;
@@ -81,7 +81,7 @@ public class HaWebSocketClientTests
     public async Task Auth_invalid_throws_auth_exception()
     {
         var socket = new FakeSocket();
-        var client = new HaWebSocketClient(() => socket, "https://ha.local:8123", () => "bad");
+        var client = new HaWebSocketClient(() => socket, "https://ha.local:8123", new StaticTokenProvider("bad"));
 
         var run = client.RunAsync(CancellationToken.None);
         socket.Enqueue("""{"type":"auth_required"}""");

@@ -9,7 +9,7 @@ Home Assistant WebSocket API — used by US3 and connection state.
 ## Handshake
 
 1. Server → client: `{ "type": "auth_required", "ha_version": "..." }`
-2. Client → server: `{ "type": "auth", "access_token": "<long-lived-token>" }`
+2. Client → server: `{ "type": "auth", "access_token": "<access-token>" }`
 3. Server → client: `{ "type": "auth_ok" }` (or `{ "type": "auth_invalid" }` → AuthError)
 
 ## Subscribe to notification events

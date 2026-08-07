@@ -6,7 +6,7 @@ Home Assistant native app integration — used by US2.
 
 `POST {BaseUrl}/api/mobile_app/registrations`
 
-Headers: `Authorization: Bearer <long-lived-access-token>`, `Content-Type: application/json`
+Headers: `Authorization: Bearer <access-token>`, `Content-Type: application/json`
 
 ## Request body
 

@@ -26,7 +26,7 @@ public class HomeAssistantClientTests
     }
 
     private static HomeAssistantClient CreateClient(StubHandler handler, string token = "tok-1234")
-        => new(new HttpClient(handler), "https://ha.local:8123/", () => token);
+        => new(new HttpClient(handler), "https://ha.local:8123/", new StaticTokenProvider(token));
 
     [Fact]
     public async Task ValidateAsync_sends_bearer_token_and_returns_true_on_success()

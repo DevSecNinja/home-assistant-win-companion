@@ -97,6 +97,51 @@ public class SensorSyncServiceTests
     }
 
     [Fact]
+    public async Task A_sensor_removed_from_the_app_is_retired_on_the_next_start()
+    {
+        // Simulates upgrading to a version that no longer has this sensor: Home
+        // Assistant knows it (persisted registry), but the catalog no longer
+        // produces it. Without retirement the entity would sit in Home Assistant
+        // showing its last value forever.
+        var registered = new Dictionary<string, RegisteredSensor>(StringComparer.Ordinal)
+        {
+            ["connectivity_ssid"] = new() { Type = "sensor", Name = "SSID" }
+        };
+
+        var persisted = 0;
+        var client = new FakeClient();
+        var svc = new SensorSyncService(client, BatteryCatalog(), registered, () => persisted++);
+
+        await svc.SyncAsync("wh", SensorReadContext.Periodic);
+
+        var retire = Assert.Single(client.RegisterCalls, c => c.Id == "connectivity_ssid");
+        Assert.True(retire.Disabled);
+
+        // Forgotten locally too, so it is not retired again on every sync.
+        Assert.False(registered.ContainsKey("connectivity_ssid"));
+        Assert.True(persisted > 0);
+
+        await svc.SyncAsync("wh", SensorReadContext.Periodic);
+        Assert.Single(client.RegisterCalls, c => c.Id == "connectivity_ssid");
+    }
+
+    [Fact]
+    public async Task Registered_sensors_are_persisted_so_they_survive_a_restart()
+    {
+        var registered = new Dictionary<string, RegisteredSensor>(StringComparer.Ordinal);
+        var client = new FakeClient();
+        var svc = new SensorSyncService(client, BatteryCatalog(), registered, persist: null);
+
+        await svc.SyncAsync("wh", SensorReadContext.Periodic);
+
+        Assert.Equal(
+            new[] { BatterySensorProvider.BatteryLevelId, BatterySensorProvider.BatteryStateId },
+            registered.Keys.OrderBy(k => k).ToArray());
+        Assert.Equal("Battery Level", registered[BatterySensorProvider.BatteryLevelId].Name);
+        Assert.Equal("sensor", registered[BatterySensorProvider.BatteryLevelId].Type);
+    }
+
+    [Fact]
     public async Task Switching_a_sensor_off_disables_its_entity_via_register_sensor()
     {
         var prefs = new SensorPreferences();

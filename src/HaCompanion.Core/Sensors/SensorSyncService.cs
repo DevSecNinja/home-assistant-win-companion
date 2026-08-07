@@ -6,45 +6,72 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace HaCompanion.Core.Sensors;
 
 /// <summary>
-/// Registers the machine sensors once and pushes periodic state updates to
-/// Home Assistant. Registration is idempotent per unique_id.
+/// Registers enabled sensors and pushes their states to Home Assistant.
 /// </summary>
+/// <remarks>
+/// Enabling and disabling both go through <c>register_sensor</c>, not
+/// <c>update_sensor_states</c>: Home Assistant only honours the <c>disabled</c>
+/// flag on the re-registration path, so a disable sent in an update batch is
+/// silently ignored. For the same reason the flag is always sent explicitly -
+/// omitting it leaves the previous value untouched, which would make a re-enabled
+/// sensor stay disabled forever.
+/// </remarks>
 public sealed class SensorSyncService
 {
     private readonly IHomeAssistantClient _client;
-    private readonly ISystemStatusProvider _status;
+    private readonly SensorCatalog _catalog;
     private readonly ILogger<SensorSyncService> _log;
-    private readonly HashSet<string> _registered = new(StringComparer.Ordinal);
+
+    /// <summary>What we have registered, so a disabled sensor can be re-registered.</summary>
+    private readonly Dictionary<string, (string Type, string Name)> _registered = new(StringComparer.Ordinal);
 
     public SensorSyncService(
         IHomeAssistantClient client,
-        ISystemStatusProvider status,
+        SensorCatalog catalog,
         ILogger<SensorSyncService>? log = null)
     {
         _client = client ?? throw new ArgumentNullException(nameof(client));
-        _status = status ?? throw new ArgumentNullException(nameof(status));
+        _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
         _log = log ?? NullLogger<SensorSyncService>.Instance;
     }
 
-    /// <summary>Registers all sensors that have not yet been registered.</summary>
-    public async Task EnsureRegisteredAsync(string webhookId, CancellationToken ct = default)
-    {
-        foreach (var sensor in BatterySensorProvider.BuildAll(_status.GetStatus()))
-        {
-            if (_registered.Contains(sensor.UniqueId)) continue;
-            await _client.RegisterSensorAsync(webhookId, sensor, ct).ConfigureAwait(false);
-            _registered.Add(sensor.UniqueId);
-        }
-    }
-
     /// <summary>Registers (if needed) then pushes the latest sensor states.</summary>
-    public async Task SyncAsync(string webhookId, CancellationToken ct = default)
+    public async Task SyncAsync(string webhookId, SensorReadContext context, CancellationToken ct = default)
     {
-        await EnsureRegisteredAsync(webhookId, ct).ConfigureAwait(false);
-        var sensors = BatterySensorProvider.BuildAll(_status.GetStatus());
+        var readings = _catalog.Read(context);
+
+        foreach (var sensor in readings)
+        {
+            if (_registered.ContainsKey(sensor.UniqueId)) continue;
+
+            // Explicitly enable: a sensor the user previously switched off is still
+            // flagged disabled in Home Assistant until we say otherwise.
+            sensor.Disabled = false;
+            await _client.RegisterSensorAsync(webhookId, sensor, ct).ConfigureAwait(false);
+            sensor.Disabled = null;
+            _registered[sensor.UniqueId] = (sensor.Type, sensor.Name);
+        }
+
+        // Anything we previously reported but the user has since switched off.
+        var live = readings.Select(r => r.UniqueId).ToHashSet(StringComparer.Ordinal);
+        foreach (var id in _registered.Keys.Where(id => !live.Contains(id)).ToList())
+        {
+            var (type, name) = _registered[id];
+            await _client.RegisterSensorAsync(webhookId, new Sensor
+            {
+                UniqueId = id,
+                Type = type,
+                Name = name,
+                Disabled = true
+            }, ct).ConfigureAwait(false);
+            _registered.Remove(id);
+        }
+
+        if (readings.Count == 0) return;
+
         try
         {
-            await _client.UpdateSensorsAsync(webhookId, sensors, ct).ConfigureAwait(false);
+            await _client.UpdateSensorsAsync(webhookId, readings, ct).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {

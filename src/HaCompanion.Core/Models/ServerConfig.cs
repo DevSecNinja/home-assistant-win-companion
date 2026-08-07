@@ -19,6 +19,12 @@ public sealed class ServerConfig
 
     public string? CloudhookUrl { get; set; }
 
+    /// <summary>
+    /// Per-sensor enablement and settings. Non-secret, so it lives here alongside
+    /// the rest of the configuration.
+    /// </summary>
+    public Sensors.SensorPreferences Sensors { get; set; } = new();
+
     public bool Registered => !string.IsNullOrEmpty(WebhookId);
 
     public bool IsValid()

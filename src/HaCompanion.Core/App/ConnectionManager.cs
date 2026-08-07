@@ -1,5 +1,6 @@
 using HaCompanion.Core.HomeAssistant;
 using HaCompanion.Core.Models;
+using HaCompanion.Core.Abstractions;
 using HaCompanion.Core.Sensors;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -22,12 +23,39 @@ public sealed class ConnectionManager : IAsyncDisposable
     private readonly TimeSpan _syncInterval;
     private readonly ILogger<ConnectionManager> _log;
     private readonly Random _jitter = new();
+    private readonly IClock _clock;
 
     private CancellationTokenSource? _cts;
     private Task? _wsLoop;
     private Task? _syncLoop;
 
     public ConnectionState State { get; private set; } = ConnectionState.Disconnected;
+
+    /// <summary>
+    /// When sensor states were last pushed to Home Assistant successfully. Surfaced
+    /// in the companion's own UI so the user can tell at a glance that it is alive.
+    /// </summary>
+    public DateTimeOffset? LastSyncedAt { get; private set; }
+
+    /// <summary>Message from the most recent sync failure, for troubleshooting.</summary>
+    public string? LastError { get; private set; }
+
+    public DateTimeOffset? LastErrorAt { get; private set; }
+
+    /// <summary>Sync failures since the last success; resets to zero on success.</summary>
+    public int ConsecutiveFailures { get; private set; }
+
+    public TimeSpan SyncInterval => _syncInterval;
+
+    /// <summary>
+    /// Healthy means connected and reporting on schedule. A missed sync window is
+    /// the signal that matters: the socket can look fine while pushes are failing.
+    /// </summary>
+    public bool IsHealthy =>
+        State == ConnectionState.Connected
+        && ConsecutiveFailures == 0
+        && LastSyncedAt is not null
+        && DateTimeOffset.UtcNow - LastSyncedAt.Value < _syncInterval * 2.5;
 
     public event Action<ConnectionState>? StateChanged;
     public event Action<NotificationMessage>? NotificationReceived;
@@ -37,12 +65,14 @@ public sealed class ConnectionManager : IAsyncDisposable
         SensorSyncService sensors,
         string webhookId,
         TimeSpan? syncInterval = null,
+        IClock? clock = null,
         ILogger<ConnectionManager>? log = null)
     {
         _ws = ws ?? throw new ArgumentNullException(nameof(ws));
         _sensors = sensors ?? throw new ArgumentNullException(nameof(sensors));
         _webhookId = webhookId ?? throw new ArgumentNullException(nameof(webhookId));
         _syncInterval = syncInterval ?? TimeSpan.FromSeconds(60);
+        _clock = clock ?? new SystemClock();
         _log = log ?? NullLogger<ConnectionManager>.Instance;
         _ws.NotificationReceived += n => NotificationReceived?.Invoke(n);
     }
@@ -93,7 +123,7 @@ public sealed class ConnectionManager : IAsyncDisposable
         // Immediate first sync, then on the configured interval.
         while (!ct.IsCancellationRequested)
         {
-            await SyncOnceAsync(ct).ConfigureAwait(false);
+            await SyncOnceAsync(SensorReadContext.Periodic, ct).ConfigureAwait(false);
             try
             {
                 await Task.Delay(_syncInterval, ct).ConfigureAwait(false);
@@ -106,21 +136,30 @@ public sealed class ConnectionManager : IAsyncDisposable
     }
 
     /// <summary>Runs a single sensor sync now (e.g. on power-state change).</summary>
-    public Task SyncNowAsync() => SyncOnceAsync(_cts?.Token ?? CancellationToken.None);
+    public Task SyncNowAsync(SensorReadContext? context = null) =>
+        SyncOnceAsync(context ?? SensorReadContext.StateChange, _cts?.Token ?? CancellationToken.None);
 
-    private async Task SyncOnceAsync(CancellationToken ct)
+    private async Task SyncOnceAsync(SensorReadContext context, CancellationToken ct)
     {
         if (State == ConnectionState.AuthError) return;
         try
         {
-            await _sensors.SyncAsync(_webhookId, ct).ConfigureAwait(false);
+            await _sensors.SyncAsync(_webhookId, context, ct).ConfigureAwait(false);
+            LastSyncedAt = _clock.UtcNow;
+            ConsecutiveFailures = 0;
+            LastError = null;
+            _log.LogDebug("Sensor sync succeeded ({Reason}).", context.Reason);
             if (State is ConnectionState.Connecting or ConnectionState.Reconnecting)
                 SetState(ConnectionState.Connected);
         }
         catch (OperationCanceledException) { }
         catch (Exception ex)
         {
-            _log.LogWarning(ex, "Sensor sync failed.");
+            ConsecutiveFailures++;
+            LastError = ex.Message;
+            LastErrorAt = _clock.UtcNow;
+            _log.LogWarning(ex, "Sensor sync failed ({Reason}), failure #{Count}.",
+                context.Reason, ConsecutiveFailures);
         }
     }
 
@@ -151,3 +190,4 @@ public sealed class ConnectionManager : IAsyncDisposable
         _cts = null;
     }
 }
+

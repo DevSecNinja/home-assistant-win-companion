@@ -7,17 +7,69 @@ It is **not** a dashboard. It stays out of your way in the system tray, reports 
 PC's status to Home Assistant, turns Home Assistant notifications into native Windows
 toasts, and opens Home Assistant in your normal browser when you want the UI.
 
+## Why this project exists
+
+Windows is the one major platform without a first-party Home Assistant companion.
+There are good third-party options, but they generally ask you to run extra
+infrastructure or install a custom integration. The goals here are deliberately
+narrow:
+
+- **Lightweight.** A tray app that does a few things well. No embedded browser, no
+  media player, no command runner. If you want the Home Assistant UI, it opens the
+  one you already have.
+- **Native.** WinUI 3 / Windows App SDK, so it looks and behaves like a Windows app -
+  Fluent styling, Mica, native toasts, a real tray icon.
+- **App push like macOS/iOS.** Notifications arrive over the same
+  `mobile_app` local push channel the official Apple apps use, so the PC shows up as
+  a normal notify target in Home Assistant. No MQTT broker, no custom component.
+- **Battle tested.** An explicit goal rather than a claim: spec-driven development,
+  a platform-agnostic core covered by unit tests, protocol behaviour verified against
+  Home Assistant's own source, and decisions recorded in
+  [`specs/`](specs/) so the reasoning survives.
+
+Concretely, that means it talks to the **built-in `mobile_app` integration** - the
+same one the official companion apps use. Nothing to install on the Home Assistant
+side.
+
+### How it compares
+
+[HASS.Agent](https://github.com/LAB02-Research/HASS.Agent) is the established
+Windows companion and is far more capable than this project. If you want commands,
+quick actions, a media player or a large sensor catalogue today, use it. This table
+is about *fit*, not quality.
+
+| | This project | HASS.Agent |
+| --- | --- | --- |
+| Home Assistant side | Built-in `mobile_app` integration | Custom [HASS.Agent integration](https://github.com/LAB02-Research/HASS.Agent-Integration) (HACS) |
+| Extra infrastructure | None | MQTT broker |
+| Notifications | `mobile_app` local push, same as the macOS/iOS apps | MQTT + custom integration; supports images and actionable buttons |
+| Sign-in | OAuth2 in your browser, no token to paste | Long-lived token + MQTT credentials |
+| UI framework | WinUI 3 (Windows App SDK), .NET 9 | WinForms + Syncfusion, .NET 6 |
+| Home Assistant UI | Opens your default browser | Built-in WebView |
+| Sensors | Small, curated, opt-in per sensor | ~37 built in |
+| Commands / media player / quick actions | Not offered | Yes |
+| Runs when logged out | No | Yes, via satellite service |
+| Maturity | Early; MVP | Mature, large community |
+
+The short version: **HASS.Agent is the featureful option; this aims to be the boring
+one that just works with stock Home Assistant.**
+
 ## Features (MVP)
 
 - **Browser-based sign-in** — OAuth2 (IndieAuth) with a loopback redirect. No
   long-lived tokens to create or paste. The refresh token is stored in the Windows
   Credential Locker.
-- **Tray-resident** — closing the window hides it to the notification area.
+- **Tray-resident** — closing the window hides it to the notification area. The tray
+  tooltip shows current health.
 - **Windows toasts** — notifications sent to this PC from Home Assistant appear as
   native toasts, delivered over the `mobile_app` local push channel (Windows has no
   APNS/FCM equivalent).
-- **Status sensors** — reports battery level and battery state back to Home
-  Assistant as a registered `mobile_app` device.
+- **Opt-in sensor catalog** — battery, active/idle, screen locked, connection type,
+  IP address, OS version, last boot and the last-update trigger. Each sensor can be
+  switched on or off individually, shows the value it would report before you enable
+  it, and privacy-sensitive ones are off by default.
+- **Health and logs** — a health verdict based on whether the app is actually
+  reporting on schedule, plus a rolling local log you can open from the UI.
 - **Open Home Assistant** — one click (window or tray menu) to open your instance in
   the default browser.
 
@@ -87,6 +139,16 @@ principles in [`.specify/memory/constitution.md`](.specify/memory/constitution.m
 MVP, verified against a live Home Assistant instance: browser sign-in, device
 registration, session resume, battery sensors updating, and notifications arriving
 as Windows toasts.
+
+## Credits
+
+- The [Home Assistant](https://www.home-assistant.io/) team.
+- [home-assistant/iOS](https://github.com/home-assistant/iOS) — the official
+  macOS/iOS companion. Sensor identifiers and the `Active` sensor's design are
+  deliberately mirrored from it so entities line up with the official apps.
+- [HASS.Agent](https://github.com/LAB02-Research/HASS.Agent) — the established
+  Windows companion, and a useful reference for what a Windows sensor catalogue can
+  cover.
 
 ## License
 

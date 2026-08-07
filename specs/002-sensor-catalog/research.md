@@ -156,3 +156,34 @@ timestamp sensor would duplicate it. The official apps instead expose
 trigger string). The companion mirrors that, and separately shows the actual last
 push time in its own status view where it is genuinely not otherwise available.
 
+
+## Decision: Validate the webhook response body, not just the status code
+
+**Rationale**: `update_sensor_states` returns **HTTP 200 even when it rejects every
+sensor**, reporting per-sensor outcomes only in the response body:
+
+```json
+{"battery_level":{"success":false,"error":{"code":"invalid_format",
+  "message":"extra keys not allowed @ data['device_class'] ..."}}}
+```
+
+This shipped as a live bug: sensors registered fine and then never updated again,
+while the app reported itself healthy, because `EnsureSuccessStatusCode()` passed
+and the body was discarded.
+
+Two rules follow:
+
+1. **`update_sensor_states` accepts only** `unique_id`, `type`, `state`, `icon` and
+   `attributes` (HA's `SENSOR_SCHEMA_FULL`). Registration metadata - `name`,
+   `device_class`, `entity_category`, `unit_of_measurement`, `state_class` - is
+   valid on `register_sensor` but is rejected with `invalid_format` on update. The
+   two payloads must therefore be built separately, not reused.
+2. A partial rejection is raised as `HomeAssistantRejectedException` so it counts as
+   a sync failure and turns the health indicator red. Silent tolerance is what let
+   this go unnoticed. It deliberately does *not* trigger re-registration, because a
+   schema rejection is a bug in what we send and retrying would loop.
+
+**Why the tests missed it**: the fake HTTP handler returned 200 for anything and
+never modelled the server's schema, so the tests asserted only that we sent
+*something*. There is now a test pinning the exact accepted key set, and one
+asserting a rejection body surfaces as an exception.

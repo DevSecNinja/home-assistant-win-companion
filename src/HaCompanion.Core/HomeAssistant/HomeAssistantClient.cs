@@ -18,6 +18,17 @@ public sealed class HomeAssistantAuthException : Exception
 }
 
 /// <summary>
+/// Thrown when Home Assistant accepts the request (HTTP 200) but rejects one or
+/// more individual sensors in the response body. Surfacing this as an error is
+/// deliberate: a silent partial rejection previously meant sensors stopped
+/// updating for hours while the app still reported itself healthy.
+/// </summary>
+public sealed class HomeAssistantRejectedException : Exception
+{
+    public HomeAssistantRejectedException(string message) : base(message) { }
+}
+
+/// <summary>
 /// Home Assistant REST + webhook client. The access token is supplied via a
 /// factory so it can be rotated without rebuilding the client, and is never logged.
 /// </summary>
@@ -114,11 +125,45 @@ public sealed class HomeAssistantClient : IHomeAssistantClient
 
     public async Task UpdateSensorsAsync(string webhookId, IReadOnlyList<Sensor> sensors, CancellationToken ct = default)
     {
-        var payload = new { type = "update_sensor_states", data = sensors };
-        await PostWebhookAsync(webhookId, payload, ct).ConfigureAwait(false);
+        var payload = new { type = "update_sensor_states", data = sensors.Select(ToUpdatePayload).ToList() };
+        var body = await PostWebhookAsync(webhookId, payload, ct).ConfigureAwait(false);
+
+        // Home Assistant reports per-sensor success in the body and still returns
+        // HTTP 200 when an individual sensor is rejected, so a 200 alone does not
+        // mean the update landed.
+        if (!string.IsNullOrWhiteSpace(body) && body.Contains("\"success\":false", StringComparison.OrdinalIgnoreCase))
+        {
+            _log.LogWarning("Home Assistant rejected part of a sensor update: {Body}", body);
+            throw new HomeAssistantRejectedException(
+                "Home Assistant rejected one or more sensor updates: " + body);
+        }
+
+        _log.LogDebug("Sensor update accepted ({Count} sensors).", sensors.Count);
     }
 
-    private async Task PostWebhookAsync(string webhookId, object payload, CancellationToken ct)
+    /// <summary>
+    /// Projects a sensor onto the only keys <c>update_sensor_states</c> accepts
+    /// (HA's <c>SENSOR_SCHEMA_FULL</c>: unique_id, type, state, icon, attributes).
+    /// Registration metadata such as name, device_class, entity_category,
+    /// unit_of_measurement or state_class is rejected with <c>invalid_format</c>
+    /// and would silently drop the whole sensor from the update.
+    /// </summary>
+    internal static Dictionary<string, object?> ToUpdatePayload(Sensor sensor)
+    {
+        var payload = new Dictionary<string, object?>
+        {
+            ["unique_id"] = sensor.UniqueId,
+            ["type"] = sensor.Type,
+            ["state"] = sensor.State
+        };
+
+        if (sensor.Icon is not null) payload["icon"] = sensor.Icon;
+        if (sensor.Attributes is not null) payload["attributes"] = sensor.Attributes;
+
+        return payload;
+    }
+
+    private async Task<string> PostWebhookAsync(string webhookId, object payload, CancellationToken ct)
     {
         var request = new HttpRequestMessage(HttpMethod.Post, new Uri(_baseUri, $"api/webhook/{webhookId}"))
         {
@@ -128,6 +173,7 @@ public sealed class HomeAssistantClient : IHomeAssistantClient
         using (var response = await _http.SendAsync(request, ct).ConfigureAwait(false))
         {
             response.EnsureSuccessStatusCode();
+            return await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
         }
     }
 }

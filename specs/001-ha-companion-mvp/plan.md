@@ -29,14 +29,15 @@ OAuth loopback listener). Tray icon via `H.NotifyIcon.WinUI`. Toasts
 via Windows App SDK `AppNotification` API. Tests via `xUnit`.
 
 **Storage**: Windows Credential Locker (`Windows.Security.Credentials.PasswordVault`)
-for the OAuth refresh token and webhook secret; a small JSON app-settings file
-(`%LOCALAPPDATA%\HaCompanion\settings.json`) for non-secret config (base URL,
-webhook id, device id).
+for the OAuth refresh token, webhook id, and cloudhook URL; a small JSON app-settings
+file (`%LOCALAPPDATA%\HaCompanion\settings.json`) for non-secret config (base URL,
+device id, sensor preferences, and registered-sensor metadata).
 
 **Testing**: xUnit unit tests for the core library (client request building, sensor
 provider, settings/registration models) with faked HTTP/OS interfaces.
 
-**Target Platform**: Windows 10 build 19041+ and Windows 11 (x64, ARM64).
+**Target Platform**: Windows 10 build 19041+ and Windows 11 (x64 and ARM64; the
+source run script currently builds x64).
 
 **Project Type**: Desktop application (native tray-resident companion; no embedded
 web view) with a reusable core library.
@@ -132,9 +133,10 @@ layer and provides the concrete Windows implementations of the core abstractions
 2. **Device registration**: On first successful connect, POST
    `/api/mobile_app/registrations` with `app_id=io.homeassistant.windows`, a stable
    `device_id` (GUID persisted), OS/model metadata, `supports_encryption=false`.
-   Persist the returned `webhook_id` (and `remote_ui_url`/`cloudhook_url` if any).
+   Persist `webhook_id` and `cloudhook_url` in the Credential Locker; persist the
+   non-secret `remote_ui_url` in settings.
 3. **Sensor reporting**: Use webhook `POST /api/webhook/<webhook_id>` with
-   `register_sensor` then periodic `update_sensor`. Sensors: `battery_level`
+   `register_sensor` then periodic `update_sensor_states`. Sensors: `battery_level`
    (device_class battery, unit %) and `battery_state` (charging/discharging/…).
    Update on a timer and on OS power-status change.
 4. **Notifications**: Maintain a WebSocket connection (`/api/websocket`), authenticate
@@ -155,4 +157,3 @@ layer and provides the concrete Windows implementations of the core abstractions
 ## Complexity Tracking
 
 No constitution violations; section intentionally empty.
-

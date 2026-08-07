@@ -43,4 +43,13 @@ public sealed class Sensor
     [JsonPropertyName("attributes")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IDictionary<string, object>? Attributes { get; set; }
+
+    /// <summary>
+    /// When true, Home Assistant disables the corresponding entity. Used when the
+    /// user switches a previously reported sensor off, so the entity does not
+    /// linger showing a stale value.
+    /// </summary>
+    [JsonPropertyName("disabled")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? Disabled { get; set; }
 }

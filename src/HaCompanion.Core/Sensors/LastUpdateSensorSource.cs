@@ -1,45 +1,55 @@
+using HaCompanion.Core.Abstractions;
 using HaCompanion.Core.Models;
 
 namespace HaCompanion.Core.Sensors;
 
 /// <summary>
-/// Reports why the companion last pushed to Home Assistant, mirroring the official
-/// apps' <c>last_update_trigger</c> sensor. The state is the trigger reason rather
-/// than a timestamp, because Home Assistant already records when an entity last
-/// updated - the reason is the part it cannot know.
+/// Optionally reports when the companion last pushed to Home Assistant.
 /// </summary>
 /// <remarks>
+/// Off by default. Home Assistant's built-in `last_reported` already tracks when an
+/// entity last reported, without writing a history entry, whereas this sensor
+/// changes on every update and so records one every sync interval. It exists for
+/// people who want staleness to be obvious in the normal UI and accept that cost.
+///
 /// The value is produced as part of the outgoing batch, so it never causes a push
 /// of its own (which would otherwise feed back into itself indefinitely).
 /// </remarks>
 public sealed class LastUpdateSensorSource : ISensorSource
 {
-    public const string LastUpdateTriggerId = "last_update_trigger";
+    public const string LastUpdateTimeId = "last_update_time";
+
+    private readonly IClock _clock;
+
+    public LastUpdateSensorSource(IClock? clock = null) => _clock = clock ?? new SystemClock();
 
     public IReadOnlyList<SensorDefinition> Definitions { get; } = new[]
     {
         new SensorDefinition(
-            LastUpdateTriggerId,
-            "Last Update Trigger",
-            "Why this PC last reported to Home Assistant. Useful for diagnosing a companion that has stopped reporting.",
+            LastUpdateTimeId,
+            "Last Update Time",
+            "When this PC last reported. Makes staleness obvious, but writes a history entry "
+            + "every sync. Home Assistant's built-in last_reported already tracks this without "
+            + "the recorder cost.",
             SensorPrivacy.Benign,
-            EnabledByDefault: true)
+            EnabledByDefault: false)
     };
 
     public IReadOnlyList<Sensor> Read(IReadOnlySet<string> enabled, SensorReadContext context)
     {
-        if (!enabled.Contains(LastUpdateTriggerId)) return Array.Empty<Sensor>();
+        if (!enabled.Contains(LastUpdateTimeId)) return Array.Empty<Sensor>();
 
         return new[]
         {
             new Sensor
             {
-                UniqueId = LastUpdateTriggerId,
+                UniqueId = LastUpdateTimeId,
                 Type = "sensor",
-                Name = "Last Update Trigger",
-                State = context.Reason,
+                Name = "Last Update Time",
+                State = _clock.UtcNow.ToString("o"),
+                DeviceClass = "timestamp",
                 EntityCategory = "diagnostic",
-                Icon = "mdi:laptop"
+                Icon = "mdi:clock-check-outline"
             }
         };
     }

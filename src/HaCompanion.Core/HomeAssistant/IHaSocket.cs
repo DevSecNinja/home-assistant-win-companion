@@ -20,6 +20,16 @@ public sealed class ClientWebSocketAdapter : IHaSocket
 {
     private readonly ClientWebSocket _socket = new();
 
+    public ClientWebSocketAdapter()
+    {
+        // Without a finite keep-alive timeout a silently dropped link (VPN drop,
+        // Wi-Fi change, sleeping NAT) leaves ReceiveAsync blocked forever: the
+        // notification channel is dead but the loop never returns, so reconnect
+        // never runs. .NET pings by default but waits indefinitely for the pong.
+        _socket.Options.KeepAliveInterval = TimeSpan.FromSeconds(30);
+        _socket.Options.KeepAliveTimeout = TimeSpan.FromSeconds(15);
+    }
+
     public Task ConnectAsync(Uri uri, CancellationToken ct) => _socket.ConnectAsync(uri, ct);
 
     public Task SendAsync(string json, CancellationToken ct)

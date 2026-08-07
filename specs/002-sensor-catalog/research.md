@@ -14,7 +14,7 @@ community automations written for the official app work against a Windows PC.
 | Active | `active` | binary_sensor | Yes |
 | Connection Type | `connectivity_connection_type` | sensor | Yes |
 | SSID / BSSID | `connectivity_ssid` / `connectivity_bssid` | sensor | **Dropped** (see below) |
-| Last Update Trigger | `last_update_trigger` | sensor | Yes |
+| Last Update Trigger | `last_update_trigger` | sensor | **Dropped** (see below) |
 | Battery Level / State | `battery_level` / `battery_state` | sensor | Already shipped |
 | Microphone / Camera in use | `microphone` / `camera` | binary_sensor | Deferred |
 | Frontmost app | `frontmost_app` | sensor | Deferred |
@@ -77,10 +77,11 @@ a personal machine. Sensors are classified and defaulted accordingly:
 | --- | --- | --- |
 | `active`, `screen_locked` | On | Presence/automation value, reveals no content |
 | `battery_level`, `battery_state` | On | Already shipped |
-| `last_update_trigger` | On | Diagnostic only |
+| `last_update_time` | **Off** | Writes recorder history every sync |
 | `os_version` | On | Low sensitivity, diagnostic |
 | `ip_address` | **Off** | Network topology; low risk but not needed by default |
-| `connectivity_ssid` / `connectivity_bssid` | **Off** | SSID/BSSID can infer physical location |
+| `connectivity_connection_type` | **Off** | Optional network context |
+| `connectivity_ssid` / `connectivity_bssid` | Dropped | SSID/BSSID can infer physical location |
 | `frontmost_app` (deferred) | **Off** | Window titles leak document names, URLs, private content |
 
 Privacy-sensitive values must never be written to logs (the existing `Redactor`
@@ -117,7 +118,11 @@ Two consequences:
    disabled in Home Assistant forever unless we send `disabled: false`.
 
 Note that disabled is not deleted: Home Assistant keeps the registry entry and
-shows it greyed out under the device. Removing it entirely is a manual action.
+shows it greyed out under the device, often collapsed under "+N entities not
+shown". It holds no state and is absent from normal pickers. Home Assistant does
+not offer entity deletion while `mobile_app` continues to provide it. Removing it
+entirely requires deleting the whole Mobile App device, which invalidates the
+`webhook_id` and forces the companion to register again.
 
 ## Decision: Wi-Fi SSID and BSSID are out of scope
 

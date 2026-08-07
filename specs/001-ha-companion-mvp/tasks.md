@@ -4,6 +4,12 @@ description: "Task list for Home Assistant Windows Companion (MVP)"
 
 # Tasks: Home Assistant Windows Companion (MVP)
 
+> **Historical record:** This generated task list captures the original MVP plan.
+> The feature shipped and subsequently evolved through features and fixes recorded
+> in issues, commits, and `specs/002-sensor-catalog/`. The unchecked boxes are not
+> outstanding work and are intentionally retained to avoid rewriting the original
+> execution plan as if it had predicted the final implementation.
+
 **Input**: Design documents from `/specs/001-ha-companion-mvp/`
 
 **Prerequisites**: plan.md, spec.md, research.md, data-model.md, contracts/

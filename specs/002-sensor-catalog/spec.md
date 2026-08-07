@@ -4,7 +4,7 @@
 
 **Created**: 2026-08-07
 
-**Status**: Draft
+**Status**: Shipped
 
 **Input**: User description: "More sensors: screen lock, WLAN/Wi-Fi, IP address, OS
 version, idle, last connection/push time. Make the sensors selectable in the
@@ -32,13 +32,13 @@ only the data I am comfortable sharing ever leaves my PC.
 sensors makes the app *less* acceptable, because it would ship location-inferring and
 content-revealing data by default.
 
-**Independent Test**: Open Settings, toggle a sensor off, and confirm it stops being
+**Independent Test**: Open Sensors, toggle a sensor off, and confirm it stops being
 reported and its entity is disabled in Home Assistant; toggle it back on and confirm
 it returns. Testable with only the already-shipped battery sensors.
 
 **Acceptance Scenarios**:
 
-1. **Given** the Settings page, **When** the user views it, **Then** every available
+1. **Given** the Sensors page, **When** the user views it, **Then** every available
    sensor is listed with its name, a description, and an on/off toggle.
 2. **Given** an enabled sensor, **When** the user switches it off, **Then** the app
    stops collecting it, stops sending it, and Home Assistant marks the entity
@@ -73,8 +73,8 @@ revert. Leave the PC untouched past the idle threshold and confirm `Active` turn
 3. **Given** an idle threshold of N minutes, **When** there is no input for longer
    than N, **Then** `Active` becomes off; **When** input resumes, it becomes on.
 4. **Given** the `Active` sensor, **When** inspected in Home Assistant, **Then** its
-   attributes expose the individual sub-states (Idle, Locked, Screensaver, Screen
-   Off, Sleeping, Fast User Switched).
+   attributes expose the individual sub-states (Idle, Locked, Screensaver, Sleeping,
+   Fast User Switched).
 5. **Given** the user changes the idle threshold, **When** it is saved, **Then** the
    new threshold takes effect without restarting the app.
 
@@ -82,27 +82,27 @@ revert. Leave the PC untouched past the idle threshold and confirm `Active` turn
 
 ### User Story 3 - See the PC's network and system context (Priority: P3)
 
-As a user, I want optional sensors for my Wi-Fi network, IP address, OS version and
-when the companion last reported in, so I can build network-aware automations and
-confirm the companion is healthy.
+As a user, I want optional sensors for my network connection, IP address, OS
+version and when the companion last reported in, so I can build network-aware
+automations and confirm the companion is healthy.
 
 **Why this priority**: Useful but supporting; several are privacy-sensitive and are
 therefore off by default. Independently testable once the catalog exists.
 
-**Independent Test**: Enable the network sensors and confirm SSID/BSSID/connection
-type appear and update when the machine changes network; disable and confirm they
-disappear.
+**Independent Test**: Enable Connection Type and IP Address and confirm they update
+when the machine changes network; disable them and confirm their entities become
+disabled.
 
 **Acceptance Scenarios**:
 
-1. **Given** the SSID sensor is enabled and the PC is on Wi-Fi, **When** it reports,
-   **Then** the state is the current SSID.
-2. **Given** the PC is on Ethernet or offline, **When** the SSID sensor reports,
-   **Then** the state is "Not Connected" rather than an error.
-3. **Given** the network changes, **When** the change occurs, **Then** the sensors
+1. **Given** Connection Type is enabled, **When** the PC is on Wi-Fi, Ethernet, or
+   offline, **Then** the state reports that classification.
+2. **Given** IP Address is enabled and no local address is available, **When** it
+   reports, **Then** the state is "Not Connected" rather than an error.
+3. **Given** the network changes, **When** the change occurs, **Then** enabled sensors
    update without waiting for a full sync interval.
-4. **Given** the last-update sensor, **When** the app pushes to Home Assistant,
-   **Then** it reflects that most recent successful push.
+4. **Given** the optional Last Update Time sensor, **When** the app pushes to Home
+   Assistant, **Then** it reflects that most recent successful push.
 5. **Given** the OS version sensor, **When** it reports, **Then** it shows the
    Windows version and build.
 
@@ -129,13 +129,11 @@ disappear.
 - **FR-005**: Disabling a sensor MUST mark the corresponding Home Assistant entity
   disabled rather than leaving a stale entity. Enabling MUST re-enable it. (Both
   must go through `register_sensor`; `update_sensor_states` ignores the flag.)
-- **FR-006**: Privacy-sensitive sensors (IP address, connection type) MUST default
-  to off; presence and diagnostic sensors MAY default to on.
-- **FR-006a**: The catalog MUST show the current value each sensor would report,
-  computed locally and never transmitted, so the user can see what enabling it
-  would share.
+- **FR-006**: Privacy-sensitive sensors (currently IP address) MUST default to off.
+  Other optional network sensors MAY also default to off to minimize disclosure;
+  presence and diagnostic sensors MAY default to on.
 - **FR-007**: The app MUST report an `Active` binary sensor derived from idle, lock,
-  screensaver, display-off, sleep and fast-user-switch state, exposing each
+  screensaver, sleep and fast-user-switch state, exposing each
   sub-state as an attribute.
 - **FR-008**: The app MUST report a `Screen Locked` binary sensor.
 - **FR-009**: The idle threshold MUST be user-configurable and MUST take effect
@@ -179,8 +177,8 @@ disappear.
 
 ### Measurable Outcomes
 
-- **SC-001**: A user can find and change any sensor's on/off state in under 30
-  seconds from the main window.
+- **SC-001**: A user can find and change any sensor's on/off state from the Sensors
+  page opened from the main window.
 - **SC-002**: Locking or unlocking the PC is reflected in Home Assistant within 10
   seconds.
 - **SC-003**: With all optional sensors disabled, network traffic is unchanged from
@@ -202,4 +200,9 @@ disappear.
   Teams presence in particular would require Microsoft Graph and an Entra app
   registration.
 
+## Delivery Notes
 
+This feature was implemented directly from the specification and research while
+Home Assistant and Windows behavior were still being discovered. No separate
+`plan.md` or `tasks.md` was generated. The shipped code, tests, this corrected
+specification, and `research.md` are the feature record.

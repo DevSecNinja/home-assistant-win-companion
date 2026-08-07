@@ -90,6 +90,63 @@ public class HomeAssistantClientTests
     }
 
     [Fact]
+    public async Task UpdateSensorsAsync_sends_only_the_keys_home_assistant_accepts()
+    {
+        var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("{}", Encoding.UTF8, "application/json")
+        });
+        var client = CreateClient(handler);
+
+        await client.UpdateSensorsAsync("wh-1", new[]
+        {
+            new Sensor
+            {
+                UniqueId = "battery_level",
+                Type = "sensor",
+                Name = "Battery Level",
+                State = 42,
+                DeviceClass = "battery",
+                UnitOfMeasurement = "%",
+                StateClass = "measurement",
+                EntityCategory = "diagnostic",
+                Icon = "mdi:battery"
+            }
+        });
+
+        using var doc = JsonDocument.Parse(handler.Bodies[0]);
+        var sensor = doc.RootElement.GetProperty("data")[0];
+
+        // HA's SENSOR_SCHEMA_FULL rejects anything else with invalid_format, which
+        // silently drops the sensor from the update while still returning HTTP 200.
+        var keys = sensor.EnumerateObject().Select(p => p.Name).OrderBy(n => n).ToArray();
+        Assert.Equal(new[] { "icon", "state", "type", "unique_id" }, keys);
+
+        Assert.Equal("battery_level", sensor.GetProperty("unique_id").GetString());
+        Assert.Equal(42, sensor.GetProperty("state").GetInt32());
+    }
+
+    [Fact]
+    public async Task UpdateSensorsAsync_throws_when_home_assistant_rejects_a_sensor()
+    {
+        // HA answers 200 even when it rejects sensors, so only the body reveals it.
+        var rejection = """
+            {"battery_level":{"success":false,"error":{"code":"invalid_format","message":"extra keys not allowed"}}}
+            """;
+        var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(rejection, Encoding.UTF8, "application/json")
+        });
+        var client = CreateClient(handler);
+
+        await Assert.ThrowsAsync<HomeAssistantRejectedException>(() =>
+            client.UpdateSensorsAsync("wh-1", new[]
+            {
+                new Sensor { UniqueId = "battery_level", Type = "sensor", State = 1 }
+            }));
+    }
+
+    [Fact]
     public async Task RegisterDeviceAsync_posts_to_registrations_and_parses_response()
     {
         var json = """{"webhook_id":"wh-1","secret":null,"cloudhook_url":null,"remote_ui_url":null}""";

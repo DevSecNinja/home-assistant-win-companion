@@ -1,4 +1,5 @@
 using HaCompanion.Core.Abstractions;
+using HaCompanion.Core.HomeAssistant;
 using HaCompanion.Core.Models;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -72,6 +73,12 @@ public sealed class SensorSyncService
         try
         {
             await _client.UpdateSensorsAsync(webhookId, readings, ct).ConfigureAwait(false);
+        }
+        catch (HomeAssistantRejectedException)
+        {
+            // A schema rejection is a bug in what we send, not stale registration:
+            // re-registering would loop forever. Surface it and leave state alone.
+            throw;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {

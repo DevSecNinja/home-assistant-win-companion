@@ -186,3 +186,8 @@ as Windows toasts.
 ## License
 
 [MIT](LICENSE) © Jean-Paul van Ravensberg
+
+## Security
+
+Report vulnerabilities privately according to [SECURITY.md](SECURITY.md). Do not
+include Home Assistant credentials, URLs, configuration, or logs in a public issue.

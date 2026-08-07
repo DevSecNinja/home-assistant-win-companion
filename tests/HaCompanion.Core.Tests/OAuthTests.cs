@@ -119,4 +119,58 @@ public class OAuthTests
 
         Assert.Null(await manager.GetAccessTokenAsync());
     }
+
+    [Fact]
+    public async Task Concurrent_token_callers_share_one_refresh()
+    {
+        var refreshes = 0;
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var handler = new AsyncStubHandler(async (_, _, ct) =>
+        {
+            Interlocked.Increment(ref refreshes);
+            await release.Task.WaitAsync(ct);
+            return Json("""{"access_token":"shared","expires_in":1800,"token_type":"Bearer"}""");
+        });
+        var oauth = new HaOAuthClient(new HttpClient(handler), "https://ha.local:8123");
+        var manager = new OAuthTokenManager(
+            oauth, "http://localhost:9/", () => "ref-1", new FixedClock());
+
+        var callers = Enumerable.Range(0, 8)
+            .Select(_ => manager.GetAccessTokenAsync().AsTask())
+            .ToArray();
+        await WaitUntilAsync(() => Volatile.Read(ref refreshes) == 1);
+        release.TrySetResult();
+
+        var tokens = await Task.WhenAll(callers);
+
+        Assert.All(tokens, token => Assert.Equal("shared", token));
+        Assert.Equal(1, refreshes);
+    }
+
+    private static async Task WaitUntilAsync(Func<bool> condition)
+    {
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+        while (!condition())
+            await Task.Delay(10, timeout.Token);
+    }
+
+    private sealed class AsyncStubHandler : HttpMessageHandler
+    {
+        private readonly Func<HttpRequestMessage, string, CancellationToken, Task<HttpResponseMessage>> _responder;
+
+        public AsyncStubHandler(
+            Func<HttpRequestMessage, string, CancellationToken, Task<HttpResponseMessage>> responder)
+        {
+            _responder = responder;
+        }
+
+        protected override async Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request, CancellationToken ct)
+        {
+            var body = request.Content is null
+                ? string.Empty
+                : await request.Content.ReadAsStringAsync(ct);
+            return await _responder(request, body, ct);
+        }
+    }
 }

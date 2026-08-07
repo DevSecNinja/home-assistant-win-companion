@@ -37,6 +37,7 @@ artifacts/
 
 # Test results
 [Tt]est[Rr]esult*/
+Coverage/
 *.trx
 *.coverage
 *.coveragexml

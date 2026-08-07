@@ -6,32 +6,30 @@ using Microsoft.Win32;
 namespace HaCompanion_App.Services;
 
 /// <summary>
-/// Reports whether the PC is actively in use, mirroring the macOS companion's
-/// "Active" sensor: active means not idle, locked, screensavering, display-off,
-/// asleep or fast-user-switched. Each sub-state is exposed as an attribute, and
-/// "Screen Locked" is also surfaced as its own sensor because automating on an
-/// entity state is far simpler than automating on an attribute.
+/// Windows shim for the Active / Screen Locked sensors: subscribes to session and
+/// power events, polls idle time, and hands the resulting <see cref="ActiveState"/>
+/// to <see cref="ActiveSensorProvider"/>.
 /// </summary>
 /// <remarks>
+/// This type deliberately contains no decisions - what counts as "active", how idle
+/// time is computed and how the sensors are shaped all live in HaCompanion.Core
+/// where they are unit tested. Everything here is OS plumbing.
+///
 /// Lock, sleep and fast-user-switch are event driven. Only idle needs polling, via
 /// <c>GetLastInputInfo</c> - a trivial syscall - and the poll merely recomputes
 /// state locally: a push happens only when the derived state actually changes.
 /// </remarks>
 public sealed class ActiveSensorSource : ISensorSource
 {
-    public const string ActiveId = "active";
-    public const string ScreenLockedId = "screen_locked";
+    public const string ActiveId = ActiveSensorProvider.ActiveId;
+    public const string ScreenLockedId = ActiveSensorProvider.ScreenLockedId;
 
     private readonly SensorPreferences _preferences;
     private readonly System.Timers.Timer _idleTimer = new(5000);
 
     private Action? _onChanged;
     private bool _observing;
-
-    private bool _locked;
-    private bool _sleeping;
-    private bool _fastUserSwitched;
-    private bool _idle;
+    private ActiveState _state;
 
     public ActiveSensorSource(SensorPreferences preferences)
     {
@@ -56,46 +54,11 @@ public sealed class ActiveSensorSource : ISensorSource
             EnabledByDefault: true)
     };
 
-    private bool IsActive => !_locked && !_sleeping && !_fastUserSwitched && !_idle && !IsScreensaverRunning();
-
     public IReadOnlyList<Sensor> Read(IReadOnlySet<string> enabled, SensorReadContext context)
     {
-        var readings = new List<Sensor>();
-        var screensaver = IsScreensaverRunning();
-
-        if (enabled.Contains(ActiveId))
-        {
-            readings.Add(new Sensor
-            {
-                UniqueId = ActiveId,
-                Type = "binary_sensor",
-                Name = "Active",
-                State = IsActive,
-                Icon = IsActive ? "mdi:monitor" : "mdi:monitor-off",
-                Attributes = new Dictionary<string, object>
-                {
-                    ["Idle"] = _idle,
-                    ["Locked"] = _locked,
-                    ["Screensaver"] = screensaver,
-                    ["Sleeping"] = _sleeping,
-                    ["Fast User Switched"] = _fastUserSwitched
-                }
-            });
-        }
-
-        if (enabled.Contains(ScreenLockedId))
-        {
-            readings.Add(new Sensor
-            {
-                UniqueId = ScreenLockedId,
-                Type = "binary_sensor",
-                Name = "Screen Locked",
-                State = _locked,
-                Icon = _locked ? "mdi:lock" : "mdi:lock-open-variant"
-            });
-        }
-
-        return readings;
+        // The screensaver has no notification, so it is sampled at read time.
+        var state = _state with { Screensaver = IsScreensaverRunning() };
+        return ActiveSensorProvider.BuildAll(state, enabled);
     }
 
     public void Start(Action onChanged)
@@ -121,44 +84,44 @@ public sealed class ActiveSensorSource : ISensorSource
 
     private void OnSessionSwitch(object sender, SessionSwitchEventArgs e)
     {
-        var changed = e.Reason switch
+        var updated = e.Reason switch
         {
-            SessionSwitchReason.SessionLock => Set(ref _locked, true),
-            SessionSwitchReason.SessionUnlock => Set(ref _locked, false),
+            SessionSwitchReason.SessionLock => _state with { Locked = true },
+            SessionSwitchReason.SessionUnlock => _state with { Locked = false },
             SessionSwitchReason.ConsoleDisconnect or SessionSwitchReason.RemoteDisconnect
-                => Set(ref _fastUserSwitched, true),
+                => _state with { FastUserSwitched = true },
             SessionSwitchReason.ConsoleConnect or SessionSwitchReason.RemoteConnect
-                => Set(ref _fastUserSwitched, false),
-            _ => false
+                => _state with { FastUserSwitched = false },
+            _ => _state
         };
 
-        if (changed) _onChanged?.Invoke();
+        Apply(updated);
     }
 
     private void OnPowerModeChanged(object sender, PowerModeChangedEventArgs e)
     {
-        var changed = e.Mode switch
+        var updated = e.Mode switch
         {
-            PowerModes.Suspend => Set(ref _sleeping, true),
-            PowerModes.Resume => Set(ref _sleeping, false),
-            _ => false
+            PowerModes.Suspend => _state with { Sleeping = true },
+            PowerModes.Resume => _state with { Sleeping = false },
+            _ => _state
         };
 
-        if (changed) _onChanged?.Invoke();
+        Apply(updated);
     }
 
-    private void CheckIdle()
-    {
-        var threshold = TimeSpan.FromSeconds(Math.Max(30, _preferences.IdleThresholdSeconds));
-        var shouldBeIdle = GetIdleTime() >= threshold;
-        if (Set(ref _idle, shouldBeIdle)) _onChanged?.Invoke();
-    }
+    private void CheckIdle() =>
+        Apply(_state with
+        {
+            Idle = IdleTime.IsIdle(GetIdleTime(), _preferences.IdleThresholdSeconds)
+        });
 
-    private static bool Set(ref bool field, bool value)
+    /// <summary>Stores the new state and pushes only if something actually changed.</summary>
+    private void Apply(ActiveState updated)
     {
-        if (field == value) return false;
-        field = value;
-        return true;
+        if (updated == _state) return;
+        _state = updated;
+        _onChanged?.Invoke();
     }
 
     private static TimeSpan GetIdleTime()
@@ -166,10 +129,7 @@ public sealed class ActiveSensorSource : ISensorSource
         var info = new LASTINPUTINFO { cbSize = (uint)Marshal.SizeOf<LASTINPUTINFO>() };
         if (!GetLastInputInfo(ref info)) return TimeSpan.Zero;
 
-        // Both values are 32-bit millisecond tick counts and wrap every ~49 days;
-        // unchecked subtraction stays correct across the wrap.
-        var elapsed = unchecked((uint)Environment.TickCount - info.dwTime);
-        return TimeSpan.FromMilliseconds(elapsed);
+        return IdleTime.Since(unchecked((uint)Environment.TickCount), info.dwTime);
     }
 
     private static bool IsScreensaverRunning()

@@ -13,7 +13,7 @@ public sealed class SystemSensorSource : ISensorSource
     public const string OsVersionId = "os_version";
     public const string LastBootId = "last_boot";
 
-    private DateTimeOffset? _bootTime;
+    private readonly BootTimeCalculator _bootTime = new();
 
     public IReadOnlyList<SensorDefinition> Definitions { get; } = new[]
     {
@@ -70,21 +70,11 @@ public sealed class SystemSensorSource : ISensorSource
     public void Stop() { }
 
     /// <summary>
-    /// Boot time derived from the tick count drifts by a few milliseconds on every
-    /// read, and a timestamp sensor that changes on every push would fill Home
-    /// Assistant's history with meaningless state changes. So the first value is
-    /// cached and only recomputed if it moves substantially, which happens when the
-    /// machine resumes from hibernation (sleep does not advance the tick count).
+    /// Boot time is derived from the tick count and stabilised by
+    /// <see cref="BootTimeCalculator"/>, so it does not jitter on every read.
     /// </summary>
-    private DateTimeOffset GetBootTime()
-    {
-        var measured = DateTimeOffset.UtcNow - TimeSpan.FromMilliseconds(Environment.TickCount64);
-
-        if (_bootTime is null || Math.Abs((measured - _bootTime.Value).TotalSeconds) > 60)
-            _bootTime = new DateTimeOffset(measured.UtcDateTime.AddTicks(-(measured.UtcTicks % TimeSpan.TicksPerSecond)), TimeSpan.Zero);
-
-        return _bootTime.Value;
-    }
+    private DateTimeOffset GetBootTime() =>
+        _bootTime.Resolve(DateTimeOffset.UtcNow - TimeSpan.FromMilliseconds(Environment.TickCount64));
 
     private static string DescribeOs()
     {
@@ -94,20 +84,13 @@ public sealed class SystemSensorSource : ISensorSource
         {
             using var key = Registry.LocalMachine.OpenSubKey(
                 @"SOFTWARE\Microsoft\Windows NT\CurrentVersion");
-            var product = key?.GetValue("ProductName") as string;
-            var display = key?.GetValue("DisplayVersion") as string;
-            var build = key?.GetValue("CurrentBuild") as string;
-            var ubr = key?.GetValue("UBR");
 
-            // Windows 11 still reports "Windows 10 ..." in ProductName.
-            if (product is not null && int.TryParse(build, out var buildNumber) && buildNumber >= 22000)
-                product = product.Replace("Windows 10", "Windows 11");
-
-            var version = ubr is not null ? $"{build}.{ubr}" : build;
-            var parts = new[] { product, display, version }.Where(p => !string.IsNullOrEmpty(p));
-            var text = string.Join(' ', parts);
-
-            return string.IsNullOrWhiteSpace(text) ? Environment.OSVersion.Version.ToString() : text;
+            return OsVersionFormatter.Describe(
+                key?.GetValue("ProductName") as string,
+                key?.GetValue("DisplayVersion") as string,
+                key?.GetValue("CurrentBuild") as string,
+                key?.GetValue("UBR")?.ToString(),
+                Environment.OSVersion.Version.ToString());
         }
         catch
         {

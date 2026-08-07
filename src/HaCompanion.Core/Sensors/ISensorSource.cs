@@ -23,6 +23,15 @@ public interface ISensorSource
     IReadOnlyList<Sensor> Read(IReadOnlySet<string> enabled, SensorReadContext context);
 
     /// <summary>
+    /// Produces local-only readings for the settings UI. Sources that require
+    /// asynchronous OS access can override this without starting their poller.
+    /// </summary>
+    ValueTask<IReadOnlyList<Sensor>> PreviewAsync(
+        IReadOnlySet<string> requested,
+        CancellationToken cancellationToken = default) =>
+        ValueTask.FromResult(Read(requested, new SensorReadContext("Preview")));
+
+    /// <summary>
     /// Begins observing the underlying OS state. Called when the source's first
     /// sensor is enabled. <paramref name="onChanged"/> requests an immediate push.
     /// </summary>

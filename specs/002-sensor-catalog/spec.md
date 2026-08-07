@@ -146,8 +146,11 @@ disappear.
   `OS Version` and `Last Boot` sensors. Wi-Fi SSID/BSSID are out of scope
   (Windows Location capability; see research.md).
 - **FR-012**: The app MUST display the time of its most recent successful push in
-  its own status view, and MUST report a `last_update_trigger` sensor whose state is
-  the *reason* for that push, without that sensor triggering an extra push.
+  its own status view. It MAY offer an opt-in `last_update_time` timestamp sensor
+  (off by default, because it writes recorder history every sync). It MUST NOT ship a
+  sensor whose state is effectively constant as a liveness signal, because Home
+  Assistant surfaces change time rather than report time and such a sensor reads as
+  permanently stale.
 - **FR-012a**: The app MUST show a health verdict (in the window and the tray
   tooltip) based on whether it is reporting on schedule, not merely connected.
 - **FR-012b**: The app MUST write a rolling local log the user can open from the UI,
@@ -198,4 +201,5 @@ disappear.
   explicitly **out of scope** for this feature and are tracked for a later iteration.
   Teams presence in particular would require Microsoft Graph and an Entra app
   registration.
+
 

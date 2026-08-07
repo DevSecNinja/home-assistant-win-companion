@@ -4,7 +4,7 @@
 
 **Created**: 2026-08-06
 
-**Status**: Draft
+**Status**: Shipped
 
 **Input**: User description: "Windows Home Assistant companion MVP: lean tray-resident companion (opens Home Assistant in the browser), OAuth2 loopback sign-in, system tray, toast notifications, and Windows status sensor reporting to Home Assistant"
 
@@ -117,8 +117,9 @@ appears with the title and message.
   unavailable/appropriate default; the app remains functional.
 - What happens when Home Assistant is temporarily unreachable? -> The app shows a
   reconnecting status and retries with exponential backoff instead of erroring out.
-- What happens if the user provides an `http://` (non-TLS) local URL? -> Allowed for
-  local instances, but the app warns; TLS is validated for non-local hosts.
+- What happens if the user provides an `http://` (non-TLS) URL? -> It is allowed
+  for instances intentionally served over HTTP. HTTPS certificates are validated
+  normally whenever HTTPS is used.
 
 ## Requirements *(mandatory)*
 
@@ -152,8 +153,9 @@ appears with the title and message.
 - **FR-012**: The app MUST surface connection state (connected / reconnecting /
   auth error / disconnected) to the user.
 - **FR-013**: The app MUST NOT log or display secrets (tokens, webhook secrets).
-- **FR-014**: The app MUST allow the user to sign out / disconnect, which revokes
-  the refresh token with Home Assistant and removes stored credentials.
+- **FR-014**: The app MUST allow reporting and notifications to be paused without
+  discarding credentials, and MUST provide a separate confirmed remove-server
+  action that revokes the refresh token and removes stored credentials and config.
 
 ### Key Entities *(include if feature involves data)*
 
@@ -191,9 +193,9 @@ appears with the title and message.
   Home Assistant user account they can log in with via the browser.
 - Authentication uses Home Assistant's OAuth2 (IndieAuth) login flow with a loopback
   redirect; no long-lived access token is created or pasted by the user.
-- For the MVP, notifications are delivered by the app maintaining a live connection
-  to Home Assistant (WebSocket/event subscription) rather than a cloud push service,
-  since Windows has no equivalent of the mobile push channel used on iOS/Android.
+- Notifications are delivered through Home Assistant's
+  `mobile_app/push_notification_channel` local-push WebSocket command. Registration
+  declares `app_data.push_websocket_channel = true`, and each delivery is confirmed.
 - Encrypted webhook payloads are optional for the MVP; the app MAY send sensor
   updates unencrypted over TLS. Encryption can be added later.
 - Target OS is Windows 10 (build 19041+) and Windows 11 on x64/ARM64.

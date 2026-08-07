@@ -44,9 +44,10 @@
   connection state and battery. Click **Open Home Assistant** to launch your
   instance in the default browser. Close and reopen the app — it resumes the
   session without asking you to sign in again.
-- **US2 (Sensors)**: In Home Assistant → Settings → Devices & Services → *Mobile App*,
-  a new device for your PC appears with **Battery Level** and **Battery State**
-  sensors that update.
+- **US2 (Sensors)**: Open **Sensors…** in the companion. Enable or disable a sensor,
+  change the idle threshold, and use **Update now**. In Home Assistant → Settings →
+  Devices & Services → *Mobile App*, a device for your PC appears with the enabled
+  battery, activity, lock, network and diagnostic entities.
 - **US3 (Notifications)**: In Home Assistant, call the `notify.mobile_app_<your_pc>`
   action (or target the PC's notify entity from `notify.send_message`) with a
   title and message. A Windows toast appears. Minimize the app to the tray and
@@ -63,7 +64,18 @@
 dotnet test tests/HaCompanion.Core.Tests/HaCompanion.Core.Tests.csproj
 ```
 
-## Sign out
+## Pause or remove the connection
 
-Use the tray menu → **Disconnect** (or the app's sign-out action) to clear stored
-credentials from the Windows Credential Locker.
+Use **Disconnect** to pause reporting and notifications without deleting the saved
+server or credentials; the same action becomes **Reconnect**. Use **Remove server…**
+to revoke the refresh token and delete the local configuration and Credential
+Locker entries.
+
+## Disabled sensor entities
+
+Turning a sensor off disables its Home Assistant entity but does not delete the
+entity-registry entry. It may remain greyed out under "+N entities not shown" on
+the device page and will not appear in normal pickers. Home Assistant does not
+offer deletion while the Mobile App integration still provides the entity. The
+only complete removal is deleting the whole Mobile App device, which invalidates
+the app registration and requires signing in again.

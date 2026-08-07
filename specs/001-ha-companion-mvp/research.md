@@ -4,35 +4,43 @@
 
 **Rationale**: User requested "Windows native UIs". WinUI 3 is Microsoft's current
 native, Fluent-design UI stack, supports Mica material, system theming, and
-packaged/unpackaged deployment. It pairs cleanly with WebView2 (Chromium) for
-hosting the Home Assistant frontend.
+packaged/unpackaged deployment. The companion is lean and tray-resident, so it does
+not embed a browser; Home Assistant itself opens in the user's default browser.
 
 **Alternatives considered**: WPF (mature but older visuals), .NET MAUI (cross-platform
 overhead not needed for a Windows-only MVP). Rejected to keep the experience natively
 Windows and modern.
 
-## Decision: Authentication — long-lived access token (MVP)
+## Decision: Authentication — OAuth2 (IndieAuth) loopback (MVP)
 
-**Rationale**: Home Assistant's documented app flow uses OAuth2 IndieAuth with a
-custom redirect scheme, which requires app registration and redirect handling.
-For an MVP, a user-provided long-lived access token (Profile → Security → Long-lived
-access tokens) authenticates REST, WebSocket, and webhook calls with
-`Authorization: Bearer <token>` and unblocks all three user stories.
+**Rationale**: To avoid asking users to create and paste a long-lived token, the
+companion uses Home Assistant''s OAuth2 IndieAuth flow with a **loopback redirect**.
+The app opens `/auth/authorize` in the default browser with
+`client_id == redirect_uri == http://localhost:<fixed-port>/`; HA accepts this
+because the two share an origin (verified against home-assistant/core
+`indieauth.verify_redirect_uri`, which allows loopback hosts and same scheme+netloc
+without fetching the client_id page). A local `TcpListener` captures the returned
+`code`, which is exchanged at `/auth/token` for an access + refresh token. Access
+tokens (~30 min) are refreshed on demand; the refresh token is stored in the
+Credential Locker.
 
-**Alternatives considered**: Full OAuth2 IndieAuth (better UX, deferred to a later
-iteration). Documented as a spec assumption.
+**Fixed port requirement**: HA''s `/auth/token` refresh grant checks
+`refresh_token.client_id == client_id` (home-assistant/core auth token endpoint,
+`_async_handle_refresh_token`). Because `client_id` equals the loopback redirect
+URL, the port must be **fixed** across restarts, or refresh would fail. We use a
+fixed dedicated port.
 
-## Decision: Dashboard hosting — WebView2 with token injection
+**Alternatives considered**: User-pasted long-lived token (worse UX, more error-prone,
+rejected); ephemeral loopback port (breaks refresh due to client_id validation,
+rejected).
 
-**Rationale**: The HA frontend is a web app. Hosting it in WebView2 gives the real
-dashboards for free. To avoid a second login inside the web view, inject the token
-into `window.localStorage['hassTokens']` before navigation, matching how the
-official companion apps seed auth. If injection fails, the user simply logs in to
-the web frontend normally.
+## Decision: Home Assistant access — open in default browser (no embedded web view)
 
-**Reference**: HA stores auth in `localStorage` under `hassTokens`
-(access_token/refresh-like structure). For a long-lived token we set
-`{ "access_token": "<token>", "token_type": "Bearer" }` and the frontend uses it.
+**Rationale**: A lean companion keeps the app small and avoids shipping/securing a
+Chromium runtime. Instead of embedding the HA frontend, the companion exposes an
+"Open Home Assistant" action (window button + tray menu) that launches the configured
+base URL in the user''s default browser via `Process.Start` with `UseShellExecute`.
+The browser already holds the user''s HA web session, so no token injection is needed.
 
 ## Decision: Device registration — `/api/mobile_app/registrations`
 
@@ -64,7 +72,7 @@ without a battery report "no system battery" → handled gracefully.
 
 **Rationale**: Windows has no push channel equivalent to APNS/FCM used by the mobile
 apps. For the MVP, keep a live WebSocket to `/api/websocket`, authenticate with the
-token, and `subscribe_events` for `persistent_notification` (and optionally a
+access token, and `subscribe_events` for `persistent_notification` (and optionally a
 user-defined event). When such an event fires, render a native toast via the Windows
 App SDK `AppNotification` API. Toast activation restores the main window.
 
@@ -93,7 +101,6 @@ enabling run-in-background with show/hide/exit and status.
 
 ## Open items (deferred, not MVP)
 
-- OAuth2 IndieAuth login and token refresh.
 - Encrypted webhook payloads (`supports_encryption=true`).
 - Zeroconf discovery of the HA instance.
 - Additional sensors (network, active/idle, camera/mic in-use, location).

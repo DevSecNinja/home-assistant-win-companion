@@ -13,7 +13,7 @@ description: "Task list for Home Assistant Windows Companion (MVP)"
 ## Format: `[ID] [P?] [Story] Description`
 
 - **[P]**: Can run in parallel (different files, no dependencies)
-- **[Story]**: US1 (dashboard), US2 (sensors), US3 (notifications)
+- **[Story]**: US1 (connect + open HA), US2 (sensors), US3 (notifications)
 
 ## Path Conventions
 
@@ -28,7 +28,7 @@ tests in `tests/HaCompanion.Core.Tests/`.
       (classlib, net9.0), `src/HaCompanion.App` (WinUI 3, net9.0-windows), and
       `tests/HaCompanion.Core.Tests` (xUnit). Add project references.
 - [ ] T002 Add NuGet packages: App → `Microsoft.WindowsAppSDK`,
-      `Microsoft.Web.WebView2`, `H.NotifyIcon.WinUI`; Core →
+      `H.NotifyIcon.WinUI`; Core →
       `Microsoft.Extensions.Logging.Abstractions`; Tests → xUnit + runner.
 - [ ] T003 [P] Add `.editorconfig` / nullable + implicit usings enabled in both
       projects; ensure `dotnet build` succeeds on empty skeleton.
@@ -58,7 +58,7 @@ tests in `tests/HaCompanion.Core.Tests/`.
 
 ---
 
-## Phase 3: User Story 1 - Connect & view dashboard (P1) 🎯 MVP
+## Phase 3: User Story 1 - Connect & open Home Assistant (P1) 🎯 MVP
 
 ### Tests for US1
 
@@ -72,17 +72,21 @@ tests in `tests/HaCompanion.Core.Tests/`.
 
 - [ ] T011 [US1] Implement `WindowsSecretStore` (PasswordVault) in
       `src/HaCompanion.App/Services/`.
-- [ ] T012 [US1] Build `ConnectView` (URL + token entry, validation, error display)
-      in `src/HaCompanion.App/Views/`.
-- [ ] T013 [US1] Implement `MainWindow` hosting `WebView2`; inject `hassTokens` into
-      localStorage then navigate to BaseUrl; show a status bar bound to
-      `ConnectionState`.
-- [ ] T014 [US1] Wire app bootstrap in `App.xaml.cs`: on launch, if a saved config +
-      token exist, connect and show dashboard; else show ConnectView.
-- [ ] T015 [US1] Persist `ServerConfig` (non-secret) and token (secret store) on
-      successful connect; auto-reconnect on relaunch.
+- [ ] T012 [US1] Implement the OAuth loopback login: `LoopbackOAuthListener`
+      (fixed-port `TcpListener` capturing the `code`) and `OAuthLoginService`
+      (build authorize URL, open browser, exchange code) in
+      `src/HaCompanion.App/Services/`.
+- [ ] T013 [US1] Implement `MainWindow` with a Connect view (URL entry + "Sign in")
+      and a lean Status view (connection state, battery, "Open Home Assistant" that
+      launches BaseUrl in the default browser, "Disconnect"). No embedded web view.
+- [ ] T014 [US1] Wire app bootstrap via `AppController`: on launch, if a saved config
+      + refresh token exist, resume the session and show the Status view; else show
+      the Connect view.
+- [ ] T015 [US1] Persist `ServerConfig` (non-secret) and the OAuth refresh token
+      (secret store) on successful sign-in; auto-resume on relaunch.
 
-**Checkpoint**: US1 fully functional — connect once, dashboard reloads on relaunch.
+**Checkpoint**: US1 fully functional — sign in once, session resumes on relaunch and
+"Open Home Assistant" launches the browser.
 
 ---
 
@@ -163,7 +167,7 @@ tests in `tests/HaCompanion.Core.Tests/`.
 ## Implementation Strategy
 
 1. Setup + Foundational.
-2. US1 → validate (MVP: connect + dashboard + relaunch).
+2. US1 → validate (MVP: sign in + open HA in browser + resume on relaunch).
 3. US2 → validate sensors in HA.
 4. US3 → validate toasts.
 5. Polish (tray, sign-out, resilience, logging, README).

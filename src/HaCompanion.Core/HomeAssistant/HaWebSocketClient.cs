@@ -1,4 +1,5 @@
 using System.Text.Json;
+using HaCompanion.Core.Abstractions;
 using HaCompanion.Core.Models;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -15,7 +16,7 @@ public sealed class HaWebSocketClient
 {
     private readonly Func<IHaSocket> _socketFactory;
     private readonly Uri _wsUri;
-    private readonly Func<string?> _tokenProvider;
+    private readonly IAccessTokenProvider _tokens;
     private readonly ILogger<HaWebSocketClient> _log;
     private int _messageId;
 
@@ -24,12 +25,12 @@ public sealed class HaWebSocketClient
     public HaWebSocketClient(
         Func<IHaSocket> socketFactory,
         string baseUrl,
-        Func<string?> tokenProvider,
+        IAccessTokenProvider tokens,
         ILogger<HaWebSocketClient>? log = null)
     {
         _socketFactory = socketFactory ?? throw new ArgumentNullException(nameof(socketFactory));
         _wsUri = BuildWebSocketUri(baseUrl);
-        _tokenProvider = tokenProvider ?? throw new ArgumentNullException(nameof(tokenProvider));
+        _tokens = tokens ?? throw new ArgumentNullException(nameof(tokens));
         _log = log ?? NullLogger<HaWebSocketClient>.Instance;
     }
 
@@ -70,7 +71,8 @@ public sealed class HaWebSocketClient
             switch (type)
             {
                 case "auth_required":
-                    await SendAsync(socket, new { type = "auth", access_token = _tokenProvider() }, ct).ConfigureAwait(false);
+                    var token = await _tokens.GetAccessTokenAsync(ct).ConfigureAwait(false);
+                    await SendAsync(socket, new { type = "auth", access_token = token }, ct).ConfigureAwait(false);
                     break;
 
                 case "auth_ok":

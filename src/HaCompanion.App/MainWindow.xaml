@@ -5,8 +5,9 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:local="using:HaCompanion_App"
+    xmlns:tb="using:H.NotifyIcon"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-    Title="HaCompanion.App"
+    Title="Home Assistant Companion"
     mc:Ignorable="d">
     <Window.SystemBackdrop>
         <MicaBackdrop />
@@ -18,17 +19,79 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <TitleBar x:Name="AppTitleBar" Title="HaCompanion.App">
+        <TitleBar x:Name="AppTitleBar" Title="Home Assistant Companion">
             <TitleBar.IconSource>
                 <ImageIconSource ImageSource="Assets/AppIcon.ico" />
             </TitleBar.IconSource>
         </TitleBar>
 
-        <!--
-            The Frame hosts pages for your application content. Add your UI to
-            MainPage.xaml rather than here so you can use Page features such as
-            navigation events and the Loaded lifecycle.
-        -->
-        <Frame x:Name="RootFrame" Grid.Row="1" />
+        <tb:TaskbarIcon
+            x:Name="TrayIcon"
+            ToolTipText="Home Assistant Companion"
+            IconSource="Assets/AppIcon.ico">
+            <tb:TaskbarIcon.ContextFlyout>
+                <MenuFlyout>
+                    <MenuFlyoutItem Text="Open Home Assistant" Click="OnOpenHomeAssistant" />
+                    <MenuFlyoutItem Text="Show Companion" Click="OnShowWindow" />
+                    <MenuFlyoutSeparator />
+                    <MenuFlyoutItem Text="Disconnect" Click="OnDisconnect" />
+                    <MenuFlyoutItem Text="Exit" Click="OnExit" />
+                </MenuFlyout>
+            </tb:TaskbarIcon.ContextFlyout>
+        </tb:TaskbarIcon>
+
+        <!-- Connect view -->
+        <StackPanel
+            x:Name="ConnectPanel"
+            Grid.Row="1"
+            Width="380"
+            Padding="24"
+            VerticalAlignment="Center"
+            HorizontalAlignment="Center"
+            Spacing="12">
+            <TextBlock Text="Connect to Home Assistant" Style="{StaticResource SubtitleTextBlockStyle}" />
+            <TextBlock
+                Text="Enter your Home Assistant URL. You'll sign in through your browser — no tokens to copy."
+                TextWrapping="Wrap"
+                Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+            <TextBox
+                x:Name="UrlBox"
+                Header="Home Assistant URL"
+                PlaceholderText="http://homeassistant.local:8123" />
+            <Button
+                x:Name="SignInButton"
+                Content="Sign in"
+                Style="{StaticResource AccentButtonStyle}"
+                Click="OnSignIn" />
+            <ProgressRing x:Name="SignInProgress" IsActive="False" Width="24" Height="24" HorizontalAlignment="Left" />
+            <TextBlock
+                x:Name="ConnectError"
+                Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+                TextWrapping="Wrap"
+                Visibility="Collapsed" />
+        </StackPanel>
+
+        <!-- Status view -->
+        <StackPanel
+            x:Name="StatusPanel"
+            Grid.Row="1"
+            Width="380"
+            Padding="24"
+            VerticalAlignment="Center"
+            HorizontalAlignment="Center"
+            Spacing="12"
+            Visibility="Collapsed">
+            <TextBlock Text="Home Assistant Companion" Style="{StaticResource SubtitleTextBlockStyle}" />
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <TextBlock Text="Status:" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                <TextBlock x:Name="StatusText" Text="Connecting…" FontWeight="SemiBold" />
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <TextBlock Text="Battery:" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                <TextBlock x:Name="BatteryText" Text="—" />
+            </StackPanel>
+            <Button Content="Open Home Assistant" Click="OnOpenHomeAssistant" HorizontalAlignment="Stretch" />
+            <Button Content="Disconnect" Click="OnDisconnect" HorizontalAlignment="Stretch" />
+        </StackPanel>
     </Grid>
 </Window>

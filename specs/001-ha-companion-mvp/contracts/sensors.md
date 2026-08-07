@@ -60,6 +60,10 @@ Repeat for `battery_state`:
 ## Behavior
 
 - Register each `unique_id` once before updating it.
+- Disabling or re-enabling a sensor uses `register_sensor` with an explicit
+  `disabled: true` or `disabled: false`; `update_sensor_states` ignores that flag.
+- A disabled or retired sensor remains in Home Assistant's entity registry as a
+  disabled entity. It is not deleted.
 - A 200 with `{ "unique_id": { "success": true } }` (or 200 empty) indicates success.
 - If an update returns that a sensor is not registered, re-register then retry.
 - Update on a timer (e.g., every 60s) and immediately on power-source change.

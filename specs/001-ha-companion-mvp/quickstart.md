@@ -17,13 +17,15 @@
 ## Build & run
 
 ```powershell
-# From the repository root
-dotnet restore HaCompanion.sln
-dotnet build HaCompanion.sln -c Debug
-
-# Run the WinUI app
-dotnet run --project src/HaCompanion.App/HaCompanion.App.csproj
+# From the repository root: builds and launches what it just built
+.\scripts\run.ps1
 ```
+
+> `dotnet run` is **not** supported for this project: it resolves the .NET root to
+> the app's own output folder and fails with a misleading "You must install or
+> update .NET" dialog even when the runtime is present. Note also that a failed
+> launch does not exit - the apphost stays alive showing an error dialog titled
+> `HaCompanion.App.exe` - so a running process is not proof that the app started.
 
 > WinUI 3 apps may require the Windows App SDK runtime; unpackaged runs use the
 > bootstrapper referenced by the app project.

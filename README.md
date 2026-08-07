@@ -87,10 +87,25 @@ one that just works with stock Home Assistant.**
 ## Build and run
 
 ```powershell
-dotnet build HaCompanion.sln -c Debug
+# Build and launch in one step (the supported way to run from source)
+.\scripts\run.ps1
+
 dotnet test tests/HaCompanion.Core.Tests/HaCompanion.Core.Tests.csproj
-.\src\HaCompanion.App\bin\Debug\net9.0-windows10.0.26100.0\win-x64\HaCompanion.App.exe
 ```
+
+`scripts/run.ps1` builds and then launches exactly what it just built. That matters:
+a solution build and a project build otherwise select different platforms and write
+to different folders, which makes it easy to build one binary and silently run an
+older one. The script pins the platform and verifies the app actually started.
+
+Two things worth knowing if you build by hand:
+
+- `dotnet run` does **not** work for this project. It resolves the .NET root to the
+  app's own output folder and fails with a misleading *"You must install or update
+  .NET"* dialog even when the runtime is installed.
+- A failed launch does not exit. The .NET apphost stays alive showing an error
+  dialog whose window title is `HaCompanion.App.exe`, so "a process is running" is
+  not evidence that the app started.
 
 On first launch, enter your Home Assistant URL and click **Sign in** — your browser
 opens for login, then the app registers this PC and connects.

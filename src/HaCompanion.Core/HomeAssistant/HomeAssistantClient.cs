@@ -82,6 +82,29 @@ public sealed class HomeAssistantClient : IHomeAssistantClient
         return result;
     }
 
+    public async Task UpdateRegistrationAsync(
+        string webhookId, DeviceRegistrationRequest req, CancellationToken ct = default)
+    {
+        // app_version, device_name, manufacturer and model are all required by
+        // Home Assistant's update_registration schema; omitting any of them makes
+        // the whole call fail validation.
+        var payload = new
+        {
+            type = "update_registration",
+            data = new
+            {
+                app_data = req.AppData,
+                app_version = req.AppVersion,
+                device_name = req.DeviceName,
+                manufacturer = req.Manufacturer,
+                model = req.Model,
+                os_version = req.OsVersion
+            }
+        };
+        await PostWebhookAsync(webhookId, payload, ct).ConfigureAwait(false);
+        _log.LogInformation("Updated device registration (local push declared).");
+    }
+
     public async Task RegisterSensorAsync(string webhookId, Sensor sensor, CancellationToken ct = default)
     {
         var payload = new { type = "register_sensor", data = sensor };

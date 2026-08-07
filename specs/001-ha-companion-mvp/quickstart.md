@@ -4,6 +4,11 @@
 
 - Windows 10 (build 19041+) or Windows 11.
 - .NET 9 SDK (`dotnet --version` ≥ 9.0).
+- The **Windows App Runtime 2.3** must be installed (the app ships unpackaged and
+  uses the Windows App SDK bootstrapper). If it is missing, the app exits at
+  startup with `REGDB_E_CLASSNOTREG`. The MSIX packages ship inside the
+  `Microsoft.WindowsAppSDK.Runtime` NuGet package under
+  `tools/MSIX/win10-x64/` and can be installed with `Add-AppxPackage`.
 - A running Home Assistant instance with the `mobile_app` integration loaded
   (included in `default_config`).
 - Your Home Assistant account credentials (you'll sign in through your browser —
@@ -40,10 +45,15 @@ dotnet run --project src/HaCompanion.App/HaCompanion.App.csproj
 - **US2 (Sensors)**: In Home Assistant → Settings → Devices & Services → *Mobile App*,
   a new device for your PC appears with **Battery Level** and **Battery State**
   sensors that update.
-- **US3 (Notifications)**: Trigger a `persistent_notification.create` (Developer
-  Tools → Services) or an automation that creates a persistent notification. A
-  Windows toast appears. Minimize the app to the tray and confirm toasts still work;
-  clicking a toast restores the window.
+- **US3 (Notifications)**: In Home Assistant, call the `notify.mobile_app_<your_pc>`
+  action (or target the PC's notify entity from `notify.send_message`) with a
+  title and message. A Windows toast appears. Minimize the app to the tray and
+  confirm toasts still work; clicking a toast restores the window.
+
+  > If your PC registered before this app declared push support, it appears under
+  > `notify.mobile_app_<your_pc>` immediately but only shows up under
+  > `notify.send_message` after you reload the Mobile App integration once
+  > (Settings → Devices & Services → Mobile App → ⋮ → Reload) or restart HA.
 
 ## Run tests
 

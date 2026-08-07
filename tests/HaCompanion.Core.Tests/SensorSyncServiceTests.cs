@@ -24,6 +24,9 @@ public class SensorSyncServiceTests
         public Task<DeviceRegistrationResponse> RegisterDeviceAsync(DeviceRegistrationRequest request, CancellationToken ct = default)
             => Task.FromResult(new DeviceRegistrationResponse { WebhookId = "wh" });
 
+        public Task UpdateRegistrationAsync(string webhookId, DeviceRegistrationRequest request, CancellationToken ct = default)
+            => Task.CompletedTask;
+
         public Task RegisterSensorAsync(string webhookId, Sensor sensor, CancellationToken ct = default)
         {
             Registered.Add(sensor.UniqueId);

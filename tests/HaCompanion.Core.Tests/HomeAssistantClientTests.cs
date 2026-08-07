@@ -44,6 +44,43 @@ public class HomeAssistantClientTests
     }
 
     [Fact]
+    public async Task UpdateRegistrationAsync_sends_all_fields_required_by_home_assistant()
+    {
+        var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("{}", Encoding.UTF8, "application/json")
+        });
+        var client = CreateClient(handler);
+
+        await client.UpdateRegistrationAsync("wh-9", new DeviceRegistrationRequest
+        {
+            DeviceId = "dev",
+            AppVersion = "1.2.3",
+            DeviceName = "PC-1",
+            Manufacturer = "PC",
+            Model = "Windows PC",
+            OsVersion = "10.0"
+        });
+
+        var req = Assert.Single(handler.Requests);
+        Assert.Equal("https://ha.local:8123/api/webhook/wh-9", req.RequestUri!.ToString());
+
+        using var doc = JsonDocument.Parse(handler.Bodies[0]);
+        Assert.Equal("update_registration", doc.RootElement.GetProperty("type").GetString());
+        var data = doc.RootElement.GetProperty("data");
+
+        // HA's update_registration schema requires these; omitting any one makes
+        // the entire call fail validation and silently disables notifications.
+        Assert.Equal("1.2.3", data.GetProperty("app_version").GetString());
+        Assert.Equal("PC-1", data.GetProperty("device_name").GetString());
+        Assert.Equal("PC", data.GetProperty("manufacturer").GetString());
+        Assert.Equal("Windows PC", data.GetProperty("model").GetString());
+
+        // Declaring the websocket push channel is what makes the PC a notify target.
+        Assert.True(data.GetProperty("app_data").GetProperty("push_websocket_channel").GetBoolean());
+    }
+
+    [Fact]
     public async Task ValidateAsync_throws_auth_exception_on_401()
     {
         var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.Unauthorized));

@@ -126,10 +126,12 @@ tests in `tests/HaCompanion.Core.Tests/`.
 ### Implementation for US3
 
 - [ ] T023 [US3] Implement `HaWebSocketClient` in `src/HaCompanion.Core/HomeAssistant/`:
-      connect, auth, subscribe to `persistent_notification`, emit
-      `NotificationMessage` events; ping/pong liveness.
+      connect, auth, open `mobile_app/push_notification_channel`, confirm each
+      delivery via `mobile_app/push_notification_confirm`, emit
+      `NotificationMessage` events; ping/pong liveness. Declare
+      `app_data.push_websocket_channel` at registration so the PC is a notify target.
 - [ ] T024 [US3] Integrate WS lifecycle into `ConnectionManager` with reconnect +
-      re-subscribe and `AuthError` handling.
+      re-open of the push channel and `AuthError` handling.
 - [ ] T025 [US3] Implement `ToastNotifier` in `src/HaCompanion.App/Services/` using
       Windows App SDK `AppNotification`; show title/message; activation restores window.
 - [ ] T026 [US3] Bridge WS `NotificationMessage` events → `ToastNotifier` in the app.

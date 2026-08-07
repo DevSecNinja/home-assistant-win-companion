@@ -34,6 +34,18 @@ public sealed class DeviceRegistrationRequest
 
     [JsonPropertyName("supports_encryption")]
     public bool SupportsEncryption { get; set; }
+
+    /// <summary>
+    /// Declares <c>push_websocket_channel</c> so Home Assistant treats this PC as
+    /// push-capable and exposes it as a notify target. Notifications are then
+    /// delivered over our authenticated WebSocket (local push), which is what
+    /// Windows uses instead of APNS/FCM.
+    /// </summary>
+    [JsonPropertyName("app_data")]
+    public Dictionary<string, object> AppData { get; set; } = new()
+    {
+        ["push_websocket_channel"] = true
+    };
 }
 
 /// <summary>Response from POST /api/mobile_app/registrations.</summary>

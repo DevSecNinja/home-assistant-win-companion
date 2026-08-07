@@ -19,6 +19,7 @@ public sealed class AppController : IAsyncDisposable
     private readonly SessionStore _settings;
     private readonly WindowsSystemStatusProvider _status = new();
     private readonly ToastNotifier _toasts = new();
+    private readonly PowerShellWinGetUpdateProvider _winGetUpdates = new();
     private readonly OAuthLoginService _login;
     private readonly ILoggerFactory _loggerFactory =
         LoggerFactory.Create(builder =>
@@ -92,6 +93,12 @@ public sealed class AppController : IAsyncDisposable
             await _connection.SyncNowAsync(SensorReadContext.SettingsChanged).ConfigureAwait(false);
     }
 
+    public Task<bool> IsWinGetModuleInstalledAsync(CancellationToken ct = default) =>
+        _winGetUpdates.IsModuleInstalledAsync(ct);
+
+    public Task<WinGetModuleInstallResult> InstallWinGetModuleAsync(CancellationToken ct = default) =>
+        _winGetUpdates.InstallModuleAsync(ct);
+
     public bool HasSavedSession
     {
         get
@@ -163,8 +170,18 @@ public sealed class AppController : IAsyncDisposable
     /// <summary>Pushes all enabled sensors right now, on the user's command.</summary>
     public async Task ForcePushAsync()
     {
-        if (_connection is null) return;
-        await _connection.SyncNowAsync(new SensorReadContext("Manual")).ConfigureAwait(false);
+        var connection = _connection;
+        var catalog = _catalog;
+        if (connection is null || catalog is null) return;
+
+        await catalog.RefreshAsync().ConfigureAwait(false);
+        if (!ReferenceEquals(connection, _connection)
+            || !ReferenceEquals(catalog, _catalog))
+        {
+            return;
+        }
+
+        await connection.SyncNowAsync(new SensorReadContext("Manual")).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -263,7 +280,8 @@ public sealed class AppController : IAsyncDisposable
                 new LastUpdateSensorSource(),
                 new NotificationStateSensorSource(),
                 new CapabilityUsageSensorSource(config.Sensors),
-                new AudioDeviceSensorSource(config.Sensors)
+                new AudioDeviceSensorSource(config.Sensors),
+                new WinGetUpdateSensorSource(_winGetUpdates, config.Sensors)
             },
             config.Sensors);
         _catalog = catalog;
@@ -332,4 +350,3 @@ public sealed class AppController : IAsyncDisposable
         _http.Dispose();
     }
 }
-

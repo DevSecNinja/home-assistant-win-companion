@@ -66,9 +66,10 @@ one that just works with stock Home Assistant.**
   APNS/FCM equivalent).
 - **Opt-in sensor catalog** — battery, active/idle, screen locked, connection type,
   IP address, OS version, last boot, notification/presentation state, microphone
-  and camera use, audio output, headset presence, and an optional last-update
-  timestamp. Each sensor can be switched on or off individually, shows a local
-  preview, and privacy-sensitive ones are off by default.
+  and camera use, audio output, headset presence, WinGet update count, and an
+  optional last-update timestamp. Each sensor can be switched on or off
+  individually, shows a local preview, and privacy-sensitive ones are off by
+  default.
 - **Health and logs** — a health verdict based on whether the app is actually
   reporting on schedule, plus a rolling local log you can open from the UI.
 - **Open Home Assistant** — one click (window or tray menu) to open your instance in
@@ -84,6 +85,12 @@ one that just works with stock Home Assistant.**
   `tools/MSIX/win10-x64/` and can be installed with `Add-AppxPackage`.
 - A Home Assistant instance with the `mobile_app` integration (part of
   `default_config`)
+
+The optional **WinGet Updates** sensor uses Microsoft's
+`Microsoft.WinGet.Client` PowerShell module. The first time it is enabled, the app
+explains the approximately 53 MB current-user installation and can install it from
+PowerShell Gallery after confirmation. Only the update count is sent to Home
+Assistant; package names and versions remain in the local preview.
 
 ## Build and run
 

@@ -93,6 +93,11 @@ public sealed class AppController : IAsyncDisposable
             await _connection.SyncNowAsync(SensorReadContext.SettingsChanged).ConfigureAwait(false);
     }
 
+    public void SaveSensorPreferences()
+    {
+        if (_config is not null) _settings.Save(_config);
+    }
+
     public Task<bool> IsWinGetModuleInstalledAsync(CancellationToken ct = default) =>
         _winGetUpdates.IsModuleInstalledAsync(ct);
 
@@ -281,6 +286,7 @@ public sealed class AppController : IAsyncDisposable
                 new NotificationStateSensorSource(),
                 new CapabilityUsageSensorSource(config.Sensors),
                 new AudioDeviceSensorSource(config.Sensors),
+                new FrontmostAppSensorSource(config.Sensors),
                 new WinGetUpdateSensorSource(_winGetUpdates, config.Sensors)
             },
             config.Sensors);

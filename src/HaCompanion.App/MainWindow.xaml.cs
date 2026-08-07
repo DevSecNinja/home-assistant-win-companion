@@ -21,6 +21,7 @@ public sealed partial class MainWindow : Window
     private bool _connected;
     private int _sensorListBuildVersion;
     private bool _suppressSensorToggle;
+    private bool _loadingSensorSettings;
 
     public MainWindow()
     {
@@ -295,7 +296,11 @@ public sealed partial class MainWindow : Window
         }
 
         SensorList.Children.Clear();
+        _loadingSensorSettings = true;
         IdleMinutesBox.Value = Math.Max(1, catalog.Preferences.IdleThresholdSeconds / 60);
+        FrontmostAppModeBox.SelectedIndex =
+            catalog.Preferences.FrontmostAppMode == FrontmostAppMode.FullWindowTitle ? 1 : 0;
+        _loadingSensorSettings = false;
         foreach (var definition in catalog.Definitions)
         {
             var toggle = new ToggleSwitch
@@ -439,6 +444,46 @@ public sealed partial class MainWindow : Window
 
         catalog.Preferences.IdleThresholdSeconds = (int)Math.Max(1, args.NewValue) * 60;
         await _controller.ApplySensorChangesAsync();
+    }
+
+    private async void OnFrontmostAppModeChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_loadingSensorSettings) return;
+
+        var catalog = _controller.Catalog;
+        if (catalog is null) return;
+
+        var selected = FrontmostAppModeBox.SelectedIndex == 1
+            ? FrontmostAppMode.FullWindowTitle
+            : FrontmostAppMode.ApplicationName;
+
+        if (selected == FrontmostAppMode.FullWindowTitle
+            && catalog.Preferences.FrontmostAppMode != FrontmostAppMode.FullWindowTitle)
+        {
+            var dialog = new ContentDialog
+            {
+                XamlRoot = Content.XamlRoot,
+                Title = "Share full window titles?",
+                Content = "Window titles can contain document names, messages, customer names "
+                          + "and complete website titles. This value will be sent to your Home "
+                          + "Assistant server whenever the sensor reports.",
+                PrimaryButtonText = "Use full titles",
+                CloseButtonText = "Keep application names",
+                DefaultButton = ContentDialogButton.Close
+            };
+
+            if (await dialog.ShowAsync() != ContentDialogResult.Primary)
+            {
+                _loadingSensorSettings = true;
+                FrontmostAppModeBox.SelectedIndex = 0;
+                _loadingSensorSettings = false;
+                return;
+            }
+        }
+
+        catalog.Preferences.FrontmostAppMode = selected;
+        _controller.SaveSensorPreferences();
+        await BuildSensorListAsync();
     }
 
     private void SetSignInBusy(bool busy)

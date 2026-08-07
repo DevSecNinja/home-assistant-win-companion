@@ -148,42 +148,32 @@ reporting on schedule. `last_reported` is the attribute that tracks every report
 This is why the companion surfaces its own last-push time rather than relying on
 what Home Assistant displays.
 
-## Decision: Last update is shown in-app; the sensor reports the *reason*
+## Decision: No `last_update_trigger` sensor; freshness is shown in-app
 
-**Rationale**: Home Assistant already records when an entity last updated, so a
-timestamp sensor would duplicate it. The official apps instead expose
-`last_update_trigger`, whose state is *why* the app reported ("registration", or a
-trigger string). The companion mirrors that, and separately shows the actual last
-push time in its own status view where it is genuinely not otherwise available.
+**Rationale**: The official apps expose `last_update_trigger`, whose state is *why*
+the app reported. On Windows the periodic sync is overwhelmingly the only trigger, so
+the state is the constant string "Periodic" - and because Home Assistant only advances
+`last_updated` when a state actually **changes**, the entity looks permanently frozen.
+It gave the misleading impression that the companion had stopped reporting, which is
+the exact opposite of its purpose. Dropped.
 
+Freshness is instead surfaced where it is unambiguous:
 
-## Decision: Validate the webhook response body, not just the status code
+- The companion shows its own last successful push time and a health verdict.
+- Home Assistant's built-in `last_reported` already records every report, including
+  unchanged ones, without writing history.
+- An optional `last_update_time` timestamp sensor exists for people who want
+  staleness visible in the normal UI. It is **off by default** because it changes on
+  every sync and therefore writes a recorder entry every interval.
 
-**Rationale**: `update_sensor_states` returns **HTTP 200 even when it rejects every
-sensor**, reporting per-sensor outcomes only in the response body:
+**General lesson**: a sensor whose value rarely changes is a poor liveness signal in
+Home Assistant, because the UI surfaces *change* time, not *report* time.
 
-```json
-{"battery_level":{"success":false,"error":{"code":"invalid_format",
-  "message":"extra keys not allowed @ data['device_class'] ..."}}}
-```
+## Note: `battery_state` can legitimately read "not charging" while plugged in
 
-This shipped as a live bug: sensors registered fine and then never updated again,
-while the app reported itself healthy, because `EnsureSuccessStatusCode()` passed
-and the body was discarded.
+`GetSystemPowerStatus` reports `AcLineStatus = 1` with the charging bit (`0x08`)
+clear when firmware pauses charging - adaptive/conservation charging thresholds, or
+a thermal pause. The mapping is faithful, but it flaps and surprises users.
 
-Two rules follow:
-
-1. **`update_sensor_states` accepts only** `unique_id`, `type`, `state`, `icon` and
-   `attributes` (HA's `SENSOR_SCHEMA_FULL`). Registration metadata - `name`,
-   `device_class`, `entity_category`, `unit_of_measurement`, `state_class` - is
-   valid on `register_sensor` but is rejected with `invalid_format` on update. The
-   two payloads must therefore be built separately, not reused.
-2. A partial rejection is raised as `HomeAssistantRejectedException` so it counts as
-   a sync failure and turns the health indicator red. Silent tolerance is what let
-   this go unnoticed. It deliberately does *not* trigger re-registration, because a
-   schema rejection is a bug in what we send and retrying would loop.
-
-**Why the tests missed it**: the fake HTTP handler returned 200 for anything and
-never modelled the server's schema, so the tests asserted only that we sent
-*something*. There is now a test pinning the exact accepted key set, and one
-asserting a rejection body surfaces as an exception.
+`battery_state` therefore carries an `ac_online` attribute, which stays stable while
+the machine is on mains and is the better signal to automate on.

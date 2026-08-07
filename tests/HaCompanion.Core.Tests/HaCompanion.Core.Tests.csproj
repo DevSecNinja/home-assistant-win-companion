@@ -22,4 +22,8 @@
     <ProjectReference Include="..\..\src\HaCompanion.Core\HaCompanion.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Include="Golden\*.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

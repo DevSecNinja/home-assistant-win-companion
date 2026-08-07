@@ -1,0 +1,11 @@
+{
+  "type": "update_sensor_states",
+  "data": [
+    {
+      "unique_id": "battery_level",
+      "type": "sensor",
+      "state": 42,
+      "icon": "mdi:battery"
+    }
+  ]
+}

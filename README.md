@@ -67,7 +67,7 @@ one that just works with stock Home Assistant.**
 - **Opt-in sensor catalog** — battery, active/idle, screen locked, connection type,
   IP address, Wi-Fi SSID/BSSID, OS version, last boot, notification/presentation state, microphone
   and camera use, audio output, headset presence, WinGet update count, and an
-  optional last-update timestamp. Each sensor can be switched on or off
+  optional frontmost-app/last-update value. Each sensor can be switched on or off
   individually, shows a local preview, and privacy-sensitive ones are off by
   default.
 - **Health and logs** — a health verdict based on whether the app is actually

@@ -81,5 +81,3 @@ public sealed record WinGetUpdateResult(
         public string? AvailableVersion { get; set; }
     }
 }
-
-public sealed record WinGetModuleInstallResult(bool Success, string? Error = null);

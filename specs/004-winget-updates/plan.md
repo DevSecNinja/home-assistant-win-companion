@@ -8,8 +8,8 @@
 Add one opt-in cached sensor backed by the official `Microsoft.WinGet.Client`
 PowerShell module. Core owns update-result parsing, cache state, scheduling and
 sensor shaping. The App project owns Windows PowerShell process execution, module
-installation, and the confirmation UI. Package details remain in memory and appear
-only in local preview text.
+detection/signature validation, and the setup-instructions UI. Package details
+remain in memory and appear only in local preview text.
 
 ## Technical Context
 
@@ -28,7 +28,7 @@ lifecycle, refresh scheduling, and local-only preview
 **Project Type**: Native Windows desktop application with platform-agnostic Core
 
 **Performance Goals**: Maximum one automatic query per six hours; two-minute query
-timeout; installation and checks never block the UI thread
+timeout; checks never block the UI thread
 
 **Constraints**: No CLI-table parsing; no package details in HA payloads/logs; no
 PowerShell process while disabled; no package installation/update functionality
@@ -39,8 +39,8 @@ PowerShell process while disabled; no package installation/update functionality
 
 - **Native Windows Experience First**: PASS — confirmation and errors use native
   dialogs; PowerShell runs invisibly.
-- **Security & Privacy**: PASS — module installation requires explicit consent and
-  uses current-user scope; inventory remains local and unlogged.
+- **Security & Privacy**: PASS — the app executes only an explicitly installed,
+  sufficiently recent Microsoft-signed module; inventory remains local and unlogged.
 - **Evidence-Driven Development**: PASS — issue #21 and research record the rejected
   COM/CLI alternatives and dependency tradeoff.
 - **Testable, Layered Architecture**: PASS — provider interface and parser/cache live

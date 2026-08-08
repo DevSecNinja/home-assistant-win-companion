@@ -1,0 +1,13 @@
+{
+  "type": "update_registration",
+  "data": {
+    "app_data": {
+      "push_websocket_channel": true
+    },
+    "app_version": "1.2.3",
+    "device_name": "DESKTOP-TEST",
+    "manufacturer": "Contoso",
+    "model": "Windows PC",
+    "os_version": "10.0.26100"
+  }
+}

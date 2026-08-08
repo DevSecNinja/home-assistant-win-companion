@@ -85,13 +85,12 @@ public sealed class FrontmostAppSensorSource : ISensorSource
         lock (_lifecycleGate)
         {
             debounce = _debounceCancellation;
+            debounce?.Cancel();
             _debounceCancellation = null;
             thread = _hookThread;
             threadId = _hookThreadId;
         }
 
-        debounce?.Cancel();
-        debounce?.Dispose();
         if (thread is null) return;
         if (threadId != 0) PostThreadMessage(threadId, WmQuit, 0, 0);
         thread.Join(TimeSpan.FromSeconds(5));
@@ -118,10 +117,9 @@ public sealed class FrontmostAppSensorSource : ISensorSource
         lock (_lifecycleGate)
         {
             previous = _debounceCancellation;
+            previous?.Cancel();
             _debounceCancellation = cancellation;
         }
-        previous?.Cancel();
-        previous?.Dispose();
         _ = CommitAfterSettleAsync(version, cancellation);
         // Deliberately no onChanged callback: the value rides the next normal batch.
     }

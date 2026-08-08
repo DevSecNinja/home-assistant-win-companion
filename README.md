@@ -60,7 +60,8 @@ one that just works with stock Home Assistant.**
   long-lived tokens to create or paste. The refresh token is stored in the Windows
   Credential Locker.
 - **Tray-resident** — closing the window hides it to the notification area. The tray
-  tooltip shows current health.
+  tooltip shows current health. The status overview can register the app to start
+  in the tray when the current Windows user signs in.
 - **Windows toasts** — notifications sent to this PC from Home Assistant appear as
   native toasts, delivered over the `mobile_app` local push channel (Windows has no
   APNS/FCM equivalent).

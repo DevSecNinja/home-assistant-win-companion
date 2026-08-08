@@ -102,6 +102,16 @@
                 <TextBlock Text="Last update:" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                 <TextBlock x:Name="LastUpdateText" Text="—" />
             </StackPanel>
+            <ToggleSwitch
+                x:Name="StartWithWindowsToggle"
+                Header="Start with Windows"
+                OnContent="On"
+                OffContent="Off"
+                Toggled="OnStartWithWindowsToggled" />
+            <TextBlock
+                x:Name="StartupStatusText"
+                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                TextWrapping="Wrap" />
             <Button Content="Open Home Assistant" Click="OnOpenHomeAssistant" HorizontalAlignment="Stretch" />
             <Button Content="Change server URL…" Click="OnChangeServerUrl" HorizontalAlignment="Stretch" />
             <Button x:Name="UpdateNowButton" Content="Update now" Click="OnForcePush" HorizontalAlignment="Stretch" />

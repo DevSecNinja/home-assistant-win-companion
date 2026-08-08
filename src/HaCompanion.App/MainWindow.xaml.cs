@@ -1,5 +1,6 @@
 using HaCompanion.Core.Models;
 using HaCompanion.Core.Sensors;
+using HaCompanion_App.Services;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
@@ -18,14 +19,18 @@ public sealed partial class MainWindow : Window
     private readonly AppController _controller;
     private readonly DispatcherQueue _dispatcher;
     private readonly DispatcherQueueTimer _statusTimer;
+    private readonly WindowsStartupRegistration _startup = new();
+    private readonly bool _startHidden;
     private bool _exiting;
     private bool _connected;
     private int _sensorListBuildVersion;
     private bool _suppressSensorToggle;
+    private bool _loadingStartupSetting;
 
-    public MainWindow()
+    public MainWindow(bool startHidden = false)
     {
         InitializeComponent();
+        _startHidden = startHidden;
 
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(AppTitleBar);
@@ -46,10 +51,13 @@ public sealed partial class MainWindow : Window
     private async void OnFirstActivated(object sender, WindowActivatedEventArgs args)
     {
         Activated -= OnFirstActivated;
+        if (_startHidden) AppWindow.Hide();
         try
         {
             var resumed = await _controller.TryResumeAsync();
             ShowPanel(resumed);
+            if (!resumed && _startHidden) Show();
+            RefreshStartupSetting();
             if (resumed)
             {
                 RefreshBattery();
@@ -59,6 +67,7 @@ public sealed partial class MainWindow : Window
         catch
         {
             ShowPanel(false);
+            if (_startHidden) Show();
         }
     }
 
@@ -75,7 +84,10 @@ public sealed partial class MainWindow : Window
             };
 
             if (state == ConnectionState.AuthError)
+            {
                 ShowPanel(false);
+                Show();
+            }
 
             UpdateHealth();
         });
@@ -280,8 +292,60 @@ public sealed partial class MainWindow : Window
 
     private void Show()
     {
+        RefreshStartupSetting();
         AppWindow.Show();
         AppWindow.MoveInZOrderAtTop();
+    }
+
+    private void RefreshStartupSetting()
+    {
+        _loadingStartupSetting = true;
+        try
+        {
+            var state = _startup.GetState();
+            var repaired = false;
+            if (state == StartupRegistrationState.NeedsRepair)
+            {
+                _startup.SetEnabled(true);
+                state = StartupRegistrationState.Enabled;
+                repaired = true;
+            }
+
+            StartWithWindowsToggle.IsOn = state == StartupRegistrationState.Enabled;
+            StartupStatusText.Text = state switch
+            {
+                StartupRegistrationState.Enabled when repaired =>
+                    "Enabled for this Windows user. The startup path was repaired.",
+                StartupRegistrationState.Enabled =>
+                    "Enabled for this Windows user.",
+                _ => "Disabled for this Windows user."
+            };
+        }
+        catch (Exception ex)
+        {
+            StartWithWindowsToggle.IsOn = false;
+            StartupStatusText.Text = "Could not read Windows startup status: " + ex.Message;
+        }
+        finally
+        {
+            _loadingStartupSetting = false;
+        }
+    }
+
+    private void OnStartWithWindowsToggled(object sender, RoutedEventArgs e)
+    {
+        if (_loadingStartupSetting) return;
+
+        try
+        {
+            _startup.SetEnabled(StartWithWindowsToggle.IsOn);
+        }
+        catch (Exception ex)
+        {
+            StartupStatusText.Text = "Could not update Windows startup: " + ex.Message;
+        }
+
+        RefreshStartupSetting();
     }
 
     private void RefreshBattery() => RefreshStatusFields();

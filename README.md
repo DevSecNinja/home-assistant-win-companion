@@ -66,10 +66,18 @@ one that just works with stock Home Assistant.**
   APNS/FCM equivalent).
 - **Opt-in sensor catalog** — battery, active/idle, screen locked, connection type,
   IP address, Wi-Fi SSID/BSSID, OS version, last boot, notification/presentation state, microphone
-  and camera use, audio output, headset presence, WinGet update count, and an
+  and camera use, audio output, headset presence, WinGet update count, system
+  lifecycle state, and an
   optional last-update timestamp. Each sensor can be switched on or off
   individually, shows a local preview, and privacy-sensitive ones are off by
   default.
+- **Lifecycle signals** — sleep, sign-out and shutdown are detected without polling
+  and pushed as a `system_state` sensor with a short, strictly bounded final
+  attempt. Windows may terminate the app first, so anything undelivered is recorded
+  locally and reported after the next successful connection. The companion never
+  blocks or delays a shutdown. See
+  [docs/windows-lifecycle-signals.md](docs/windows-lifecycle-signals.md) for the
+  known reliability limits.
 - **Health and logs** — a health verdict based on whether the app is actually
   reporting on schedule, plus a rolling local log you can open from the UI.
 - **Open Home Assistant** — one click (window or tray menu) to open your instance in
@@ -134,8 +142,10 @@ opens for login, then the app registers this PC and connects.
 Secrets live only in the Windows Credential Locker, including the refresh token,
 `webhook_id`, and any cloudhook URL. Non-secret config (base URL, device id, sensor
 choices, and registered-sensor metadata) goes to
-`%LOCALAPPDATA%\HaCompanion\settings.json`. Existing installs migrate a previously
-stored plaintext webhook id into the Credential Locker automatically.
+`%LOCALAPPDATA%\HaCompanion\settings.json`. The last observed lifecycle transition
+is journalled separately in `%LOCALAPPDATA%\HaCompanion\lifecycle.json`, so a write
+interrupted by a shutdown cannot damage the configuration. Existing installs migrate
+a previously stored plaintext webhook id into the Credential Locker automatically.
 
 ## Notes on the Home Assistant APIs used
 

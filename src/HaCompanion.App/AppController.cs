@@ -103,9 +103,6 @@ public sealed class AppController : IAsyncDisposable
     public Task<bool> IsWinGetModuleInstalledAsync(CancellationToken ct = default) =>
         _winGetUpdates.IsModuleInstalledAsync(ct);
 
-    public Task<WinGetModuleInstallResult> InstallWinGetModuleAsync(CancellationToken ct = default) =>
-        _winGetUpdates.InstallModuleAsync(ct);
-
     public bool HasSavedSession
     {
         get

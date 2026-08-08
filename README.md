@@ -87,9 +87,9 @@ one that just works with stock Home Assistant.**
   `default_config`)
 
 The optional **WinGet Updates** sensor uses Microsoft's
-`Microsoft.WinGet.Client` PowerShell module. The first time it is enabled, the app
-explains the approximately 53 MB current-user installation and can install it from
-PowerShell Gallery after confirmation. Only the update count is sent to Home
+`Microsoft.WinGet.Client` PowerShell module version 1.29.280 or newer. If it is
+missing, the app provides a copyable current-user installation command but never
+downloads or installs executable code itself. Only the update count is sent to Home
 Assistant; package names and versions remain in the local preview.
 
 ## Build and run

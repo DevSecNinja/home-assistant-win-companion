@@ -4,6 +4,7 @@ using Microsoft.UI.Dispatching;
 using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Windows.ApplicationModel.DataTransfer;
 
 namespace HaCompanion_App;
 
@@ -460,44 +461,48 @@ public sealed partial class MainWindow : Window
 
             if (!installed)
             {
+                const string installCommand =
+                    "Install-Module Microsoft.WinGet.Client -Repository PSGallery "
+                    + "-Scope CurrentUser -MinimumVersion 1.29.280";
+                var commandBox = new TextBox
+                {
+                    Header = "Run in Windows PowerShell",
+                    Text = installCommand,
+                    IsReadOnly = true,
+                    TextWrapping = TextWrapping.Wrap
+                };
+                var content = new StackPanel { Spacing = 12 };
+                content.Children.Add(new TextBlock
+                {
+                    Text = "WinGet Updates requires Microsoft's official "
+                           + "Microsoft.WinGet.Client PowerShell module version 1.29.280 "
+                           + "or newer. The companion will not install executable code "
+                           + "automatically. Install the module for your user, then enable "
+                           + "the sensor again.",
+                    TextWrapping = TextWrapping.Wrap
+                });
+                content.Children.Add(commandBox);
+
                 var dialog = new ContentDialog
                 {
                     XamlRoot = Content.XamlRoot,
-                    Title = "Install WinGet client module?",
-                    Content = "WinGet Updates requires Microsoft's official "
-                              + "Microsoft.WinGet.Client PowerShell module. It is about 53 MB "
-                              + "and will be installed from PowerShell Gallery for your Windows "
-                              + "user account only.",
-                    PrimaryButtonText = "Install and enable",
+                    Title = "WinGet client module required",
+                    Content = content,
+                    PrimaryButtonText = "Copy command",
                     CloseButtonText = "Cancel",
-                    DefaultButton = ContentDialogButton.Primary
+                    DefaultButton = ContentDialogButton.Close
                 };
 
-                if (await dialog.ShowAsync() != ContentDialogResult.Primary)
+                if (await dialog.ShowAsync() == ContentDialogResult.Primary)
                 {
-                    toggle.IsEnabled = true;
-                    SetToggleState(toggle, false);
-                    return;
+                    var package = new DataPackage();
+                    package.SetText(installCommand);
+                    Clipboard.SetContent(package);
                 }
 
-                var install = await _controller.InstallWinGetModuleAsync();
-                if (!ReferenceEquals(catalog, _controller.Catalog) || !install.Success)
-                {
-                    toggle.IsEnabled = true;
-                    SetToggleState(toggle, false);
-                    if (!install.Success && ReferenceEquals(catalog, _controller.Catalog))
-                    {
-                        var error = new ContentDialog
-                        {
-                            XamlRoot = Content.XamlRoot,
-                            Title = "Module installation failed",
-                            Content = install.Error ?? "The WinGet client module could not be installed.",
-                            CloseButtonText = "Close"
-                        };
-                        await error.ShowAsync();
-                    }
-                    return;
-                }
+                toggle.IsEnabled = true;
+                SetToggleState(toggle, false);
+                return;
             }
 
             toggle.IsEnabled = true;

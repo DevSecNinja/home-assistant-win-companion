@@ -136,10 +136,6 @@ public class WinGetUpdateTests
         public Task<bool> IsModuleInstalledAsync(CancellationToken cancellationToken = default) =>
             Task.FromResult(true);
 
-        public Task<WinGetModuleInstallResult> InstallModuleAsync(
-            CancellationToken cancellationToken = default) =>
-            Task.FromResult(new WinGetModuleInstallResult(true));
-
         public async Task<WinGetUpdateResult> CheckForUpdatesAsync(
             CancellationToken cancellationToken = default)
         {

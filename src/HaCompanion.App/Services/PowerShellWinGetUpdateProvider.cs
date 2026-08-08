@@ -8,12 +8,10 @@ namespace HaCompanion_App.Services;
 public sealed class PowerShellWinGetUpdateProvider : IWinGetUpdateProvider
 {
     private static readonly TimeSpan CheckTimeout = TimeSpan.FromMinutes(2);
-    private static readonly TimeSpan InstallTimeout = TimeSpan.FromMinutes(10);
 
     private const string ModuleName = "Microsoft.WinGet.Client";
-    private const string RequiredModuleVersion = "1.29.280";
-    private const string RequiredPackageSha256 =
-        "726602001E6137EFFF66AA73C197C6AB6396AE2F9634D0ADAADA17EC5068EE46";
+    // Compatibility floor, not a release pin. Newer Microsoft-signed versions are accepted.
+    private const string MinimumModuleVersion = "1.29.280";
     private static string PowerShellPath { get; } = Path.Combine(
         Environment.SystemDirectory,
         "WindowsPowerShell",
@@ -32,66 +30,6 @@ public sealed class PowerShellWinGetUpdateProvider : IWinGetUpdateProvider
             .ConfigureAwait(false);
         return result.ExitCode == 0
                && string.Equals(result.Output.Trim(), "true", StringComparison.OrdinalIgnoreCase);
-    }
-
-    public async Task<WinGetModuleInstallResult> InstallModuleAsync(
-        CancellationToken cancellationToken = default)
-    {
-        var script = $$"""
-            $ErrorActionPreference = 'Stop'
-            [Net.ServicePointManager]::SecurityProtocol =
-              [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
-
-            $moduleRoot = Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'WindowsPowerShell\Modules'
-            $target = Join-Path $moduleRoot '{{ModuleName}}\{{RequiredModuleVersion}}'
-            $work = Join-Path ([IO.Path]::GetTempPath()) ([Guid]::NewGuid().ToString('N'))
-            $package = Join-Path $work '{{ModuleName}}.nupkg'
-            $expanded = Join-Path $work 'expanded'
-
-            try {
-              New-Item -ItemType Directory -Path $expanded -Force | Out-Null
-              Invoke-WebRequest `
-                -Uri 'https://www.powershellgallery.com/api/v2/package/{{ModuleName}}/{{RequiredModuleVersion}}' `
-                -OutFile $package -UseBasicParsing
-
-              $actualHash = (Get-FileHash -Path $package -Algorithm SHA256).Hash
-              if ($actualHash -ne '{{RequiredPackageSha256}}') {
-                throw 'The WinGet client module package failed integrity verification.'
-              }
-
-              Add-Type -AssemblyName System.IO.Compression.FileSystem
-              [IO.Compression.ZipFile]::ExtractToDirectory($package, $expanded)
-
-              if (Test-Path $target) {
-                Remove-Item $target -Recurse -Force
-              }
-              New-Item -ItemType Directory -Path $target -Force | Out-Null
-              Get-ChildItem $expanded -Force |
-                Where-Object { $_.Name -notin '_rels', 'package', '[Content_Types].xml' -and
-                               $_.Extension -ne '.nuspec' } |
-                Copy-Item -Destination $target -Recurse -Force
-              Set-Content -Path (Join-Path $target '.package.sha256') `
-                -Value '{{RequiredPackageSha256}}' -NoNewline -Encoding Ascii
-            }
-            finally {
-              Remove-Item $work -Recurse -Force -ErrorAction SilentlyContinue
-            }
-
-            {{ValidationFunction}}
-            Get-ValidatedWinGetModule | Out-Null
-            [Console]::Out.Write('installed')
-            """;
-
-        var result = await RunAsync(script, InstallTimeout, cancellationToken)
-            .ConfigureAwait(false);
-        if (result.TimedOut)
-            return new(false, "Module installation timed out. Check your PowerShell Gallery access.");
-        if (result.ExitCode != 0)
-            return new(false, "The WinGet client module could not be installed from PowerShell Gallery.");
-        if (!await IsModuleInstalledAsync(cancellationToken).ConfigureAwait(false))
-            return new(false, "PowerShell completed installation but the WinGet client module is unavailable.");
-
-        return new(true);
     }
 
     public async Task<WinGetUpdateResult> CheckForUpdatesAsync(
@@ -208,32 +146,18 @@ public sealed class PowerShellWinGetUpdateProvider : IWinGetUpdateProvider
 
     private static string ValidationFunction { get; } = $$"""
         function Get-ValidatedWinGetModule {
-          $module = Get-Module -ListAvailable -FullyQualifiedName @{
-            ModuleName = '{{ModuleName}}'
-            RequiredVersion = '{{RequiredModuleVersion}}'
-          } | Select-Object -First 1
+          $module = Get-Module -ListAvailable -Name '{{ModuleName}}' |
+            Where-Object { $_.Version -ge [Version]'{{MinimumModuleVersion}}' } |
+            Sort-Object Version -Descending |
+            Select-Object -First 1
           if ($null -eq $module) {
-            throw 'The required WinGet client module version is not installed.'
-          }
-
-          $moduleRoot = Split-Path -Parent $module.Path
-          $provenance = Join-Path $moduleRoot '.package.sha256'
-          if (-not (Test-Path $provenance) -or
-              (Get-Content $provenance -Raw).Trim() -ne '{{RequiredPackageSha256}}') {
-            throw 'The WinGet client module was not installed from the audited package.'
+            throw 'A supported WinGet client module version is not installed.'
           }
 
           $manifestSignature = Get-AuthenticodeSignature -FilePath $module.Path
           if ($manifestSignature.Status -ne 'Valid' -or
               $manifestSignature.SignerCertificate.Subject -notmatch 'O=Microsoft Corporation') {
             throw 'The WinGet client module manifest is not signed by Microsoft.'
-          }
-
-          $invalidFiles = @(Get-ChildItem $moduleRoot -Recurse -File |
-            Where-Object { $_.Extension -in '.dll', '.ps1', '.psd1', '.psm1' } |
-            Where-Object { (Get-AuthenticodeSignature -FilePath $_.FullName).Status -ne 'Valid' })
-          if ($invalidFiles.Count -ne 0) {
-            throw 'The WinGet client module contains unsigned executable files.'
           }
 
           return $module

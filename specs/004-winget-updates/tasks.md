@@ -22,9 +22,9 @@
 ## Phase 4: User Story 2 - Privacy and setup
 
 - [x] T011 [P] [US2] Test local-only package preview and disabled no-query behavior in `tests/HaCompanion.Core.Tests/WinGetUpdateTests.cs`
-- [x] T012 [US2] Add module detection and current-user installation to `src/HaCompanion.App/Services/PowerShellWinGetUpdateProvider.cs`
-- [x] T013 [US2] Add install confirmation, cancellation and failure handling in `src/HaCompanion.App/MainWindow.xaml.cs`
-- [x] T014 [US2] Expose setup operations through `src/HaCompanion.App/AppController.cs`
+- [x] T012 [US2] Add supported-version and Microsoft-signature detection to `src/HaCompanion.App/Services/PowerShellWinGetUpdateProvider.cs`
+- [x] T013 [US2] Add copyable setup instructions in `src/HaCompanion.App/MainWindow.xaml.cs`
+- [x] T014 [US2] Keep the sensor disabled until explicit setup completes
 
 ## Phase 5: User Story 3 - Controlled checks
 
@@ -51,5 +51,5 @@
 
 1. Add generic refresh orchestration.
 2. Deliver cached count and unavailable states.
-3. Add consented module installation and local details.
+3. Add explicit module setup guidance and local details.
 4. Validate scheduling, cancellation, privacy, and runtime behavior.

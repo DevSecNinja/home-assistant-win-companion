@@ -478,15 +478,17 @@ public sealed partial class MainWindow : Window
             : $"Filled in the {string.Join(" and ", found)} address; check it before saving.";
     }
 
-    private void OnAssignInternal(object sender, RoutedEventArgs e) => AssignMigratedRoute(RouteKind.Internal);
+    private async void OnAssignInternal(object sender, RoutedEventArgs e) =>
+        await AssignMigratedRouteAsync(RouteKind.Internal);
 
-    private void OnAssignExternal(object sender, RoutedEventArgs e) => AssignMigratedRoute(RouteKind.External);
+    private async void OnAssignExternal(object sender, RoutedEventArgs e) =>
+        await AssignMigratedRouteAsync(RouteKind.External);
 
-    private void AssignMigratedRoute(RouteKind route)
+    private async Task AssignMigratedRouteAsync(RouteKind route)
     {
         try
         {
-            _controller.AssignMigratedRoute(route);
+            await _controller.AssignMigratedRouteAsync(route);
             LoadConnectionSettings();
             RefreshStatusFields();
         }

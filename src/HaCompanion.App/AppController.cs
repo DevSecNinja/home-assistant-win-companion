@@ -24,7 +24,7 @@ public sealed class AppController : IAsyncDisposable
     private readonly PowerShellWinGetUpdateProvider _winGetUpdates = new();
     private readonly OAuthLoginService _login;
     private readonly WindowsNetworkContextProvider _network = new();
-    private readonly SemaphoreSlim _routeGate = new(1, 1);
+    private readonly ConnectionLifecycle _lifecycle;
     private readonly ILoggerFactory _loggerFactory =
         LoggerFactory.Create(builder =>
         {
@@ -44,6 +44,7 @@ public sealed class AppController : IAsyncDisposable
     {
         _login = new OAuthLoginService(_http);
         _settings = new SessionStore(new SettingsStore(), _secrets);
+        _lifecycle = new ConnectionLifecycle(_loggerFactory.CreateLogger<ConnectionLifecycle>());
         _probe = new HttpRouteProbe(
             _http,
             () => _secrets.Get(AppConstants.RefreshTokenKey),
@@ -158,8 +159,14 @@ public sealed class AppController : IAsyncDisposable
     public event Action? RouteChanged;
 
     /// <summary>Resumes a previously saved session, if one exists and is usable.</summary>
+    /// <remarks>
+    /// Taken as an explicit intent, so a background route switch that is already
+    /// running is pre-empted and stands down rather than racing this rebuild.
+    /// </remarks>
     public async Task<bool> TryResumeAsync(CancellationToken ct = default)
     {
+        using var lease = await _lifecycle.AcquireAsync(LifecycleIntent.Start, ct).ConfigureAwait(false);
+
         var config = _settings.Load();
         if (config is null || !config.IsValid()) return false;
         if (string.IsNullOrEmpty(_secrets.Get(AppConstants.RefreshTokenKey))) return false;
@@ -168,8 +175,8 @@ public sealed class AppController : IAsyncDisposable
         // The supervisor captures the config instance, so a reload must discard it
         // rather than leave it deciding routes from an orphaned object.
         _supervisor = null;
-        await PrepareRouteAsync(RouteTrigger.Startup, ct).ConfigureAwait(false);
-        await BuildAndStartAsync(ct).ConfigureAwait(false);
+        await PrepareRouteAsync(RouteTrigger.Startup, lease.Token).ConfigureAwait(false);
+        await BuildAndStartAsync(lease.Token).ConfigureAwait(false);
         return true;
     }
 
@@ -182,6 +189,8 @@ public sealed class AppController : IAsyncDisposable
         var tokens = await _login.SignInAsync(baseUrl, ct).ConfigureAwait(false);
         if (string.IsNullOrEmpty(tokens.RefreshToken))
             throw new InvalidOperationException("Home Assistant did not return a refresh token.");
+
+        using var lease = await _lifecycle.AcquireAsync(LifecycleIntent.Start, ct).ConfigureAwait(false);
 
         _secrets.Save(AppConstants.RefreshTokenKey, tokens.RefreshToken);
 
@@ -198,7 +207,8 @@ public sealed class AppController : IAsyncDisposable
         _config = config;
         _supervisor = null;
 
-        await BuildAndStartAsync(ct, seedAccessToken: tokens.AccessToken, seedExpiresIn: tokens.ExpiresIn)
+        await BuildAndStartAsync(lease.Token,
+                seedAccessToken: tokens.AccessToken, seedExpiresIn: tokens.ExpiresIn)
             .ConfigureAwait(false);
     }
 
@@ -250,48 +260,51 @@ public sealed class AppController : IAsyncDisposable
         var report = await RouteValidator.ValidateAsync(config, draft, _probe, ct).ConfigureAwait(false);
         if (!report.CanSave) return report;
 
+        // Reconfigure rather than Start: saving settings while disconnected must
+        // not reconnect. It still bumps the generation, so an in-flight route
+        // switch stands down instead of racing this rebuild.
+        using var lease = await _lifecycle
+            .AcquireAsync(LifecycleIntent.Reconfigure, ct)
+            .ConfigureAwait(false);
+
         var previous = Snapshot(config);
         RouteValidator.Apply(config, draft, report);
         _settings.Save(config);
 
-        // Serialized against background failover so the two cannot both tear the
-        // connection down and each leave a live ConnectionManager behind.
-        await _routeGate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            await PrepareRouteAsync(RouteTrigger.UserRequested, ct).ConfigureAwait(false);
+            await PrepareRouteAsync(RouteTrigger.UserRequested, lease.Token).ConfigureAwait(false);
             if (!string.Equals(_supervisor?.ActiveUrl, previous.BaseUrl, StringComparison.OrdinalIgnoreCase)
                 && _connection is not null)
             {
-                await RestartOnActiveRouteAsync(ct).ConfigureAwait(false);
+                await RestartOnActiveRouteAsync(lease.Token).ConfigureAwait(false);
             }
         }
         catch
         {
             Restore(config, previous);
             _settings.Save(config);
-            // The restart may already have torn the connection down, so put the
-            // previous configuration back on the air rather than leaving the app
-            // silently disconnected.
+
+            // The restart may already have torn the connection down. Put the
+            // previous configuration back on the air unless the user has since
+            // asked for something else, in which case that intent decides.
             _supervisor = null;
-            try
+            if (lease.IsCurrent)
             {
-                await PrepareRouteAsync(RouteTrigger.UserRequested, CancellationToken.None)
-                    .ConfigureAwait(false);
-                if (_connection is null)
-                    await BuildAndStartAsync(CancellationToken.None).ConfigureAwait(false);
-            }
-            catch (Exception recovery)
-            {
-                _loggerFactory.CreateLogger<AppController>()
-                    .LogError(recovery, "Could not restore the previous connection settings.");
+                try
+                {
+                    await PrepareRouteAsync(RouteTrigger.UserRequested, lease.Token).ConfigureAwait(false);
+                    if (_connection is null)
+                        await BuildAndStartAsync(lease.Token).ConfigureAwait(false);
+                }
+                catch (Exception recovery)
+                {
+                    _loggerFactory.CreateLogger<AppController>()
+                        .LogError(recovery, "Could not restore the previous connection settings.");
+                }
             }
 
             throw;
-        }
-        finally
-        {
-            _routeGate.Release();
         }
 
         RouteChanged?.Invoke();
@@ -303,8 +316,12 @@ public sealed class AppController : IAsyncDisposable
     /// explicit: a hostname cannot tell internal from external once split DNS,
     /// reverse proxies or Nabu Casa are involved.
     /// </summary>
-    public void AssignMigratedRoute(RouteKind route)
+    public async Task AssignMigratedRouteAsync(RouteKind route, CancellationToken ct = default)
     {
+        using var lease = await _lifecycle
+            .AcquireAsync(LifecycleIntent.Reconfigure, ct)
+            .ConfigureAwait(false);
+
         var config = _config ?? throw new InvalidOperationException("No connected server.");
         if (string.IsNullOrWhiteSpace(config.BaseUrl))
             throw new InvalidOperationException("There is no saved address to classify.");
@@ -387,7 +404,26 @@ public sealed class AppController : IAsyncDisposable
     /// Stops reporting to Home Assistant but keeps the saved server and
     /// credentials, so it can be resumed without signing in again.
     /// </summary>
+    /// <remarks>
+    /// Marks the connection as unwanted, so a route switch that was already queued
+    /// cannot bring it back after the user has ended it.
+    /// </remarks>
     public async Task DisconnectAsync()
+    {
+        using var lease = await _lifecycle
+            .AcquireAsync(LifecycleIntent.Stop)
+            .ConfigureAwait(false);
+
+        await DisconnectCoreAsync().ConfigureAwait(false);
+        StateChanged?.Invoke(ConnectionState.Disconnected);
+    }
+
+    /// <summary>
+    /// Tears the connection down. Callers must already hold the lifecycle lease;
+    /// taking it here would deadlock the transitions that disconnect as one step
+    /// of a larger change.
+    /// </summary>
+    private async Task DisconnectCoreAsync()
     {
         _catalog?.Stop();
         _catalog = null;
@@ -397,8 +433,6 @@ public sealed class AppController : IAsyncDisposable
             await _connection.DisposeAsync().ConfigureAwait(false);
             _connection = null;
         }
-
-        StateChanged?.Invoke(ConnectionState.Disconnected);
     }
 
     /// <summary>Resumes reporting after a <see cref="DisconnectAsync"/>.</summary>
@@ -428,7 +462,11 @@ public sealed class AppController : IAsyncDisposable
     /// </summary>
     public async Task RemoveServerAsync(CancellationToken ct = default)
     {
-        await DisconnectAsync().ConfigureAwait(false);
+        using var lease = await _lifecycle
+            .AcquireAsync(LifecycleIntent.Forget, ct)
+            .ConfigureAwait(false);
+
+        await DisconnectCoreAsync().ConfigureAwait(false);
 
         var refresh = _secrets.Get(AppConstants.RefreshTokenKey);
         if (!string.IsNullOrEmpty(refresh) && _config is not null && _config.IsValid())
@@ -443,6 +481,8 @@ public sealed class AppController : IAsyncDisposable
             }
         }
 
+        // Cleared last, and under the lease, so no route switch can write the
+        // settings file back out after it has been deleted.
         _secrets.Delete(AppConstants.RefreshTokenKey);
         _settings.Delete();
         _config = null;
@@ -464,9 +504,23 @@ public sealed class AppController : IAsyncDisposable
 
     public SystemStatus GetSystemStatus() => _status.GetStatus();
 
+    /// <summary>
+    /// Builds the REST, WebSocket and sensor stack and puts it on the air.
+    /// Callers must hold the lifecycle lease.
+    /// </summary>
     private async Task BuildAndStartAsync(
         CancellationToken ct, string? seedAccessToken = null, int seedExpiresIn = 0)
     {
+        // Defensive invariant: there is exactly one live manager at a time. Even if
+        // a caller forgets to tear down first, the old WebSocket and sync loops are
+        // stopped here rather than left running invisibly alongside the new ones.
+        if (_connection is not null || _catalog is not null)
+        {
+            _loggerFactory.CreateLogger<AppController>()
+                .LogWarning("A connection was still live at build time; disposing it first.");
+            await DisconnectCoreAsync().ConfigureAwait(false);
+        }
+
         var config = _config ?? throw new InvalidOperationException("No configuration loaded.");
         var url = ActiveUrl(config);
 
@@ -652,17 +706,21 @@ public sealed class AppController : IAsyncDisposable
     /// </summary>
     private async Task EvaluateRouteAsync(RouteTrigger trigger, CancellationToken ct)
     {
+        // Never queues: if a user action is running, this switch is dropped rather
+        // than applied afterwards to a connection the user may have just ended.
+        using var lease = await _lifecycle.TryAcquireRouteSwitchAsync(ct).ConfigureAwait(false);
+        if (lease is null) return;
+
         var config = _config;
         var supervisor = _supervisor;
         if (config is null || supervisor is null) return;
         if (config.ConfiguredRoutes().Count == 0) return;
-        if (!await _routeGate.WaitAsync(0, ct).ConfigureAwait(false)) return;
 
         try
         {
             var before = supervisor.ActiveUrl;
             var decision = await supervisor
-                .EvaluateAsync(_network.GetCurrent(), trigger, ct)
+                .EvaluateAsync(_network.GetCurrent(), trigger, lease.Token)
                 .ConfigureAwait(false);
 
             if (decision.Kind != RouteDecisionKind.Activated) return;
@@ -671,16 +729,18 @@ public sealed class AppController : IAsyncDisposable
             if (string.Equals(before, decision.Url, StringComparison.OrdinalIgnoreCase)) return;
             if (_connection is null) return;
 
-            await RestartOnActiveRouteAsync(ct).ConfigureAwait(false);
+            await RestartOnActiveRouteAsync(lease.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            // Pre-empted by a user action, which now owns the connection's fate.
+            _loggerFactory.CreateLogger<AppController>()
+                .LogDebug("Route switch abandoned; the connection was changed by the user.");
         }
         catch (Exception ex)
         {
             _loggerFactory.CreateLogger<AppController>()
                 .LogWarning(ex, "Route evaluation failed ({Trigger}).", trigger);
-        }
-        finally
-        {
-            _routeGate.Release();
         }
     }
 
@@ -689,9 +749,13 @@ public sealed class AppController : IAsyncDisposable
     /// address, which re-opens the push notification channel and resumes sensor
     /// sync without re-registering the device.
     /// </summary>
+    /// <remarks>
+    /// Calls the core teardown rather than <see cref="DisconnectAsync"/>: every
+    /// caller already holds the lifecycle lease, so re-acquiring it would deadlock.
+    /// </remarks>
     private async Task RestartOnActiveRouteAsync(CancellationToken ct)
     {
-        await DisconnectAsync().ConfigureAwait(false);
+        await DisconnectCoreAsync().ConfigureAwait(false);
         await BuildAndStartAsync(ct).ConfigureAwait(false);
         RouteChanged?.Invoke();
     }
@@ -731,6 +795,7 @@ public sealed class AppController : IAsyncDisposable
         _catalog?.Stop();
         if (_connection is not null)
             await _connection.DisposeAsync().ConfigureAwait(false);
+        _lifecycle.Dispose();
         _http.Dispose();
     }
 }

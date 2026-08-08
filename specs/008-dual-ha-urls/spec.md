@@ -129,6 +129,32 @@ instance. The REST and WebSocket clients are then rebuilt on the new address,
 which re-opens the push notification channel. The refresh token, webhook id,
 device and registered sensors are untouched.
 
+## Lifecycle serialization
+
+Failover runs on its own schedule, so it can collide with whatever the user is
+doing in the window. `ConnectionLifecycle` makes every change to the connection —
+sign-in, resume, disconnect, remove server, settings changes and background route
+switches — take an exclusive lease, so two of them can never interleave.
+
+Ordering alone is not enough, because a route switch that merely *waits* would
+still rebuild a connection the user has since ended. So a lease also carries:
+
+- **A generation counter**, bumped by every user action. A route switch re-checks
+  it after being let in and stands down if it moved.
+- **A "connection wanted" flag**, cleared by disconnect and remove server. Nothing
+  can bring the connection back until the user asks for it. `Reconfigure` leaves
+  it alone, so saving settings while disconnected does not reconnect.
+- **Pre-emption**: a user action cancels the transition in progress before queuing
+  for the lease, so the UI never waits on a rebuild's network calls.
+
+Route switches never queue. If a transition is already running the switch is
+dropped, because whatever prompted it will prompt it again, and the transition in
+progress may well have settled it.
+
+`BuildAndStartAsync` additionally tears down any live connection before building,
+so no path can leave two `ConnectionManager`s — and two WebSocket sessions, sensor
+sync loops and notification subscriptions — running invisibly alongside each other.
+
 ## Migration
 
 An install saved by a single-URL version keeps its `BaseUrl` and keeps working;

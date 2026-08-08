@@ -147,6 +147,10 @@
                     <TextBlock Text="minutes without input" VerticalAlignment="Center"
                                Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                 </StackPanel>
+                <Button
+                    Content="Open Windows Location settings"
+                    Click="OnOpenLocationSettings"
+                    HorizontalAlignment="Stretch" />
                 <Button Content="Back" Click="OnCloseSettings" HorizontalAlignment="Stretch" />
             </StackPanel>
         </Grid>

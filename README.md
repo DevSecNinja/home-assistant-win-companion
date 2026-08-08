@@ -65,11 +65,15 @@ one that just works with stock Home Assistant.**
   native toasts, delivered over the `mobile_app` local push channel (Windows has no
   APNS/FCM equivalent).
 - **Opt-in sensor catalog** — battery, active/idle, screen locked, connection type,
-  IP address, Wi-Fi SSID/BSSID, OS version, last boot, notification/presentation state, microphone
+  IPv4/IPv6 address, LAN MAC address, Wi-Fi SSID/BSSID, OS version, last boot,
+  notification/presentation state, microphone
   and camera use, audio output, headset presence, WinGet update count, and an
   optional last-update timestamp. Each sensor can be switched on or off
   individually, shows a local preview, and privacy-sensitive ones are off by
-  default.
+  default. Network identifiers are only read once you enable their own sensor —
+  the preview shows nothing beforehand — and the IPv4, IPv6 and MAC readings all
+  describe the adapter carrying the active route rather than a VPN or Hyper-V
+  adapter.
 - **Health and logs** — a health verdict based on whether the app is actually
   reporting on schedule, plus a rolling local log you can open from the UI.
 - **Open Home Assistant** — one click (window or tray menu) to open your instance in

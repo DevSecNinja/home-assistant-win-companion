@@ -56,6 +56,13 @@ on that thread, and released when the sensor is switched off.
 No Windows service is involved. A service runs in session 0 and would lose the
 user-session context that the tray, toasts and every other sensor depend on.
 
+Starting and stopping that thread follows a small handshake (`MessagePumpLifetime`,
+in Core so it can be tested without Windows). A stop can arrive before the window
+exists - at sign-out moments after startup, for instance - and there is then no
+window to post `WM_CLOSE` to. The request is therefore recorded first and checked by
+the pump on both sides of window creation, and the pump always reports itself ready
+even when it never created a window, so a stop can neither be lost nor left waiting.
+
 ## Reliability limits
 
 These are properties of Windows, not defects in the companion:

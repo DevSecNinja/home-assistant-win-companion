@@ -28,10 +28,19 @@ public sealed class LifecycleCoordinator
     private readonly TimeSpan _finalPushTimeout;
     private readonly IClock _clock;
     private readonly ILogger<LifecycleCoordinator> _log;
+
+    /// <summary>
+    /// Guards every piece of mutable state here, including the cancellation source
+    /// of the in-flight push. Windows delivers the same transition on more than one
+    /// thread - the message pump and <c>SystemEvents</c> - so partially synchronised
+    /// access would let two suspends each start a push, or let a resume cancel a
+    /// source that has already been replaced and leave the new one running.
+    /// </summary>
     private readonly object _gate = new();
 
     private CancellationTokenSource? _pushCts;
     private LifecycleRecord? _readRecord;
+    private Task? _finalPushTask;
 
     /// <param name="finalPush">
     /// Pushes the current sensor states and reports whether Home Assistant accepted
@@ -75,24 +84,36 @@ public sealed class LifecycleCoordinator
     public event Action? Changed;
 
     /// <summary>The in-flight final push, exposed so tests can await it.</summary>
-    public Task? FinalPush { get; private set; }
+    public Task? FinalPush
+    {
+        get { lock (_gate) return _finalPushTask; }
+    }
 
     /// <summary>Loads the transition left behind by the previous run, if any.</summary>
     public void Start()
     {
-        var record = _journal.Read();
-        Pending = record is { Acknowledged: false } ? record : null;
-        PendingIsCurrent = false;
+        LifecycleRecord? pending;
+        lock (_gate)
+        {
+            var record = _journal.Read();
+            Pending = record is { Acknowledged: false } ? record : null;
+            PendingIsCurrent = false;
+            _readRecord = null;
+            pending = Pending;
+        }
 
-        if (Pending is not null)
+        if (pending is not null)
         {
             _log.LogInformation(
                 "Recovered unreported lifecycle transition {Transition} observed at {ObservedAt}.",
-                Pending.Transition, Pending.ObservedAt);
+                pending.Transition, pending.ObservedAt);
         }
     }
 
-    public void Stop() => CancelPendingPush();
+    public void Stop()
+    {
+        lock (_gate) CancelPendingPush();
+    }
 
     /// <summary>Records one observation. Returns immediately; never throws.</summary>
     public void Observe(LifecycleSignal signal)
@@ -120,6 +141,11 @@ public sealed class LifecycleCoordinator
 
                 PendingIsCurrent = true;
                 _journal.Write(Pending);
+
+                // Started while still holding the gate so that the observation, the
+                // cancellation of the previous attempt and the new attempt cannot be
+                // interleaved by a second thread reporting the same transition.
+                BeginFinalPush();
             }
             else
             {
@@ -129,9 +155,10 @@ public sealed class LifecycleCoordinator
         }
 
         _log.LogInformation("Lifecycle transition {Transition} ({Reason}).", signal.Transition, signal.Reason);
-        Changed?.Invoke();
 
-        if (observation.RequiresFinalPush) BeginFinalPush();
+        // Deliberately outside the gate: this runs arbitrary caller code, which may
+        // block on another thread that is itself about to report a transition.
+        Changed?.Invoke();
     }
 
     /// <summary>
@@ -139,7 +166,10 @@ public sealed class LifecycleCoordinator
     /// Acknowledgement is tied to this snapshot so a sync that was already in flight
     /// cannot be mistaken for delivery of a transition observed after it started.
     /// </summary>
-    public void NoteRead() => _readRecord = Pending;
+    public void NoteRead()
+    {
+        lock (_gate) _readRecord = Pending;
+    }
 
     /// <summary>Called when Home Assistant accepted a batch that we read into.</summary>
     public void ReportDelivered()
@@ -156,6 +186,11 @@ public sealed class LifecycleCoordinator
         _log.LogDebug("Lifecycle transition acknowledged by Home Assistant.");
     }
 
+    /// <summary>
+    /// Starts the one bounded attempt to reach Home Assistant. Must be called with
+    /// <see cref="_gate"/> held: it publishes the cancellation source that
+    /// <see cref="CancelPendingPush"/> and the push's own completion both act on.
+    /// </summary>
     private void BeginFinalPush()
     {
         if (_finalPush is null) return;
@@ -163,39 +198,43 @@ public sealed class LifecycleCoordinator
         var cts = new CancellationTokenSource(_finalPushTimeout);
         _pushCts = cts;
 
-        FinalPush = Task.Run(async () =>
-        {
-            try
-            {
-                var delivered = await _finalPush(cts.Token).ConfigureAwait(false);
-                if (!delivered)
-                    _log.LogWarning("Final lifecycle push was not acknowledged; it will be reported after the next start.");
-            }
-            catch (Exception ex)
-            {
-                // Best effort by definition: the machine is going away.
-                _log.LogWarning(ex, "Final lifecycle push failed.");
-            }
-            finally
-            {
-                cts.Dispose();
-            }
-        });
+        // Task.Run does not run the body inline, so starting it under the gate
+        // cannot deadlock: the body's own locking waits for a gate we release
+        // immediately afterwards.
+        _finalPushTask = Task.Run(() => RunFinalPushAsync(cts));
     }
 
+    private async Task RunFinalPushAsync(CancellationTokenSource cts)
+    {
+        try
+        {
+            var delivered = await _finalPush!(cts.Token).ConfigureAwait(false);
+            if (!delivered)
+                _log.LogWarning("Final lifecycle push was not acknowledged; it will be reported after the next start.");
+        }
+        catch (Exception ex)
+        {
+            // Best effort by definition: the machine is going away.
+            _log.LogWarning(ex, "Final lifecycle push failed.");
+        }
+        finally
+        {
+            lock (_gate)
+            {
+                // Retiring and disposing under the same gate that cancels is what
+                // makes a cancel-versus-completion race impossible: whichever runs
+                // second sees either a null or a source that is still alive.
+                if (ReferenceEquals(_pushCts, cts)) _pushCts = null;
+                cts.Dispose();
+            }
+        }
+    }
+
+    /// <summary>Cancels the in-flight push, if any. Requires <see cref="_gate"/>.</summary>
     private void CancelPendingPush()
     {
         var cts = _pushCts;
         _pushCts = null;
-        if (cts is null) return;
-
-        try
-        {
-            cts.Cancel();
-        }
-        catch (ObjectDisposedException)
-        {
-            // The push already finished and disposed its own source.
-        }
+        cts?.Cancel();
     }
 }

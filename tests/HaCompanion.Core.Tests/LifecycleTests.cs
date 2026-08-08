@@ -480,6 +480,169 @@ public class LifecycleCoordinatorTests
         Assert.Equal(1, pushes);
     }
 
+    [Fact]
+    public async Task Simultaneous_reports_of_one_transition_push_exactly_once()
+    {
+        // Windows delivers the same fact on the message pump and on SystemEvents, so
+        // two threads routinely report a suspend at the same moment.
+        const int threads = 16;
+        var changed = 0;
+        var pushes = 0;
+        var ready = new Barrier(threads);
+        var coordinator = new LifecycleCoordinator(
+            new LockingJournal(),
+            finalPush: _ =>
+            {
+                Interlocked.Increment(ref pushes);
+                return Task.FromResult(true);
+            });
+        coordinator.Changed += () => Interlocked.Increment(ref changed);
+
+        await Task.WhenAll(Enumerable.Range(0, threads).Select(_ => Task.Run(() =>
+        {
+            ready.SignalAndWait();
+            coordinator.Observe(new LifecycleSignal(LifecycleTransition.Sleeping, "Suspend"));
+        })));
+
+        Assert.NotNull(coordinator.FinalPush);
+        await coordinator.FinalPush!.WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.Equal(1, Volatile.Read(ref changed));
+        Assert.Equal(1, Volatile.Read(ref pushes));
+    }
+
+    [Fact]
+    public async Task A_resume_racing_the_suspend_still_cancels_its_push()
+    {
+        // The cancellation source is published before the observation completes, so a
+        // resume on another thread can never slip past the push it should cancel.
+        for (var attempt = 0; attempt < 25; attempt++)
+        {
+            CancellationToken token = default;
+            var entered = new ManualResetEventSlim();
+            var coordinator = new LifecycleCoordinator(
+                new LockingJournal(),
+                finalPush: async ct =>
+                {
+                    token = ct;
+                    entered.Set();
+                    await Task.Delay(Timeout.Infinite, ct);
+                    return true;
+                },
+                finalPushTimeout: TimeSpan.FromMinutes(5));
+
+            var suspend = Task.Run(() =>
+                coordinator.Observe(new LifecycleSignal(LifecycleTransition.Sleeping, "Suspend")));
+            var resume = Task.Run(() =>
+            {
+                entered.Wait(TimeSpan.FromSeconds(5));
+                coordinator.Observe(LifecycleSignal.Running("Resume"));
+            });
+
+            await Task.WhenAll(suspend, resume).WaitAsync(TimeSpan.FromSeconds(10));
+            await coordinator.FinalPush!.WaitAsync(TimeSpan.FromSeconds(5));
+
+            Assert.True(token.IsCancellationRequested);
+            Assert.Equal(LifecycleTransition.Running, coordinator.Tracker.Current);
+        }
+    }
+
+    [Fact]
+    public async Task A_more_serious_transition_replaces_the_push_of_the_previous_one()
+    {
+        var tokens = new List<CancellationToken>();
+        var entered = new SemaphoreSlim(0);
+        var coordinator = new LifecycleCoordinator(
+            new LockingJournal(),
+            finalPush: async ct =>
+            {
+                lock (tokens) tokens.Add(ct);
+                entered.Release();
+                await Task.Delay(Timeout.Infinite, ct);
+                return true;
+            },
+            finalPushTimeout: TimeSpan.FromMinutes(5));
+
+        coordinator.Observe(new LifecycleSignal(LifecycleTransition.Sleeping, "Suspend"));
+        Assert.True(await entered.WaitAsync(TimeSpan.FromSeconds(5)));
+        var first = coordinator.FinalPush;
+
+        coordinator.Observe(new LifecycleSignal(LifecycleTransition.ShuttingDown, "Shutdown", Critical: true));
+        Assert.True(await entered.WaitAsync(TimeSpan.FromSeconds(5)));
+        var second = coordinator.FinalPush;
+
+        Assert.NotSame(first, second);
+        await first!.WaitAsync(TimeSpan.FromSeconds(5));
+
+        CancellationToken[] observed;
+        lock (tokens) observed = tokens.ToArray();
+
+        Assert.Equal(2, observed.Length);
+        Assert.True(observed[0].IsCancellationRequested);
+        Assert.False(observed[1].IsCancellationRequested);
+
+        coordinator.Stop();
+        await second!.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.True(observed[1].IsCancellationRequested);
+    }
+
+    [Fact]
+    public async Task Stopping_after_the_push_finished_is_harmless()
+    {
+        // The push retires its own cancellation source under the same lock Stop uses,
+        // so a late stop can never touch a disposed one.
+        var coordinator = new LifecycleCoordinator(
+            new LockingJournal(),
+            finalPush: _ => Task.FromResult(true));
+
+        coordinator.Observe(new LifecycleSignal(LifecycleTransition.ShuttingDown, "Shutdown"));
+        await coordinator.FinalPush!.WaitAsync(TimeSpan.FromSeconds(5));
+
+        coordinator.Stop();
+        coordinator.Stop();
+    }
+
+    [Fact]
+    public async Task Stopping_while_observations_arrive_never_throws()
+    {
+        var coordinator = new LifecycleCoordinator(
+            new LockingJournal(),
+            finalPush: async ct =>
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(50), ct);
+                return true;
+            },
+            finalPushTimeout: TimeSpan.FromSeconds(30));
+
+        var signals = Task.Run(() =>
+        {
+            for (var i = 0; i < 200; i++)
+            {
+                coordinator.Observe(new LifecycleSignal(LifecycleTransition.Sleeping, "Suspend"));
+                coordinator.Observe(LifecycleSignal.Running("Resume"));
+            }
+        });
+        var stops = Task.Run(() =>
+        {
+            for (var i = 0; i < 200; i++) coordinator.Stop();
+        });
+
+        await Task.WhenAll(signals, stops).WaitAsync(TimeSpan.FromSeconds(30));
+
+        var push = coordinator.FinalPush;
+        if (push is not null)
+        {
+            try
+            {
+                await push.WaitAsync(TimeSpan.FromSeconds(5));
+            }
+            catch (OperationCanceledException)
+            {
+                // Expected: the coordinator swallows cancellation itself.
+            }
+        }
+    }
+
     private sealed class FakeJournal : ILifecycleJournal
     {
         public LifecycleRecord? Record { get; set; }
@@ -487,6 +650,23 @@ public class LifecycleCoordinatorTests
         public LifecycleRecord? Read() => Record;
 
         public void Write(LifecycleRecord record) => Record = record;
+    }
+
+    /// <summary>A journal that tolerates the concurrent writes the race tests produce.</summary>
+    private sealed class LockingJournal : ILifecycleJournal
+    {
+        private readonly object _gate = new();
+        private LifecycleRecord? _record;
+
+        public LifecycleRecord? Read()
+        {
+            lock (_gate) return _record;
+        }
+
+        public void Write(LifecycleRecord record)
+        {
+            lock (_gate) _record = record;
+        }
     }
 }
 
@@ -610,6 +790,147 @@ public class LifecycleSensorSourceTests
         public LifecycleRecord? Read() => _record;
 
         public void Write(LifecycleRecord record) => _record = record;
+    }
+}
+
+public class MessagePumpLifetimeTests
+{
+    private static readonly TimeSpan Wait = TimeSpan.FromSeconds(5);
+
+    [Fact]
+    public void A_second_start_is_refused_while_a_pump_is_running()
+    {
+        using var lifetime = new MessagePumpLifetime();
+
+        Assert.True(lifetime.TryBeginStart());
+        Assert.False(lifetime.TryBeginStart());
+
+        lifetime.MarkStopped();
+        Assert.True(lifetime.TryBeginStart());
+    }
+
+    [Fact]
+    public void Stopping_something_that_never_started_does_nothing()
+    {
+        using var lifetime = new MessagePumpLifetime();
+
+        Assert.False(lifetime.RequestStop());
+        Assert.False(lifetime.StopRequested);
+    }
+
+    [Fact]
+    public void A_stop_that_beats_window_creation_is_still_seen_by_the_pump()
+    {
+        // The bug this protects against: the stopper found no window, skipped the
+        // close message, and the pump then created its window and looped forever.
+        using var lifetime = new MessagePumpLifetime();
+        Assert.True(lifetime.TryBeginStart());
+        Assert.True(lifetime.RequestStop());
+
+        var createdWindow = true;
+        var pump = new Thread(() =>
+        {
+            try
+            {
+                if (lifetime.StopRequested)
+                {
+                    createdWindow = false;
+                    return;
+                }
+
+                lifetime.MarkReady();
+            }
+            finally
+            {
+                lifetime.MarkStopped();
+            }
+        });
+        pump.Start();
+
+        Assert.True(lifetime.WaitUntilReady(Wait));
+        Assert.True(pump.Join(Wait));
+        Assert.False(createdWindow);
+        Assert.False(lifetime.IsRunning);
+    }
+
+    [Fact]
+    public void A_stopper_is_never_left_waiting_for_a_pump_that_never_ran()
+    {
+        using var lifetime = new MessagePumpLifetime();
+        Assert.True(lifetime.TryBeginStart());
+        Assert.True(lifetime.RequestStop());
+
+        // Nobody ever announces readiness, exactly as when the thread failed to
+        // start; the stopper reclaims the lifetime itself.
+        lifetime.MarkStopped();
+
+        Assert.True(lifetime.WaitUntilReady(Wait));
+        Assert.True(lifetime.TryBeginStart());
+    }
+
+    [Fact]
+    public void Readiness_is_published_before_a_stopper_can_act_on_it()
+    {
+        // Whichever order the two threads run in, the stopper either sees the handle
+        // or the pump sees the request - never neither.
+        for (var attempt = 0; attempt < 50; attempt++)
+        {
+            using var lifetime = new MessagePumpLifetime();
+            Assert.True(lifetime.TryBeginStart());
+
+            var handle = 0;
+            var start = new Barrier(2);
+            var pump = new Thread(() =>
+            {
+                try
+                {
+                    start.SignalAndWait();
+                    if (lifetime.StopRequested) return;
+
+                    Volatile.Write(ref handle, 42);
+                    lifetime.MarkReady();
+                }
+                finally
+                {
+                    lifetime.MarkStopped();
+                }
+            });
+            pump.Start();
+
+            start.SignalAndWait();
+            lifetime.RequestStop();
+            Assert.True(lifetime.WaitUntilReady(Wait));
+            Assert.True(pump.Join(Wait));
+
+            var observed = Volatile.Read(ref handle);
+            Assert.True(observed is 0 or 42);
+            Assert.False(lifetime.IsRunning);
+        }
+    }
+
+    [Fact]
+    public void Marking_stopped_twice_leaves_the_lifetime_reusable()
+    {
+        using var lifetime = new MessagePumpLifetime();
+        Assert.True(lifetime.TryBeginStart());
+
+        lifetime.MarkStopped();
+        lifetime.MarkStopped();
+
+        Assert.False(lifetime.IsRunning);
+        Assert.False(lifetime.StopRequested);
+        Assert.True(lifetime.TryBeginStart());
+    }
+
+    [Fact]
+    public void Waiting_on_a_disposed_lifetime_gives_up_instead_of_hanging()
+    {
+        var lifetime = new MessagePumpLifetime();
+        lifetime.TryBeginStart();
+        lifetime.Dispose();
+
+        Assert.False(lifetime.WaitUntilReady(TimeSpan.FromMilliseconds(50)));
+        lifetime.Dispose();
     }
 }
 

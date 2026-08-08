@@ -35,12 +35,16 @@ public sealed class WindowsLifecycleSignalSource : ILifecycleSignalSource, IDisp
     private const uint WM_CLOSE = 0x0010;
     private const uint WM_DESTROY = 0x0002;
 
+    // Long enough for a window to appear on a loaded machine, short enough that a
+    // wedged pump never holds up sign-out.
+    private static readonly TimeSpan ReadyTimeout = TimeSpan.FromSeconds(2);
+
     private readonly object _gate = new();
 
-    // Signals that the pump has either created its window or given up, so Stop can
-    // always find a window to close rather than leaking a thread that starts a
-    // moment later.
-    private readonly ManualResetEventSlim _ready = new();
+    // The agreed protocol with the pump thread. It has to cope with a Stop that
+    // arrives before the window exists, which is otherwise a lost shutdown: the
+    // stopper finds no window to close and the pump loops on forever.
+    private readonly MessagePumpLifetime _lifetime = new();
 
     // The delegate is handed to unmanaged code, so it must outlive the P/Invoke that
     // registered it; a local would be collected while Windows still holds the pointer.
@@ -48,7 +52,6 @@ public sealed class WindowsLifecycleSignalSource : ILifecycleSignalSource, IDisp
 
     private Thread? _pump;
     private nint _hwnd;
-    private bool _observing;
 
     public WindowsLifecycleSignalSource() => _wndProc = OnWindowMessage;
 
@@ -58,59 +61,88 @@ public sealed class WindowsLifecycleSignalSource : ILifecycleSignalSource, IDisp
     {
         lock (_gate)
         {
-            if (_observing) return;
-            _observing = true;
+            if (!_lifetime.TryBeginStart()) return;
 
             SystemEvents.PowerModeChanged += OnPowerModeChanged;
             SystemEvents.SessionEnding += OnSessionEnding;
             SystemEvents.SessionSwitch += OnSessionSwitch;
 
+            _hwnd = 0;
             _pump = new Thread(PumpMessages)
             {
                 Name = "HaCompanion lifecycle",
                 IsBackground = true
             };
             _pump.SetApartmentState(ApartmentState.STA);
-            _ready.Reset();
             _pump.Start();
         }
 
-        _ready.Wait(TimeSpan.FromSeconds(2));
+        _lifetime.WaitUntilReady(ReadyTimeout);
     }
 
     public void Stop()
     {
         Thread? pump;
-        nint hwnd;
 
         lock (_gate)
         {
-            if (!_observing) return;
-            _observing = false;
+            // Recorded even if the pump has not created its window yet, so an early
+            // stop is honoured rather than skipped.
+            if (!_lifetime.RequestStop()) return;
 
             SystemEvents.PowerModeChanged -= OnPowerModeChanged;
             SystemEvents.SessionEnding -= OnSessionEnding;
             SystemEvents.SessionSwitch -= OnSessionSwitch;
 
             pump = _pump;
-            hwnd = _hwnd;
             _pump = null;
         }
+
+        // Wait for the pump to publish its window - or to report that it never will,
+        // having seen the request above - before deciding how to end it.
+        _lifetime.WaitUntilReady(ReadyTimeout);
+
+        nint hwnd;
+        lock (_gate) hwnd = _hwnd;
 
         // Destroying the window has to happen on the thread that created it, so ask
         // its own pump to do it and let the loop end naturally.
         if (hwnd != 0) PostMessage(hwnd, WM_CLOSE, 0, 0);
-        pump?.Join(TimeSpan.FromSeconds(2));
+
+        var ended = pump is null || pump.Join(ReadyTimeout);
+
+        // The pump normally reports this itself; do it here too so a thread that
+        // failed to start cannot leave the lifetime permanently claimed.
+        if (ended) _lifetime.MarkStopped();
     }
 
     public void Dispose()
     {
         Stop();
-        _ready.Dispose();
+        _lifetime.Dispose();
     }
 
     private void PumpMessages()
     {
+        try
+        {
+            RunPump();
+        }
+        finally
+        {
+            lock (_gate) _hwnd = 0;
+
+            // Readiness is announced again here in case we left before creating the
+            // window, so a Stop waiting on it is never stranded.
+            _lifetime.MarkStopped();
+        }
+    }
+
+    private void RunPump()
+    {
+        // Stopped before we got going: nothing to create, and nothing to tear down.
+        if (_lifetime.StopRequested) return;
+
         var instance = GetModuleHandle(null);
         var windowClass = new WNDCLASS
         {
@@ -125,17 +157,27 @@ public sealed class WindowsLifecycleSignalSource : ILifecycleSignalSource, IDisp
 
         var hwnd = CreateWindowEx(
             0, WindowClassName, "HaCompanion Lifecycle", 0, 0, 0, 0, 0, 0, 0, instance, 0);
-        _hwnd = hwnd;
-        _ready.Set();
+
+        lock (_gate) _hwnd = hwnd;
+
+        // Published before readiness is announced, so a stopper that wakes on it is
+        // guaranteed to see the handle.
+        _lifetime.MarkReady();
         if (hwnd == 0) return;
+
+        // A stop that arrived while the window was being created would have missed
+        // its chance to post to it, so honour it here instead.
+        if (_lifetime.StopRequested)
+        {
+            DestroyWindow(hwnd);
+            return;
+        }
 
         while (GetMessage(out var message, 0, 0, 0) > 0)
         {
             TranslateMessage(ref message);
             DispatchMessage(ref message);
         }
-
-        _hwnd = 0;
     }
 
     private nint OnWindowMessage(nint hwnd, uint message, nint wParam, nint lParam)
@@ -240,6 +282,9 @@ public sealed class WindowsLifecycleSignalSource : ILifecycleSignalSource, IDisp
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     private static extern bool PostMessage(nint hWnd, uint msg, nint wParam, nint lParam);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool DestroyWindow(nint hWnd);
 
     [DllImport("user32.dll")]
     private static extern void PostQuitMessage(int nExitCode);

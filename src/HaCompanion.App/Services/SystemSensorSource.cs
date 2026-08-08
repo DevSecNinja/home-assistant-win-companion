@@ -5,13 +5,15 @@ using HaCompanion.Core.Sensors;
 namespace HaCompanion_App.Services;
 
 /// <summary>
-/// System diagnostics: the Windows version and when the machine last booted.
-/// Neither changes during a session, so there is nothing to observe.
+/// System diagnostics: the Windows version, this PC's model, and when the
+/// machine last booted. None of them changes during a session, so there is
+/// nothing to observe.
 /// </summary>
 public sealed class SystemSensorSource : ISensorSource
 {
     public const string OsVersionId = "os_version";
     public const string LastBootId = "last_boot";
+    public const string HostModelId = "host_model";
 
     private readonly BootTimeCalculator _bootTime = new();
 
@@ -27,6 +29,13 @@ public sealed class SystemSensorSource : ISensorSource
             LastBootId,
             "Last Boot",
             "When this PC last started up.",
+            SensorPrivacy.Benign,
+            EnabledByDefault: true),
+        new SensorDefinition(
+            HostModelId,
+            "Model",
+            "This PC's manufacturer and model, for example Dell Precision 5560. "
+            + "No serial number, service tag or other unique identifier is read.",
             SensorPrivacy.Benign,
             EnabledByDefault: true)
     };
@@ -59,6 +68,19 @@ public sealed class SystemSensorSource : ISensorSource
                 DeviceClass = "timestamp",
                 EntityCategory = "diagnostic",
                 Icon = "mdi:restart"
+            });
+        }
+
+        if (enabled.Contains(HostModelId))
+        {
+            readings.Add(new Sensor
+            {
+                UniqueId = HostModelId,
+                Type = "sensor",
+                Name = "Model",
+                State = HardwareInfo.DescribeModel(),
+                EntityCategory = "diagnostic",
+                Icon = "mdi:desktop-tower-monitor"
             });
         }
 

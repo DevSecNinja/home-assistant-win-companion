@@ -27,11 +27,18 @@ jobs:
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           dotnet-version: 9.0.x
-      - name: Restore
-        run: dotnet restore HaCompanion.sln -p:Platform=x64 --nologo
+      - name: Restore Windows app
+        run: >-
+          dotnet restore src\HaCompanion.App\HaCompanion.App.csproj
+          -p:Platform=x64 -r win-x64 --nologo
+      - name: Restore core tests
+        run: >-
+          dotnet restore tests\HaCompanion.Core.Tests\HaCompanion.Core.Tests.csproj
+          --nologo
       - name: Build Windows app
         run: >-
-          dotnet build src\HaCompanion.App\HaCompanion.App.csproj -c Release -p:Platform=x64 --no-restore --nologo
+          dotnet build src\HaCompanion.App\HaCompanion.App.csproj -c Release
+          -p:Platform=x64 -r win-x64 --no-restore --nologo
       - name: Run core tests
         id: tests
         run: >-
@@ -57,7 +64,7 @@ jobs:
             "| $($counters.total) | $($counters.passed) | $($counters.failed) | $($counters.notExecuted) |"
           ) >> $env:GITHUB_STEP_SUMMARY
       - name: Upload test results
-        if: ${{ always() }}
+        if: ${{ always() && steps.tests.outcome != 'skipped' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: test-results

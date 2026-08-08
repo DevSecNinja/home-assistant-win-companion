@@ -388,7 +388,7 @@ public sealed class AppController : IAsyncDisposable
             {
                 new BatterySensorSource(_status),
                 new ActiveSensorSource(config.Sensors),
-                new NetworkSensorSource(),
+                new NetworkSensorSource(config.Sensors),
                 new WifiSensorSource(config.Sensors),
                 new SystemSensorSource(),
                 new LastUpdateSensorSource(),

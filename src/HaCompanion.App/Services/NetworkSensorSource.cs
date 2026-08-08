@@ -7,55 +7,88 @@ using HaCompanion.Core.Sensors;
 namespace HaCompanion_App.Services;
 
 /// <summary>
-/// Reports the PC's network context: connection type and local IP address.
-/// Updates are driven by network change events rather than polling.
+/// Reports the PC's network context: connection type, local IPv4 and IPv6 address,
+/// and the MAC address of the adapter carrying the active LAN route. Updates are
+/// driven by network change events rather than polling.
 /// </summary>
 /// <remarks>
-/// Wi-Fi SSID and BSSID are deliberately absent. Windows gates them behind the
-/// Location capability, so <c>WlanQueryInterface(current_connection)</c> returns
-/// ERROR_ACCESS_DENIED for an unpackaged desktop app that cannot cleanly request
-/// that permission. See the tracking issue rather than working around it.
+/// Every reading comes from a single adapter snapshot taken per read, so the four
+/// sensors always describe the same connection instead of each enumerating adapters
+/// and reaching its own conclusion. Nothing is enumerated unless a sensor that needs
+/// it is switched on, and the identifying values are never logged.
+///
+/// Wi-Fi SSID and BSSID live in <see cref="WifiSensorSource"/>: Windows gates them
+/// behind the Location capability, which this source deliberately does not touch.
 /// </remarks>
 public sealed class NetworkSensorSource : ISensorSource
 {
     public const string ConnectionTypeId = "connectivity_connection_type";
     public const string IpAddressId = "ip_address";
+    public const string Ipv6AddressId = "ipv6_address";
+    public const string MacAddressId = "mac_address";
 
-    private const string NotConnected = "Not Connected";
+    private const string OptInPlaceholder = "Enable to read network identifiers";
 
+    private readonly SensorPreferences _preferences;
     private Action? _onChanged;
     private bool _observing;
 
-    public IReadOnlyList<SensorDefinition> Definitions { get; } = new[]
+    public NetworkSensorSource(SensorPreferences preferences)
     {
-        new SensorDefinition(
+        _preferences = preferences ?? throw new ArgumentNullException(nameof(preferences));
+    }
+
+    public IReadOnlyList<SensorDefinition> Definitions { get; } =
+    [
+        new(
             ConnectionTypeId,
             "Connection Type",
             "Whether this PC is on Wi-Fi, Ethernet or offline.",
             SensorPrivacy.Benign,
             EnabledByDefault: false),
-        new SensorDefinition(
+        new(
             IpAddressId,
             "IP Address",
-            "This PC's local IP address on your network.",
+            "This PC's local IPv4 address on your network.",
+            SensorPrivacy.Sensitive,
+            EnabledByDefault: false),
+        new(
+            Ipv6AddressId,
+            "IPv6 Address",
+            "This PC's IPv6 address on the active network adapter. Usually globally "
+            + "routable, so it can identify this PC on the internet.",
+            SensorPrivacy.Sensitive,
+            EnabledByDefault: false),
+        new(
+            MacAddressId,
+            "MAC Address",
+            "The hardware address of the network adapter this PC is connected "
+            + "through. A stable identifier for this machine on your network.",
             SensorPrivacy.Sensitive,
             EnabledByDefault: false)
-    };
+    ];
 
     public IReadOnlyList<Sensor> Read(IReadOnlySet<string> enabled, SensorReadContext context)
     {
+        var wantsIdentity = enabled.Contains(IpAddressId)
+                            || enabled.Contains(Ipv6AddressId)
+                            || enabled.Contains(MacAddressId);
+        var wantsConnectionType = enabled.Contains(ConnectionTypeId);
+
+        if (!wantsIdentity && !wantsConnectionType) return [];
+
+        var identity = Capture(wantsIdentity);
         var readings = new List<Sensor>();
 
-        if (enabled.Contains(ConnectionTypeId))
+        if (wantsConnectionType)
         {
-            var type = NetworkClassifier.Classify(GetOperationalAdapters());
             readings.Add(new Sensor
             {
                 UniqueId = ConnectionTypeId,
                 Type = "sensor",
                 Name = "Connection Type",
-                State = type,
-                Icon = NetworkClassifier.IconFor(type)
+                State = identity.ConnectionType,
+                Icon = NetworkClassifier.IconFor(identity.ConnectionType)
             });
         }
 
@@ -66,13 +99,68 @@ public sealed class NetworkSensorSource : ISensorSource
                 UniqueId = IpAddressId,
                 Type = "sensor",
                 Name = "IP Address",
-                State = GetLocalIpAddress() ?? NotConnected,
+                State = identity.Ipv4Address,
                 EntityCategory = "diagnostic",
                 Icon = "mdi:ip-network"
             });
         }
 
+        if (enabled.Contains(Ipv6AddressId))
+        {
+            readings.Add(new Sensor
+            {
+                UniqueId = Ipv6AddressId,
+                Type = "sensor",
+                Name = "IPv6 Address",
+                State = identity.Ipv6Address,
+                EntityCategory = "diagnostic",
+                Icon = "mdi:ip-network-outline"
+            });
+        }
+
+        if (enabled.Contains(MacAddressId))
+        {
+            readings.Add(new Sensor
+            {
+                UniqueId = MacAddressId,
+                Type = "sensor",
+                Name = "MAC Address",
+                State = identity.MacAddress,
+                EntityCategory = "diagnostic",
+                Icon = "mdi:lan"
+            });
+        }
+
         return readings;
+    }
+
+    /// <summary>
+    /// Previews only what the user has already opted into. A sensitive identifier is
+    /// not collected - not even locally - until its own sensor is switched on, and
+    /// enabling one never reveals another.
+    /// </summary>
+    public ValueTask<IReadOnlyList<Sensor>> PreviewAsync(
+        IReadOnlySet<string> requested,
+        CancellationToken cancellationToken = default)
+    {
+        var permitted = SensorPreviewGate.Permitted(Definitions, requested, _preferences);
+
+        var readings = Read(permitted, new SensorReadContext("Preview")).ToList();
+
+        foreach (var definition in Definitions)
+        {
+            if (requested.Contains(definition.UniqueId) && !permitted.Contains(definition.UniqueId))
+            {
+                readings.Add(new Sensor
+                {
+                    UniqueId = definition.UniqueId,
+                    Name = definition.Name,
+                    State = OptInPlaceholder
+                });
+            }
+        }
+
+        return ValueTask.FromResult<IReadOnlyList<Sensor>>(readings);
     }
 
     public void Start(Action onChanged)
@@ -96,32 +184,176 @@ public sealed class NetworkSensorSource : ISensorSource
 
     private void OnNetworkChanged(object? sender, EventArgs e) => _onChanged?.Invoke();
 
-    /// <summary>Maps Windows adapters onto the platform-agnostic kinds Core classifies.</summary>
-    private static IEnumerable<NetworkAdapterKind> GetOperationalAdapters() =>
-        NetworkInterface.GetAllNetworkInterfaces()
-            .Where(n => n.OperationalStatus == OperationalStatus.Up)
-            .Select(n => n.NetworkInterfaceType switch
-            {
-                NetworkInterfaceType.Wireless80211 => NetworkAdapterKind.Wireless,
-                NetworkInterfaceType.Loopback => NetworkAdapterKind.Loopback,
-                NetworkInterfaceType.Tunnel => NetworkAdapterKind.Tunnel,
-                NetworkInterfaceType.Ethernet or NetworkInterfaceType.GigabitEthernet
-                    or NetworkInterfaceType.FastEthernetT or NetworkInterfaceType.FastEthernetFx
-                    => NetworkAdapterKind.Wired,
-                _ => NetworkAdapterKind.Other
-            });
-
-    private static string? GetLocalIpAddress()
+    /// <summary>
+    /// Takes one snapshot of the machine's adapters and reduces it to sensor states.
+    /// When <paramref name="includeIdentifiers"/> is false, no address or hardware
+    /// address is read at all, so a disabled sensor collects nothing.
+    /// </summary>
+    private static NetworkIdentity Capture(bool includeIdentifiers)
     {
         try
         {
-            // Picks the address the OS would actually use to reach the network.
-            // A UDP connect only sets the route; nothing is transmitted.
-            using var socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
-            socket.Connect("8.8.8.8", 65530);
+            var adapters = NetworkInterface.GetAllNetworkInterfaces()
+                .Select(adapter => Describe(adapter, includeIdentifiers))
+                .ToList();
+
+            if (!includeIdentifiers)
+            {
+                return NetworkIdentity.NotConnected with
+                {
+                    ConnectionType = NetworkClassifier.ClassifyAdapters(adapters)
+                };
+            }
+
+            return NetworkIdentity.From(
+                adapters,
+                ResolveRoute(AddressFamily.InterNetwork),
+                ResolveRoute(AddressFamily.InterNetworkV6));
+        }
+        catch (NetworkInformationException)
+        {
+            return NetworkIdentity.NotConnected;
+        }
+    }
+
+    private static NetworkAdapterSnapshot Describe(NetworkInterface adapter, bool includeIdentifiers)
+    {
+        var kind = adapter.NetworkInterfaceType switch
+        {
+            NetworkInterfaceType.Wireless80211 => NetworkAdapterKind.Wireless,
+            NetworkInterfaceType.Loopback => NetworkAdapterKind.Loopback,
+            NetworkInterfaceType.Tunnel or NetworkInterfaceType.Ppp => NetworkAdapterKind.Tunnel,
+            NetworkInterfaceType.Ethernet or NetworkInterfaceType.GigabitEthernet
+                or NetworkInterfaceType.FastEthernetT or NetworkInterfaceType.FastEthernetFx
+                => NetworkAdapterKind.Wired,
+            _ => NetworkAdapterKind.Other
+        };
+
+        var isUp = adapter.OperationalStatus == OperationalStatus.Up;
+        var isVirtual = NetworkAdapterSelector.LooksVirtual(adapter.Description)
+                        || NetworkAdapterSelector.LooksVirtual(adapter.Name);
+
+        if (!includeIdentifiers)
+            return new NetworkAdapterSnapshot(adapter.Id, adapter.Description, kind, isUp, isVirtual);
+
+        var ipv4 = new List<string>();
+        var ipv6 = new List<Ipv6AddressInfo>();
+        var hasGateway = false;
+
+        try
+        {
+            var properties = adapter.GetIPProperties();
+            hasGateway = properties.GatewayAddresses
+                .Any(gateway => gateway.Address is not null && !IsUnspecified(gateway.Address));
+
+            foreach (var unicast in properties.UnicastAddresses)
+            {
+                if (unicast.Address.AddressFamily == AddressFamily.InterNetwork)
+                {
+                    ipv4.Add(unicast.Address.ToString());
+                }
+                else if (unicast.Address.AddressFamily == AddressFamily.InterNetworkV6)
+                {
+                    ipv6.Add(new Ipv6AddressInfo(
+                        unicast.Address.ToString(),
+                        StateOf(unicast),
+                        OriginOf(unicast)));
+                }
+            }
+        }
+        catch (NetworkInformationException)
+        {
+            // An adapter can disappear mid-enumeration; describe it without addresses.
+        }
+        catch (PlatformNotSupportedException)
+        {
+        }
+
+        return new NetworkAdapterSnapshot(
+            adapter.Id,
+            adapter.Description,
+            kind,
+            isUp,
+            isVirtual,
+            hasGateway,
+            ipv4,
+            ipv6,
+            PhysicalAddressOf(adapter));
+    }
+
+    private static bool IsUnspecified(IPAddress address) =>
+        address.Equals(IPAddress.Any) || address.Equals(IPAddress.IPv6Any);
+
+    private static Ipv6AddressState StateOf(UnicastIPAddressInformation address)
+    {
+        try
+        {
+            return address.DuplicateAddressDetectionState switch
+            {
+                DuplicateAddressDetectionState.Preferred => Ipv6AddressState.Preferred,
+                DuplicateAddressDetectionState.Deprecated => Ipv6AddressState.Deprecated,
+                _ => Ipv6AddressState.Invalid
+            };
+        }
+        catch (PlatformNotSupportedException)
+        {
+            return Ipv6AddressState.Preferred;
+        }
+    }
+
+    private static Ipv6AddressOrigin OriginOf(UnicastIPAddressInformation address)
+    {
+        try
+        {
+            return address.SuffixOrigin == SuffixOrigin.Random
+                ? Ipv6AddressOrigin.Temporary
+                : Ipv6AddressOrigin.Stable;
+        }
+        catch (PlatformNotSupportedException)
+        {
+            return Ipv6AddressOrigin.Stable;
+        }
+    }
+
+    private static byte[]? PhysicalAddressOf(NetworkInterface adapter)
+    {
+        try
+        {
+            var bytes = adapter.GetPhysicalAddress().GetAddressBytes();
+            return bytes.Length == 0 ? null : bytes;
+        }
+        catch (NetworkInformationException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Asks Windows which local endpoint would carry traffic for the given family.
+    /// Connecting a UDP socket only resolves the route: no packet is ever sent and
+    /// the destination addresses are never contacted.
+    /// </summary>
+    private static string? ResolveRoute(AddressFamily family)
+    {
+        try
+        {
+            var destination = family == AddressFamily.InterNetwork
+                ? "8.8.8.8"
+                : "2001:4860:4860::8888";
+
+            using var socket = new Socket(family, SocketType.Dgram, ProtocolType.Udp);
+            socket.Connect(destination, 65530);
             return (socket.LocalEndPoint as IPEndPoint)?.Address.ToString();
         }
-        catch
+        catch (SocketException)
+        {
+            return null;
+        }
+        catch (NotSupportedException)
+        {
+            return null;
+        }
+        catch (ObjectDisposedException)
         {
             return null;
         }

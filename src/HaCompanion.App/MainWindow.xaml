@@ -86,6 +86,11 @@
                 <TextBlock Text="Server:" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                 <TextBlock x:Name="ServerText" Text="—" TextTrimming="CharacterEllipsis" />
             </StackPanel>
+            <TextBlock
+                x:Name="ServerChangeError"
+                Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+                TextWrapping="Wrap"
+                Visibility="Collapsed" />
             <StackPanel Orientation="Horizontal" Spacing="8">
                 <TextBlock Text="Status:" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                 <TextBlock x:Name="StatusText" Text="Connecting…" FontWeight="SemiBold" />

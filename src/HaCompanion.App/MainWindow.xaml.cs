@@ -184,37 +184,77 @@ public sealed partial class MainWindow : Window
 
     private async void OnChangeServerUrl(object sender, RoutedEventArgs e)
     {
+        ServerChangeError.Visibility = Visibility.Collapsed;
         var urlBox = new TextBox
         {
             Header = "Home Assistant URL",
             Text = _controller.BaseUrl ?? string.Empty
         };
+        var validationError = new TextBlock
+        {
+            Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources[
+                "SystemFillColorCriticalBrush"],
+            TextWrapping = TextWrapping.Wrap,
+            Visibility = Visibility.Collapsed
+        };
+        var content = new StackPanel { Spacing = 8 };
+        content.Children.Add(urlBox);
+        content.Children.Add(validationError);
+
         var dialog = new ContentDialog
         {
             XamlRoot = Content.XamlRoot,
             Title = "Change server URL",
-            Content = urlBox,
+            Content = content,
             PrimaryButtonText = "Validate and change",
             CloseButtonText = "Cancel",
             DefaultButton = ContentDialogButton.Primary
         };
 
-        if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+        AppController.ServerUrlChangeResult? changeResult = null;
+        dialog.PrimaryButtonClick += async (_, args) =>
+        {
+            var deferral = args.GetDeferral();
+            args.Cancel = true;
+            dialog.IsPrimaryButtonEnabled = false;
+            validationError.Visibility = Visibility.Collapsed;
+
+            try
+            {
+                changeResult = await _controller.ChangeServerUrlAsync(urlBox.Text);
+                args.Cancel = false;
+            }
+            catch (Exception ex)
+            {
+                validationError.Text = ex.Message;
+                validationError.Visibility = Visibility.Visible;
+            }
+            finally
+            {
+                dialog.IsPrimaryButtonEnabled = true;
+                deferral.Complete();
+            }
+        };
+
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary
+            || changeResult is null)
+        {
+            return;
+        }
+
+        if (changeResult == AppController.ServerUrlChangeResult.Changed)
+        {
+            _connected = _controller.State != ConnectionState.Disconnected;
+            DisconnectButton.Content = _connected ? "Disconnect" : "Reconnect";
+            UpdateNowButton.IsEnabled = _connected;
+            if (_connected) _statusTimer.Start();
+            else _statusTimer.Stop();
+            RefreshStatusFields();
+            return;
+        }
 
         try
         {
-            var result = await _controller.ChangeServerUrlAsync(urlBox.Text);
-            if (result == AppController.ServerUrlChangeResult.Changed)
-            {
-                _connected = _controller.State != ConnectionState.Disconnected;
-                DisconnectButton.Content = _connected ? "Disconnect" : "Reconnect";
-                UpdateNowButton.IsEnabled = _connected;
-                if (_connected) _statusTimer.Start();
-                else _statusTimer.Stop();
-                RefreshStatusFields();
-                return;
-            }
-
             var replace = new ContentDialog
             {
                 XamlRoot = Content.XamlRoot,
@@ -240,24 +280,18 @@ public sealed partial class MainWindow : Window
                     ShowPanel(true);
                     RefreshStatusFields();
                 }
-                catch
+                catch (Exception ex)
                 {
                     _connected = false;
                     ShowView(View.Connect);
-                    throw;
+                    ShowConnectError(ex.Message);
                 }
             }
         }
         catch (Exception ex)
         {
-            var error = new ContentDialog
-            {
-                XamlRoot = Content.XamlRoot,
-                Title = "Server URL was not changed",
-                Content = ex.Message,
-                CloseButtonText = "Close"
-            };
-            await error.ShowAsync();
+            ServerChangeError.Text = "Server change failed: " + ex.Message;
+            ServerChangeError.Visibility = Visibility.Visible;
         }
     }
 

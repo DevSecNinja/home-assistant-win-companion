@@ -65,7 +65,7 @@ one that just works with stock Home Assistant.**
   native toasts, delivered over the `mobile_app` local push channel (Windows has no
   APNS/FCM equivalent).
 - **Opt-in sensor catalog** — battery, active/idle, screen locked, connection type,
-  IP address, OS version, last boot, notification/presentation state, microphone
+  IP address, Wi-Fi SSID/BSSID, OS version, last boot, notification/presentation state, microphone
   and camera use, audio output, headset presence, WinGet update count, and an
   optional last-update timestamp. Each sensor can be switched on or off
   individually, shows a local preview, and privacy-sensitive ones are off by

@@ -240,6 +240,9 @@ public sealed partial class MainWindow : Window
 
     private void OnOpenLog(object sender, RoutedEventArgs e) => _controller.OpenLogFile();
 
+    private void OnOpenLocationSettings(object sender, RoutedEventArgs e) =>
+        _controller.OpenLocationSettings();
+
     private static string Ago(TimeSpan span) => span.TotalSeconds switch
     {
         < 10 => "just now",

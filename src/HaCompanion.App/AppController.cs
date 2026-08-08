@@ -84,6 +84,13 @@ public sealed class AppController : IAsyncDisposable
         });
     }
 
+    public void OpenLocationSettings() =>
+        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+        {
+            FileName = "ms-settings:privacy-location",
+            UseShellExecute = true
+        });
+
     /// <summary>Persists the current sensor choices and pushes them immediately.</summary>
     public async Task ApplySensorChangesAsync()
     {
@@ -276,6 +283,7 @@ public sealed class AppController : IAsyncDisposable
                 new BatterySensorSource(_status),
                 new ActiveSensorSource(config.Sensors),
                 new NetworkSensorSource(),
+                new WifiSensorSource(config.Sensors),
                 new SystemSensorSource(),
                 new LastUpdateSensorSource(),
                 new NotificationStateSensorSource(),

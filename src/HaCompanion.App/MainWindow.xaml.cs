@@ -181,6 +181,85 @@ public sealed partial class MainWindow : Window
 
     private void OnOpenHomeAssistant(object sender, RoutedEventArgs e) => _controller.OpenHomeAssistant();
 
+    private async void OnChangeServerUrl(object sender, RoutedEventArgs e)
+    {
+        var urlBox = new TextBox
+        {
+            Header = "Home Assistant URL",
+            Text = _controller.BaseUrl ?? string.Empty
+        };
+        var dialog = new ContentDialog
+        {
+            XamlRoot = Content.XamlRoot,
+            Title = "Change server URL",
+            Content = urlBox,
+            PrimaryButtonText = "Validate and change",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Primary
+        };
+
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+
+        try
+        {
+            var result = await _controller.ChangeServerUrlAsync(urlBox.Text);
+            if (result == AppController.ServerUrlChangeResult.Changed)
+            {
+                _connected = _controller.State != ConnectionState.Disconnected;
+                DisconnectButton.Content = _connected ? "Disconnect" : "Reconnect";
+                UpdateNowButton.IsEnabled = _connected;
+                if (_connected) _statusTimer.Start();
+                else _statusTimer.Stop();
+                RefreshStatusFields();
+                return;
+            }
+
+            var replace = new ContentDialog
+            {
+                XamlRoot = Content.XamlRoot,
+                Title = "Sign in to a different server?",
+                Content = "The saved credentials are not valid at this URL. Replacing the "
+                          + "server revokes the current session and creates a new Mobile App "
+                          + "device after browser sign-in.",
+                PrimaryButtonText = "Replace and sign in",
+                CloseButtonText = "Keep current server",
+                DefaultButton = ContentDialogButton.Close
+            };
+
+            if (await replace.ShowAsync() == ContentDialogResult.Primary)
+            {
+                await _controller.RemoveServerAsync();
+                try
+                {
+                    await _controller.SignInAsync(urlBox.Text);
+                    _connected = true;
+                    DisconnectButton.Content = "Disconnect";
+                    UpdateNowButton.IsEnabled = true;
+                    _statusTimer.Start();
+                    ShowPanel(true);
+                    RefreshStatusFields();
+                }
+                catch
+                {
+                    _connected = false;
+                    ShowView(View.Connect);
+                    throw;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            var error = new ContentDialog
+            {
+                XamlRoot = Content.XamlRoot,
+                Title = "Server URL was not changed",
+                Content = ex.Message,
+                CloseButtonText = "Close"
+            };
+            await error.ShowAsync();
+        }
+    }
+
     private void OnShowWindow(object sender, RoutedEventArgs e) => Show();
 
     private void OnExit(object sender, RoutedEventArgs e)

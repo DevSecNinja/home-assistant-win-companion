@@ -118,6 +118,12 @@ public sealed class AppController : IAsyncDisposable
 
     public event Action<ConnectionState>? StateChanged;
 
+    public enum ServerUrlChangeResult
+    {
+        Changed,
+        RequiresSignIn
+    }
+
     /// <summary>Resumes a previously saved session, if one exists and is usable.</summary>
     public async Task<bool> TryResumeAsync(CancellationToken ct = default)
     {
@@ -133,7 +139,7 @@ public sealed class AppController : IAsyncDisposable
     /// <summary>Runs the interactive OAuth login and starts the connection.</summary>
     public async Task SignInAsync(string baseUrl, CancellationToken ct = default)
     {
-        baseUrl = NormalizeBaseUrl(baseUrl);
+        baseUrl = ServerUrlNormalizer.Normalize(baseUrl);
         baseUrl = await ResolveBaseUrlAsync(baseUrl, ct).ConfigureAwait(false);
 
         var tokens = await _login.SignInAsync(baseUrl, ct).ConfigureAwait(false);
@@ -151,6 +157,105 @@ public sealed class AppController : IAsyncDisposable
 
         await BuildAndStartAsync(ct, seedAccessToken: tokens.AccessToken, seedExpiresIn: tokens.ExpiresIn)
             .ConfigureAwait(false);
+    }
+
+    public async Task<ServerUrlChangeResult> ChangeServerUrlAsync(
+        string baseUrl,
+        CancellationToken ct = default)
+    {
+        var config = _config ?? throw new InvalidOperationException("No connected server.");
+        var refreshToken = _secrets.Get(AppConstants.RefreshTokenKey);
+        if (string.IsNullOrEmpty(refreshToken) || string.IsNullOrEmpty(config.WebhookId))
+            return ServerUrlChangeResult.RequiresSignIn;
+
+        var candidate = ServerUrlNormalizer.Normalize(baseUrl);
+        candidate = await ResolveBaseUrlAsync(candidate, ct).ConfigureAwait(false);
+        if (Uri.Compare(
+                new Uri(candidate),
+                new Uri(config.BaseUrl),
+                UriComponents.HttpRequestUrl,
+                UriFormat.SafeUnescaped,
+                StringComparison.OrdinalIgnoreCase) == 0)
+        {
+            return ServerUrlChangeResult.Changed;
+        }
+
+        TokenResponse token;
+        try
+        {
+            token = await new HaOAuthClient(_http, candidate)
+                .RefreshAsync(refreshToken, AppConstants.ClientId, ct)
+                .ConfigureAwait(false);
+        }
+        catch (HomeAssistantAuthException)
+        {
+            return ServerUrlChangeResult.RequiresSignIn;
+        }
+
+        var candidateTokens = new OAuthTokenManager(
+            new HaOAuthClient(_http, candidate),
+            AppConstants.ClientId,
+            () => refreshToken,
+            log: _loggerFactory.CreateLogger<OAuthTokenManager>());
+        candidateTokens.Seed(token.AccessToken, token.ExpiresIn);
+        var client = new HomeAssistantClient(
+            _http,
+            candidate,
+            candidateTokens,
+            _loggerFactory.CreateLogger<HomeAssistantClient>());
+
+        if (!await client.ValidateAsync(ct).ConfigureAwait(false))
+            throw new InvalidOperationException("The new URL did not return a valid Home Assistant API response.");
+
+        try
+        {
+            await client.UpdateRegistrationAsync(
+                config.WebhookId,
+                DeviceInfo.BuildRegistration(config.DeviceId),
+                ct).ConfigureAwait(false);
+        }
+        catch (HomeAssistantAuthException)
+        {
+            return ServerUrlChangeResult.RequiresSignIn;
+        }
+
+        var previous = config.BaseUrl;
+        var wasConnected = _connection is not null;
+        if (wasConnected)
+            await DisconnectAsync().ConfigureAwait(false);
+
+        try
+        {
+            config.BaseUrl = candidate;
+            _settings.Save(config);
+            _config = config;
+            if (wasConnected)
+            {
+                await BuildAndStartAsync(
+                        ct,
+                        seedAccessToken: token.AccessToken,
+                        seedExpiresIn: token.ExpiresIn)
+                    .ConfigureAwait(false);
+            }
+        }
+        catch
+        {
+            config.BaseUrl = previous;
+            _config = config;
+            try
+            {
+                _settings.Save(config);
+                if (wasConnected)
+                    await BuildAndStartAsync(CancellationToken.None).ConfigureAwait(false);
+            }
+            catch
+            {
+                // Preserve the original failure while making a best effort to restore.
+            }
+            throw;
+        }
+
+        return ServerUrlChangeResult.Changed;
     }
 
     /// <summary>
@@ -308,19 +413,6 @@ public sealed class AppController : IAsyncDisposable
 
         // Sources push immediately on change; steady state stays at one batch per sync.
         catalog.Start(() => _ = connection.SyncNowAsync());
-    }
-
-    private static string NormalizeBaseUrl(string baseUrl)
-    {
-        baseUrl = baseUrl.Trim();
-        if (!baseUrl.StartsWith("http://", StringComparison.OrdinalIgnoreCase) &&
-            !baseUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
-        {
-            // Default to HTTPS: an http:// guess against a TLS-only instance would be
-            // redirected, and redirects downgrade POSTs to GETs (breaking /auth/token).
-            baseUrl = "https://" + baseUrl;
-        }
-        return baseUrl.TrimEnd('/') + "/";
     }
 
     /// <summary>

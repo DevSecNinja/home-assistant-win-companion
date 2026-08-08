@@ -1,4 +1,5 @@
 using HaCompanion.Core.Abstractions;
+using HaCompanion.Core.HomeAssistant;
 using HaCompanion.Core.Models;
 using HaCompanion.Core.Sensors;
 using Xunit;
@@ -20,6 +21,7 @@ public class SensorSyncServiceTests
         public readonly List<IReadOnlyList<Sensor>> Batches = new();
         public int Updates;
         public bool FailNextUpdate;
+        public HomeAssistantRejectedException? RejectNextUpdate;
 
         public Task<bool> ValidateAsync(CancellationToken ct = default) => Task.FromResult(true);
 
@@ -44,6 +46,11 @@ public class SensorSyncServiceTests
             {
                 FailNextUpdate = false;
                 throw new HttpRequestException("boom");
+            }
+            if (RejectNextUpdate is { } rejection)
+            {
+                RejectNextUpdate = null;
+                throw rejection;
             }
             return Task.CompletedTask;
         }
@@ -78,6 +85,40 @@ public class SensorSyncServiceTests
         await svc.SyncAsync("wh", SensorReadContext.Periodic);                 // must re-register the 2 sensors
 
         Assert.Equal(4, client.Registered.Count);  // 2 + 2 after the forced reset
+    }
+
+    [Fact]
+    public async Task Not_registered_rejection_forces_reregistration_on_next_sync()
+    {
+        var client = new FakeClient();
+        var svc = new SensorSyncService(client, BatteryCatalog());
+
+        await svc.SyncAsync("wh", SensorReadContext.Periodic);
+        client.RejectNextUpdate = new HomeAssistantRejectedException(
+            "not registered", sensorsUnregistered: true);
+
+        await Assert.ThrowsAsync<HomeAssistantRejectedException>(
+            () => svc.SyncAsync("wh", SensorReadContext.Periodic));
+        await svc.SyncAsync("wh", SensorReadContext.Periodic);
+
+        Assert.Equal(4, client.Registered.Count);
+    }
+
+    [Fact]
+    public async Task Invalid_format_rejection_does_not_reregister_known_sensors()
+    {
+        var client = new FakeClient();
+        var svc = new SensorSyncService(client, BatteryCatalog());
+
+        await svc.SyncAsync("wh", SensorReadContext.Periodic);
+        client.RejectNextUpdate = new HomeAssistantRejectedException(
+            "invalid format", sensorsUnregistered: false);
+
+        await Assert.ThrowsAsync<HomeAssistantRejectedException>(
+            () => svc.SyncAsync("wh", SensorReadContext.Periodic));
+        await svc.SyncAsync("wh", SensorReadContext.Periodic);
+
+        Assert.Equal(2, client.Registered.Count);
     }
 
     [Fact]
@@ -212,4 +253,3 @@ public class SensorSyncServiceTests
         public void Stop() { }
     }
 }
-

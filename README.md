@@ -98,8 +98,13 @@ Assistant; package names and versions remain in the local preview.
 # Build and launch in one step (the supported way to run from source)
 .\scripts\run.ps1
 
-dotnet test tests/HaCompanion.Core.Tests/HaCompanion.Core.Tests.csproj
+.\scripts\test.ps1
+.\scripts\test.ps1 -Coverage
 ```
+
+Coverage is measured for `HaCompanion.Core` only. The current gates are 85% line
+and 70% branch coverage; the WinUI/P/Invoke shell remains intentionally thin and
+outside the unit-test project.
 
 `scripts/run.ps1` builds and then launches exactly what it just built. That matters:
 a solution build and a project build otherwise select different platforms and write

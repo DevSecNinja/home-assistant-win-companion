@@ -188,6 +188,11 @@ as Windows toasts.
   Windows companion, and a useful reference for what a Windows sensor catalogue can
   cover.
 
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the Windows development environment,
+repository conventions, and pull request expectations.
+
 ## License
 
 [MIT](LICENSE) © Jean-Paul van Ravensberg

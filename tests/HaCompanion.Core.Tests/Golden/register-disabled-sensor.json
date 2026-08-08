@@ -1,0 +1,11 @@
+{
+  "type": "register_sensor",
+  "data": {
+    "unique_id": "microphone",
+    "type": "binary_sensor",
+    "name": "Microphone In Use",
+    "state": false,
+    "icon": "mdi:microphone-off",
+    "disabled": true
+  }
+}

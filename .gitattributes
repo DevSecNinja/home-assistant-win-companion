@@ -1,5 +1,7 @@
 # Normalize line endings; treat these as text
 * text=auto eol=crlf
+*.yml text eol=lf
+*.yaml text eol=lf
 *.png binary
 *.ico binary
 *.jpg binary

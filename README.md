@@ -106,6 +106,9 @@ Coverage is measured for `HaCompanion.Core` only. The current gates are 85% line
 and 70% branch coverage; the WinUI/P/Invoke shell remains intentionally thin and
 outside the unit-test project.
 
+Maintainers can create versioned unsigned draft candidates using the
+[release process](docs/releasing.md).
+
 `scripts/run.ps1` builds and then launches exactly what it just built. That matters:
 a solution build and a project build otherwise select different platforms and write
 to different folders, which makes it easy to build one binary and silently run an

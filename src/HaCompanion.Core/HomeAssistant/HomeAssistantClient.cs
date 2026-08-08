@@ -230,4 +230,66 @@ public sealed class HomeAssistantClient : IHomeAssistantClient
             return await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
         }
     }
+
+    /// <summary>
+    /// Asks the instance behind this address to describe itself through the
+    /// existing webhook. Read-only: <c>get_config</c> creates nothing, so probing
+    /// a second address can never produce a duplicate device.
+    /// </summary>
+    /// <remarks>
+    /// Home Assistant answers an unknown webhook id with 200 and an empty body
+    /// (deliberately, so webhook ids cannot be enumerated) and a deleted one with
+    /// 410. Both mean "this registration does not live here", which is exactly the
+    /// signal needed to reject an address that points at a different instance.
+    /// </remarks>
+    public async Task<HaInstanceInfo?> GetInstanceInfoAsync(string webhookId, CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(webhookId);
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, new Uri(_baseUri, $"api/webhook/{webhookId}"))
+        {
+            Content = JsonContent.Create(new { type = "get_config" }, options: Json)
+        };
+        using var response = await _http.SendAsync(request, ct).ConfigureAwait(false);
+        if (!response.IsSuccessStatusCode)
+        {
+            _log.LogDebug("Webhook get_config returned {Status}.", (int)response.StatusCode);
+            return null;
+        }
+
+        var body = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+        if (string.IsNullOrWhiteSpace(body)) return null;
+
+        try
+        {
+            var info = JsonSerializer.Deserialize<HaInstanceInfo>(body, Json);
+            return string.IsNullOrEmpty(info?.DeviceId) ? null : info;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Reads the instance's own idea of its internal and external addresses so
+    /// they can be offered as suggestions. Requires the access token.
+    /// </summary>
+    public async Task<HaConfigInfo?> GetConfigAsync(CancellationToken ct = default)
+    {
+        using var request = await AuthorizedAsync(HttpMethod.Get, "api/config", ct).ConfigureAwait(false);
+        using var response = await _http.SendAsync(request, ct).ConfigureAwait(false);
+        if (response.StatusCode == HttpStatusCode.Unauthorized)
+            throw new HomeAssistantAuthException("Home Assistant rejected the access token.");
+        if (!response.IsSuccessStatusCode) return null;
+
+        try
+        {
+            return await response.Content.ReadFromJsonAsync<HaConfigInfo>(Json, ct).ConfigureAwait(false);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
 }

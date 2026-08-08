@@ -54,6 +54,12 @@ public class SensorSyncServiceTests
             }
             return Task.CompletedTask;
         }
+
+        public Task<HaInstanceInfo?> GetInstanceInfoAsync(string webhookId, CancellationToken ct = default)
+            => Task.FromResult<HaInstanceInfo?>(new HaInstanceInfo { DeviceId = "device" });
+
+        public Task<HaConfigInfo?> GetConfigAsync(CancellationToken ct = default)
+            => Task.FromResult<HaConfigInfo?>(null);
     }
 
     private static SensorCatalog BatteryCatalog(SensorPreferences? prefs = null) =>

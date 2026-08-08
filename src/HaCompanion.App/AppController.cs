@@ -14,6 +14,8 @@ namespace HaCompanion_App;
 /// </summary>
 public sealed class AppController : IAsyncDisposable
 {
+    private static readonly TimeSpan NetworkSettleDelay = TimeSpan.FromSeconds(5);
+
     private readonly HttpClient _http = new();
     private readonly WindowsSecretStore _secrets = new();
     private readonly SessionStore _settings;
@@ -21,6 +23,8 @@ public sealed class AppController : IAsyncDisposable
     private readonly ToastNotifier _toasts = new();
     private readonly PowerShellWinGetUpdateProvider _winGetUpdates = new();
     private readonly OAuthLoginService _login;
+    private readonly WindowsNetworkContextProvider _network = new();
+    private readonly SemaphoreSlim _routeGate = new(1, 1);
     private readonly ILoggerFactory _loggerFactory =
         LoggerFactory.Create(builder =>
         {
@@ -28,19 +32,52 @@ public sealed class AppController : IAsyncDisposable
             builder.SetMinimumLevel(LogLevel.Debug);
         });
 
+    private readonly HttpRouteProbe _probe;
+
     private ServerConfig? _config;
     private ConnectionManager? _connection;
     private SensorCatalog? _catalog;
+    private RouteSupervisor? _supervisor;
+    private CancellationTokenSource? _networkSettle;
 
     public AppController()
     {
         _login = new OAuthLoginService(_http);
         _settings = new SessionStore(new SettingsStore(), _secrets);
+        _probe = new HttpRouteProbe(
+            _http,
+            () => _secrets.Get(AppConstants.RefreshTokenKey),
+            AppConstants.ClientId,
+            log: _loggerFactory.CreateLogger<HttpRouteProbe>());
+        _network.NetworkChanged += OnNetworkChanged;
+        _network.Start();
     }
 
     public ConnectionState State => _connection?.State ?? ConnectionState.Disconnected;
 
-    public string? BaseUrl => _config?.BaseUrl;
+    public string? BaseUrl => _supervisor?.ActiveUrl ?? _config?.BaseUrl;
+
+    /// <summary>Which address is in use, and how routing is currently doing.</summary>
+    public RouteStatus RouteState =>
+        _config is null ? RouteStatus.Offline
+        : _config.RouteAssignmentPending && _supervisor?.ActiveRoute is null ? RouteStatus.Unassigned
+        : _supervisor?.Status ?? RouteStatus.Offline;
+
+    /// <summary>One word for the status view and tray tooltip.</summary>
+    public string RouteSummary => RouteState switch
+    {
+        RouteStatus.Internal => "Internal",
+        RouteStatus.External => "External",
+        RouteStatus.FailingOver => "Failing over",
+        RouteStatus.Unassigned => "Single address",
+        _ => "Offline"
+    };
+
+    /// <summary>True while a migrated install still has one unclassified address.</summary>
+    public bool RouteAssignmentPending => _config?.RouteAssignmentPending ?? false;
+
+    /// <summary>The local network snapshot, for the trusted-network settings UI.</summary>
+    public NetworkContext CurrentNetwork => _network.GetCurrent();
 
     /// <summary>The sensor catalog, once a session exists. Null before sign-in.</summary>
     public SensorCatalog? Catalog => _catalog;
@@ -59,6 +96,8 @@ public sealed class AppController : IAsyncDisposable
             {
                 ConnectionState.AuthError => (false, "Sign-in required"),
                 ConnectionState.Connecting => (false, "Connecting…"),
+                ConnectionState.Reconnecting when RouteState == RouteStatus.FailingOver =>
+                    (false, "Trying the other address…"),
                 ConnectionState.Reconnecting => (false, "Reconnecting…"),
                 ConnectionState.Disconnected => (false, "Disconnected"),
                 _ when _connection.ConsecutiveFailures > 0 =>
@@ -66,7 +105,7 @@ public sealed class AppController : IAsyncDisposable
                 _ when _connection.LastSyncedAt is null => (false, "Waiting for first update"),
                 _ when DateTimeOffset.UtcNow - _connection.LastSyncedAt.Value > _connection.SyncInterval * 2.5 =>
                     (false, "No recent update"),
-                _ => (true, "Healthy")
+                _ => (true, $"Healthy ({RouteSummary})")
             };
         }
     }
@@ -115,11 +154,8 @@ public sealed class AppController : IAsyncDisposable
 
     public event Action<ConnectionState>? StateChanged;
 
-    public enum ServerUrlChangeResult
-    {
-        Changed,
-        RequiresSignIn
-    }
+    /// <summary>Raised when routing changes, so the UI can refresh its labels.</summary>
+    public event Action? RouteChanged;
 
     /// <summary>Resumes a previously saved session, if one exists and is usable.</summary>
     public async Task<bool> TryResumeAsync(CancellationToken ct = default)
@@ -129,6 +165,10 @@ public sealed class AppController : IAsyncDisposable
         if (string.IsNullOrEmpty(_secrets.Get(AppConstants.RefreshTokenKey))) return false;
 
         _config = config;
+        // The supervisor captures the config instance, so a reload must discard it
+        // rather than leave it deciding routes from an orphaned object.
+        _supervisor = null;
+        await PrepareRouteAsync(RouteTrigger.Startup, ct).ConfigureAwait(false);
         await BuildAndStartAsync(ct).ConfigureAwait(false);
         return true;
     }
@@ -149,110 +189,198 @@ public sealed class AppController : IAsyncDisposable
         config.BaseUrl = baseUrl;
         if (string.IsNullOrEmpty(config.DeviceId))
             config.DeviceId = Guid.NewGuid().ToString("N");
+
+        // A single address at sign-in is not evidence of being internal or
+        // external, so it is flagged for the user to classify rather than guessed.
+        if (config.ConfiguredRoutes().Count == 0) config.RouteAssignmentPending = true;
+
         _settings.Save(config);
         _config = config;
+        _supervisor = null;
 
         await BuildAndStartAsync(ct, seedAccessToken: tokens.AccessToken, seedExpiresIn: tokens.ExpiresIn)
             .ConfigureAwait(false);
     }
 
-    public async Task<ServerUrlChangeResult> ChangeServerUrlAsync(
-        string baseUrl,
-        CancellationToken ct = default)
+    /// <summary>The saved connection settings, as the settings UI edits them.</summary>
+    public ConnectionSettingsDraft ConnectionSettings
+    {
+        get
+        {
+            var config = _config;
+            if (config is null) return new ConnectionSettingsDraft();
+
+            return new ConnectionSettingsDraft
+            {
+                InternalUrl = config.InternalUrl,
+                ExternalUrl = config.ExternalUrl,
+                Mode = config.ConnectionMode,
+                TrustedNetworks = new TrustedNetworkSettings
+                {
+                    Ssids = [.. config.TrustedNetworks.Ssids],
+                    Bssids = [.. config.TrustedNetworks.Bssids],
+                    RequireBssidMatch = config.TrustedNetworks.RequireBssidMatch,
+                    TrustWiredNetworks = config.TrustedNetworks.TrustWiredNetworks,
+                    ProbeInternalOnUnknownNetworks = config.TrustedNetworks.ProbeInternalOnUnknownNetworks
+                }
+            };
+        }
+    }
+
+    /// <summary>
+    /// Tests both addresses without changing anything, so the user can see what
+    /// would happen before committing.
+    /// </summary>
+    public Task<RouteValidationReport> TestConnectionSettingsAsync(
+        ConnectionSettingsDraft draft, CancellationToken ct = default)
     {
         var config = _config ?? throw new InvalidOperationException("No connected server.");
-        var refreshToken = _secrets.Get(AppConstants.RefreshTokenKey);
-        if (string.IsNullOrEmpty(refreshToken) || string.IsNullOrEmpty(config.WebhookId))
-            return ServerUrlChangeResult.RequiresSignIn;
+        return RouteValidator.ValidateAsync(config, draft, _probe, ct);
+    }
 
-        var candidate = ServerUrlNormalizer.Normalize(baseUrl);
-        candidate = await ResolveBaseUrlAsync(candidate, ct).ConfigureAwait(false);
-        if (Uri.Compare(
-                new Uri(candidate),
-                new Uri(config.BaseUrl),
-                UriComponents.HttpRequestUrl,
-                UriFormat.SafeUnescaped,
-                StringComparison.OrdinalIgnoreCase) == 0)
-        {
-            return ServerUrlChangeResult.Changed;
-        }
+    /// <summary>
+    /// Validates and, only on success, saves the connection settings. Every
+    /// failure path leaves the previous working configuration in place.
+    /// </summary>
+    public async Task<RouteValidationReport> SaveConnectionSettingsAsync(
+        ConnectionSettingsDraft draft, CancellationToken ct = default)
+    {
+        var config = _config ?? throw new InvalidOperationException("No connected server.");
 
-        TokenResponse token;
+        var report = await RouteValidator.ValidateAsync(config, draft, _probe, ct).ConfigureAwait(false);
+        if (!report.CanSave) return report;
+
+        var previous = Snapshot(config);
+        RouteValidator.Apply(config, draft, report);
+        _settings.Save(config);
+
+        // Serialized against background failover so the two cannot both tear the
+        // connection down and each leave a live ConnectionManager behind.
+        await _routeGate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            token = await new HaOAuthClient(_http, candidate)
-                .RefreshAsync(refreshToken, AppConstants.ClientId, ct)
-                .ConfigureAwait(false);
-        }
-        catch (HomeAssistantAuthException)
-        {
-            return ServerUrlChangeResult.RequiresSignIn;
-        }
-
-        var candidateTokens = new OAuthTokenManager(
-            new HaOAuthClient(_http, candidate),
-            AppConstants.ClientId,
-            () => refreshToken,
-            log: _loggerFactory.CreateLogger<OAuthTokenManager>());
-        candidateTokens.Seed(token.AccessToken, token.ExpiresIn);
-        var client = new HomeAssistantClient(
-            _http,
-            candidate,
-            candidateTokens,
-            _loggerFactory.CreateLogger<HomeAssistantClient>());
-
-        if (!await client.ValidateAsync(ct).ConfigureAwait(false))
-            throw new InvalidOperationException("The new URL did not return a valid Home Assistant API response.");
-
-        try
-        {
-            await client.UpdateRegistrationAsync(
-                config.WebhookId,
-                DeviceInfo.BuildRegistration(config.DeviceId),
-                ct).ConfigureAwait(false);
-        }
-        catch (HomeAssistantAuthException)
-        {
-            return ServerUrlChangeResult.RequiresSignIn;
-        }
-
-        var previous = config.BaseUrl;
-        var wasConnected = _connection is not null;
-        if (wasConnected)
-            await DisconnectAsync().ConfigureAwait(false);
-
-        try
-        {
-            config.BaseUrl = candidate;
-            _settings.Save(config);
-            _config = config;
-            if (wasConnected)
+            await PrepareRouteAsync(RouteTrigger.UserRequested, ct).ConfigureAwait(false);
+            if (!string.Equals(_supervisor?.ActiveUrl, previous.BaseUrl, StringComparison.OrdinalIgnoreCase)
+                && _connection is not null)
             {
-                await BuildAndStartAsync(
-                        ct,
-                        seedAccessToken: token.AccessToken,
-                        seedExpiresIn: token.ExpiresIn)
-                    .ConfigureAwait(false);
+                await RestartOnActiveRouteAsync(ct).ConfigureAwait(false);
             }
         }
         catch
         {
-            config.BaseUrl = previous;
-            _config = config;
+            Restore(config, previous);
+            _settings.Save(config);
+            // The restart may already have torn the connection down, so put the
+            // previous configuration back on the air rather than leaving the app
+            // silently disconnected.
+            _supervisor = null;
             try
             {
-                _settings.Save(config);
-                if (wasConnected)
+                await PrepareRouteAsync(RouteTrigger.UserRequested, CancellationToken.None)
+                    .ConfigureAwait(false);
+                if (_connection is null)
                     await BuildAndStartAsync(CancellationToken.None).ConfigureAwait(false);
             }
-            catch
+            catch (Exception recovery)
             {
-                // Preserve the original failure while making a best effort to restore.
+                _loggerFactory.CreateLogger<AppController>()
+                    .LogError(recovery, "Could not restore the previous connection settings.");
             }
+
             throw;
         }
+        finally
+        {
+            _routeGate.Release();
+        }
 
-        return ServerUrlChangeResult.Changed;
+        RouteChanged?.Invoke();
+        return report;
+    }
+
+    /// <summary>
+    /// Records the user's decision about a migrated single address. Deliberately
+    /// explicit: a hostname cannot tell internal from external once split DNS,
+    /// reverse proxies or Nabu Casa are involved.
+    /// </summary>
+    public void AssignMigratedRoute(RouteKind route)
+    {
+        var config = _config ?? throw new InvalidOperationException("No connected server.");
+        if (string.IsNullOrWhiteSpace(config.BaseUrl))
+            throw new InvalidOperationException("There is no saved address to classify.");
+
+        // Classifying is still a route assignment, so it obeys the same transport
+        // rule as the settings panel: a plain-HTTP address cannot become external.
+        var url = RouteUrlPolicy.Normalize(config.BaseUrl, route);
+        if (!url.Accepted || url.Url is null)
+        {
+            throw new InvalidOperationException(
+                url.Message ?? "The saved address cannot be used for that route.");
+        }
+
+        config.SetRoute(route, url.Url);
+        config.RouteAssignmentPending = false;
+        config.LastSuccessfulRoute = route;
+        _settings.Save(config);
+        _supervisor ??= CreateSupervisor(config);
+        _supervisor.Adopt(route, url.Url);
+        RouteChanged?.Invoke();
+    }
+
+    /// <summary>
+    /// Which classification the saved address most likely is. A suggestion for the
+    /// UI to preselect; the user still chooses.
+    /// </summary>
+    public RouteKind SuggestRouteForSavedUrl() =>
+        _config is not null && RouteUrlPolicy.LooksPrivate(_config.BaseUrl)
+            ? RouteKind.Internal
+            : RouteKind.External;
+
+    /// <summary>
+    /// Addresses Home Assistant itself reports, offered as suggestions only. The
+    /// cloudhook URL is never offered: it embeds the webhook capability secret.
+    /// </summary>
+    public async Task<(string? Internal, string? External)> SuggestedUrlsAsync(CancellationToken ct = default)
+    {
+        var config = _config;
+        if (config is null) return (null, null);
+
+        try
+        {
+            var client = CreateClient(config, ActiveUrl(config), out _);
+            var instance = await client.GetConfigAsync(ct).ConfigureAwait(false);
+            var external = instance?.ExternalUrl ?? config.RemoteUiUrl;
+            return (instance?.InternalUrl, external);
+        }
+        catch
+        {
+            return (null, config.RemoteUiUrl);
+        }
+    }
+
+    /// <summary>Re-checks routing now, on the user's command.</summary>
+    public async Task RefreshRouteAsync(CancellationToken ct = default)
+    {
+        await EvaluateRouteAsync(RouteTrigger.UserRequested, ct).ConfigureAwait(false);
+        RouteChanged?.Invoke();
+    }
+
+    private static (string BaseUrl, string? Internal, string? External, ConnectionMode Mode,
+        TrustedNetworkSettings Trusted, bool Pending) Snapshot(ServerConfig config) =>
+        (config.BaseUrl, config.InternalUrl, config.ExternalUrl, config.ConnectionMode,
+            config.TrustedNetworks, config.RouteAssignmentPending);
+
+    private static void Restore(
+        ServerConfig config,
+        (string BaseUrl, string? Internal, string? External, ConnectionMode Mode,
+            TrustedNetworkSettings Trusted, bool Pending) snapshot)
+    {
+        config.BaseUrl = snapshot.BaseUrl;
+        config.InternalUrl = snapshot.Internal;
+        config.ExternalUrl = snapshot.External;
+        config.ConnectionMode = snapshot.Mode;
+        config.TrustedNetworks = snapshot.Trusted;
+        config.RouteAssignmentPending = snapshot.Pending;
     }
 
     /// <summary>
@@ -318,13 +446,14 @@ public sealed class AppController : IAsyncDisposable
         _secrets.Delete(AppConstants.RefreshTokenKey);
         _settings.Delete();
         _config = null;
+        _supervisor = null;
         StateChanged?.Invoke(ConnectionState.Disconnected);
     }
 
     /// <summary>Opens the connected Home Assistant instance in the default browser.</summary>
     public void OpenHomeAssistant()
     {
-        var url = _config?.BaseUrl;
+        var url = BaseUrl;
         if (string.IsNullOrEmpty(url)) return;
         System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
         {
@@ -339,18 +468,11 @@ public sealed class AppController : IAsyncDisposable
         CancellationToken ct, string? seedAccessToken = null, int seedExpiresIn = 0)
     {
         var config = _config ?? throw new InvalidOperationException("No configuration loaded.");
+        var url = ActiveUrl(config);
 
-        var oauth = new HaOAuthClient(_http, config.BaseUrl);
-        var tokenManager = new OAuthTokenManager(
-            oauth,
-            AppConstants.ClientId,
-            () => _secrets.Get(AppConstants.RefreshTokenKey),
-            log: _loggerFactory.CreateLogger<OAuthTokenManager>());
+        var client = CreateClient(config, url, out var tokenManager);
         if (seedAccessToken is not null)
             tokenManager.Seed(seedAccessToken, seedExpiresIn);
-
-        var client = new HomeAssistantClient(_http, config.BaseUrl, tokenManager,
-            _loggerFactory.CreateLogger<HomeAssistantClient>());
 
         var registration = DeviceInfo.BuildRegistration(config.DeviceId);
         if (!config.Registered)
@@ -375,8 +497,10 @@ public sealed class AppController : IAsyncDisposable
             }
         }
 
+        await LearnInstanceIdentityAsync(client, config, ct).ConfigureAwait(false);
+
         var ws = new HaWebSocketClient(
-            () => new ClientWebSocketAdapter(), config.BaseUrl, tokenManager, config.WebhookId!,
+            () => new ClientWebSocketAdapter(), url, tokenManager, config.WebhookId!,
             _loggerFactory.CreateLogger<HaWebSocketClient>());
 
         var catalog = new SensorCatalog(
@@ -402,14 +526,174 @@ public sealed class AppController : IAsyncDisposable
             _loggerFactory.CreateLogger<SensorSyncService>());
 
         var connection = new ConnectionManager(ws, sensors, config.WebhookId!,
-            log: _loggerFactory.CreateLogger<ConnectionManager>());
+            log: _loggerFactory.CreateLogger<ConnectionManager>(),
+            route: _supervisor?.ActiveRoute);
         connection.StateChanged += s => StateChanged?.Invoke(s);
         connection.NotificationReceived += n => _toasts.Show(n);
+        connection.RouteUnhealthy += _ => RequestRouteEvaluation(RouteTrigger.ConnectionFailed);
         _connection = connection;
         connection.Start();
 
         // Sources push immediately on change; steady state stays at one batch per sync.
         catalog.Start(() => _ = connection.SyncNowAsync());
+    }
+
+    private string ActiveUrl(ServerConfig config) => _supervisor?.ActiveUrl ?? config.BaseUrl;
+
+    private HomeAssistantClient CreateClient(ServerConfig config, string url, out OAuthTokenManager tokens)
+    {
+        tokens = new OAuthTokenManager(
+            new HaOAuthClient(_http, url),
+            AppConstants.ClientId,
+            () => _secrets.Get(AppConstants.RefreshTokenKey),
+            log: _loggerFactory.CreateLogger<OAuthTokenManager>());
+
+        return new HomeAssistantClient(_http, url, tokens,
+            _loggerFactory.CreateLogger<HomeAssistantClient>());
+    }
+
+    private RouteSupervisor CreateSupervisor(ServerConfig config)
+    {
+        var supervisor = new RouteSupervisor(
+            config, _probe, log: _loggerFactory.CreateLogger<RouteSupervisor>());
+        supervisor.RouteActivated += _ => RouteChanged?.Invoke();
+        return supervisor;
+    }
+
+    /// <summary>
+    /// Records Home Assistant's own device id for this registration the first time
+    /// it is seen. It is what later proves a second address is the same instance.
+    /// </summary>
+    private async Task LearnInstanceIdentityAsync(
+        HomeAssistantClient client, ServerConfig config, CancellationToken ct)
+    {
+        if (!string.IsNullOrEmpty(config.InstanceDeviceId) || string.IsNullOrEmpty(config.WebhookId))
+            return;
+
+        try
+        {
+            var info = await client.GetInstanceInfoAsync(config.WebhookId, ct).ConfigureAwait(false);
+            if (info?.DeviceId is null) return;
+            config.InstanceDeviceId = info.DeviceId;
+            _settings.Save(config);
+        }
+        catch
+        {
+            // Identity is a nicety at startup; the validation flow re-reads it.
+        }
+    }
+
+    /// <summary>
+    /// Picks the address to start on. When nothing can be validated - offline
+    /// startup being the normal case - the last address that worked is used and
+    /// the connection's own backoff takes over, so the app still comes up.
+    /// </summary>
+    private async Task PrepareRouteAsync(RouteTrigger trigger, CancellationToken ct)
+    {
+        var config = _config!;
+        _supervisor ??= CreateSupervisor(config);
+
+        if (config.ConfiguredRoutes().Count == 0) return;
+
+        var decision = await _supervisor
+            .EvaluateAsync(_network.GetCurrent(), trigger, ct)
+            .ConfigureAwait(false);
+
+        if (decision.Kind is RouteDecisionKind.Activated or RouteDecisionKind.Unchanged)
+        {
+            _settings.Save(config);
+            return;
+        }
+
+        if (_supervisor.ActiveRoute is not null) return;
+
+        var fallback = config.LastSuccessfulRoute is { } last && config.HasRoute(last)
+            ? last
+            : config.ConfiguredRoutes()[0];
+        if (config.UrlFor(fallback) is { } url)
+        {
+            config.BaseUrl = url;
+            _supervisor.Adopt(fallback, url);
+        }
+    }
+
+    private void OnNetworkChanged()
+    {
+        if (_config is null || _connection is null) return;
+
+        // Let the network settle first: a transition produces a burst of events,
+        // and a captive portal answers before it lets anything through.
+        var settle = new CancellationTokenSource();
+        Interlocked.Exchange(ref _networkSettle, settle)?.Cancel();
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(NetworkSettleDelay, settle.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+
+            await EvaluateRouteAsync(RouteTrigger.NetworkChanged, CancellationToken.None)
+                .ConfigureAwait(false);
+        });
+    }
+
+    private void RequestRouteEvaluation(RouteTrigger trigger) =>
+        _ = Task.Run(() => EvaluateRouteAsync(trigger, CancellationToken.None));
+
+    /// <summary>
+    /// Re-decides the route and, only when a different address actually proved
+    /// usable, rebuilds the clients on it. The refresh token, webhook id and every
+    /// registered sensor are untouched, so nothing re-registers.
+    /// </summary>
+    private async Task EvaluateRouteAsync(RouteTrigger trigger, CancellationToken ct)
+    {
+        var config = _config;
+        var supervisor = _supervisor;
+        if (config is null || supervisor is null) return;
+        if (config.ConfiguredRoutes().Count == 0) return;
+        if (!await _routeGate.WaitAsync(0, ct).ConfigureAwait(false)) return;
+
+        try
+        {
+            var before = supervisor.ActiveUrl;
+            var decision = await supervisor
+                .EvaluateAsync(_network.GetCurrent(), trigger, ct)
+                .ConfigureAwait(false);
+
+            if (decision.Kind != RouteDecisionKind.Activated) return;
+
+            _settings.Save(config);
+            if (string.Equals(before, decision.Url, StringComparison.OrdinalIgnoreCase)) return;
+            if (_connection is null) return;
+
+            await RestartOnActiveRouteAsync(ct).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _loggerFactory.CreateLogger<AppController>()
+                .LogWarning(ex, "Route evaluation failed ({Trigger}).", trigger);
+        }
+        finally
+        {
+            _routeGate.Release();
+        }
+    }
+
+    /// <summary>
+    /// Tears the REST and WebSocket clients down and rebuilds them on the active
+    /// address, which re-opens the push notification channel and resumes sensor
+    /// sync without re-registering the device.
+    /// </summary>
+    private async Task RestartOnActiveRouteAsync(CancellationToken ct)
+    {
+        await DisconnectAsync().ConfigureAwait(false);
+        await BuildAndStartAsync(ct).ConfigureAwait(false);
+        RouteChanged?.Invoke();
     }
 
     /// <summary>
@@ -441,6 +725,9 @@ public sealed class AppController : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
+        _network.NetworkChanged -= OnNetworkChanged;
+        _network.Stop();
+        _networkSettle?.Cancel();
         _catalog?.Stop();
         if (_connection is not null)
             await _connection.DisposeAsync().ConfigureAwait(false);

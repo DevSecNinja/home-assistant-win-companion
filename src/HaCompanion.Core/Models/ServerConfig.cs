@@ -9,7 +9,49 @@ namespace HaCompanion.Core.Models;
 /// </summary>
 public sealed class ServerConfig
 {
+    /// <summary>
+    /// The address currently in use. Always kept in step with the active route so
+    /// installs that predate dual URLs - and everything that only needs "where is
+    /// Home Assistant right now" - keep working unchanged.
+    /// </summary>
     public string BaseUrl { get; set; } = string.Empty;
+
+    /// <summary>Address used on the user's own network. May be plain HTTP.</summary>
+    public string? InternalUrl { get; set; }
+
+    /// <summary>Address used from anywhere else. HTTPS only.</summary>
+    public string? ExternalUrl { get; set; }
+
+    [JsonConverter(typeof(JsonStringEnumConverter))]
+    public ConnectionMode ConnectionMode { get; set; } = ConnectionMode.Automatic;
+
+    /// <summary>Networks on which the internal address is appropriate. Local only.</summary>
+    public TrustedNetworkSettings TrustedNetworks { get; set; } = new();
+
+    /// <summary>The route that last carried a validated connection.</summary>
+    [JsonConverter(typeof(JsonStringEnumConverter))]
+    public RouteKind? LastSuccessfulRoute { get; set; }
+
+    public DateTimeOffset? LastSuccessfulRouteAt { get; set; }
+
+    /// <summary>
+    /// Home Assistant's own device-registry id for this installation, read from
+    /// the <c>get_config</c> webhook. Both addresses must report the same value,
+    /// which is what proves they are the same instance rather than two servers
+    /// that happen to share a name or version.
+    /// </summary>
+    /// <remarks>
+    /// Not a credential: it identifies a device row inside the user's own Home
+    /// Assistant and grants nothing on its own.
+    /// </remarks>
+    public string? InstanceDeviceId { get; set; }
+
+    /// <summary>
+    /// Set when an install with a single URL was migrated. The address keeps
+    /// working; the user is asked to say whether it is internal or external
+    /// rather than having it guessed from the hostname.
+    /// </summary>
+    public bool RouteAssignmentPending { get; set; }
 
     /// <summary>Stable identifier for this installation, used as HA device_id.</summary>
     public string DeviceId { get; set; } = string.Empty;
@@ -72,4 +114,70 @@ public sealed class ServerConfig
         if (!Uri.TryCreate(BaseUrl, UriKind.Absolute, out var uri)) return false;
         return uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps;
     }
+
+    /// <summary>The address configured for a route, or null when unset.</summary>
+    public string? UrlFor(RouteKind route) =>
+        route == RouteKind.Internal
+            ? NullIfBlank(InternalUrl)
+            : NullIfBlank(ExternalUrl);
+
+    public bool HasRoute(RouteKind route) => UrlFor(route) is not null;
+
+    /// <summary>Routes that actually have an address, in a stable order.</summary>
+    public IReadOnlyList<RouteKind> ConfiguredRoutes()
+    {
+        var routes = new List<RouteKind>(2);
+        if (HasRoute(RouteKind.Internal)) routes.Add(RouteKind.Internal);
+        if (HasRoute(RouteKind.External)) routes.Add(RouteKind.External);
+        return routes;
+    }
+
+    /// <summary>
+    /// Records the address of a route and takes the install out of the migrated
+    /// "not classified yet" state once either route is assigned.
+    /// </summary>
+    public void SetRoute(RouteKind route, string? url)
+    {
+        url = NullIfBlank(url);
+        if (route == RouteKind.Internal) InternalUrl = url;
+        else ExternalUrl = url;
+
+        if (ConfiguredRoutes().Count > 0) RouteAssignmentPending = false;
+    }
+
+    /// <summary>Marks a route as active, keeping <see cref="BaseUrl"/> in step.</summary>
+    public void SetActiveRoute(RouteKind route, DateTimeOffset at)
+    {
+        var url = UrlFor(route) ?? throw new InvalidOperationException(
+            $"The {route} address is not configured.");
+        BaseUrl = url;
+        LastSuccessfulRoute = route;
+        LastSuccessfulRouteAt = at;
+    }
+
+    /// <summary>
+    /// Brings an install saved by a single-URL version forward. The existing
+    /// address stays in use so startup is unaffected; it is only flagged for the
+    /// user to classify, because internal versus external cannot be inferred
+    /// reliably from a hostname (split DNS, reverse proxies and Nabu Casa all
+    /// break the guess).
+    /// </summary>
+    /// <returns>True when the configuration changed and should be saved.</returns>
+    public bool MigrateRoutes()
+    {
+        if (ConfiguredRoutes().Count > 0)
+        {
+            if (!RouteAssignmentPending) return false;
+            RouteAssignmentPending = false;
+            return true;
+        }
+
+        if (string.IsNullOrWhiteSpace(BaseUrl) || RouteAssignmentPending) return false;
+
+        RouteAssignmentPending = true;
+        return true;
+    }
+
+    private static string? NullIfBlank(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value;
 }

@@ -53,6 +53,10 @@ public sealed class SessionStore
             migrated = true;
         }
 
+        // Brings a single-URL install onto the internal/external model without
+        // changing the address it is already using.
+        if (config.MigrateRoutes()) migrated = true;
+
         // Re-saving is what actually removes the plaintext copy from disk.
         if (migrated) Save(config);
 

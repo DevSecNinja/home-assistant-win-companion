@@ -22,4 +22,15 @@ public interface IHomeAssistantClient
 
     /// <summary>Sends a batch state update for already-registered sensors.</summary>
     Task UpdateSensorsAsync(string webhookId, IReadOnlyList<Sensor> sensors, CancellationToken ct = default);
+
+    /// <summary>
+    /// Asks the instance behind this address to describe itself through the
+    /// existing webhook (<c>get_config</c>). Returns null when the webhook is not
+    /// known there, which is how a different instance is detected. Never creates
+    /// or changes a registration.
+    /// </summary>
+    Task<HaInstanceInfo?> GetInstanceInfoAsync(string webhookId, CancellationToken ct = default);
+
+    /// <summary>Reads the instance's own internal/external URLs (GET /api/config).</summary>
+    Task<HaConfigInfo?> GetConfigAsync(CancellationToken ct = default);
 }

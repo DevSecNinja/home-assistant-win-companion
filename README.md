@@ -60,7 +60,8 @@ one that just works with stock Home Assistant.**
   long-lived tokens to create or paste. The refresh token is stored in the Windows
   Credential Locker.
 - **Tray-resident** — closing the window hides it to the notification area. The tray
-  tooltip shows current health.
+  tooltip shows current health. The status overview can register the app to start
+  in the tray when the current Windows user signs in.
 - **Windows toasts** — notifications sent to this PC from Home Assistant appear as
   native toasts, delivered over the `mobile_app` local push channel (Windows has no
   APNS/FCM equivalent).
@@ -78,13 +79,17 @@ one that just works with stock Home Assistant.**
 ## Requirements
 
 - Windows 10 (build 19041+) or Windows 11
-- [.NET 9 SDK](https://dotnet.microsoft.com/download) to build
+- [.NET 9 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/9.0) to run
+- [.NET 9 SDK](https://dotnet.microsoft.com/download) to build from source
 - **Windows App Runtime 2.3** — the app ships unpackaged and uses the Windows App SDK
   bootstrapper. Without it the app exits at startup with `REGDB_E_CLASSNOTREG`. The
   MSIX packages ship inside the `Microsoft.WindowsAppSDK.Runtime` NuGet package under
   `tools/MSIX/win10-x64/` and can be installed with `Add-AppxPackage`.
 - A Home Assistant instance with the `mobile_app` integration (part of
   `default_config`)
+
+See the [end-user installation guide](docs/installation.md) for release downloads,
+runtime setup, updates, Start with Windows, and uninstallation.
 
 The optional **WinGet Updates** sensor uses Microsoft's
 `Microsoft.WinGet.Client` PowerShell module version 1.29.280 or newer. If it is

@@ -103,6 +103,7 @@
                 <TextBlock x:Name="LastUpdateText" Text="—" />
             </StackPanel>
             <Button Content="Open Home Assistant" Click="OnOpenHomeAssistant" HorizontalAlignment="Stretch" />
+            <Button Content="Change server URL…" Click="OnChangeServerUrl" HorizontalAlignment="Stretch" />
             <Button x:Name="UpdateNowButton" Content="Update now" Click="OnForcePush" HorizontalAlignment="Stretch" />
             <Button Content="Sensors…" Click="OnShowSettings" HorizontalAlignment="Stretch" />
             <Button x:Name="DisconnectButton" Content="Disconnect" Click="OnDisconnect" HorizontalAlignment="Stretch" />

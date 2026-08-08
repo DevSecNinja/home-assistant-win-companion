@@ -8,9 +8,10 @@ namespace HaCompanion_App.Services;
 public sealed class PowerShellWinGetUpdateProvider : IWinGetUpdateProvider
 {
     private static readonly TimeSpan CheckTimeout = TimeSpan.FromMinutes(2);
-    private static readonly TimeSpan InstallTimeout = TimeSpan.FromMinutes(10);
 
     private const string ModuleName = "Microsoft.WinGet.Client";
+    // Compatibility floor, not a release pin. Newer Microsoft-signed versions are accepted.
+    private const string MinimumModuleVersion = "1.29.280";
     private static string PowerShellPath { get; } = Path.Combine(
         Environment.SystemDirectory,
         "WindowsPowerShell",
@@ -20,41 +21,15 @@ public sealed class PowerShellWinGetUpdateProvider : IWinGetUpdateProvider
     public async Task<bool> IsModuleInstalledAsync(
         CancellationToken cancellationToken = default)
     {
-        const string script =
-            "$module = Get-Module -ListAvailable -Name Microsoft.WinGet.Client "
-            + "| Sort-Object Version -Descending | Select-Object -First 1; "
-            + "[Console]::Out.Write($(if ($null -ne $module) { 'true' } else { 'false' }))";
+        var script = ValidationFunction
+            + "try { Get-ValidatedWinGetModule | Out-Null; "
+            + "[Console]::Out.Write('true') } "
+            + "catch { [Console]::Out.Write('false') }";
 
         var result = await RunAsync(script, TimeSpan.FromSeconds(30), cancellationToken)
             .ConfigureAwait(false);
         return result.ExitCode == 0
                && string.Equals(result.Output.Trim(), "true", StringComparison.OrdinalIgnoreCase);
-    }
-
-    public async Task<WinGetModuleInstallResult> InstallModuleAsync(
-        CancellationToken cancellationToken = default)
-    {
-        const string script =
-            "$ErrorActionPreference = 'Stop'; "
-            + "[Net.ServicePointManager]::SecurityProtocol = "
-            + "[Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12; "
-            + "if (-not (Get-PackageProvider -Name NuGet -ListAvailable -ErrorAction SilentlyContinue)) { "
-            + "Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 "
-            + "-Scope CurrentUser -Force -Confirm:$false | Out-Null }; "
-            + "Install-Module -Name Microsoft.WinGet.Client -Repository PSGallery "
-            + "-Scope CurrentUser -Force -AllowClobber -Confirm:$false -ErrorAction Stop; "
-            + "[Console]::Out.Write('installed')";
-
-        var result = await RunAsync(script, InstallTimeout, cancellationToken)
-            .ConfigureAwait(false);
-        if (result.TimedOut)
-            return new(false, "Module installation timed out. Check your PowerShell Gallery access.");
-        if (result.ExitCode != 0)
-            return new(false, "The WinGet client module could not be installed from PowerShell Gallery.");
-        if (!await IsModuleInstalledAsync(cancellationToken).ConfigureAwait(false))
-            return new(false, "PowerShell completed installation but the WinGet client module is unavailable.");
-
-        return new(true);
     }
 
     public async Task<WinGetUpdateResult> CheckForUpdatesAsync(
@@ -69,10 +44,12 @@ public sealed class PowerShellWinGetUpdateProvider : IWinGetUpdateProvider
                 DateTimeOffset.UtcNow);
         }
 
-        const string script =
+        var script =
             "$ErrorActionPreference = 'Stop'; "
             + "$OutputEncoding = [Console]::OutputEncoding = New-Object Text.UTF8Encoding($false); "
-            + "Import-Module Microsoft.WinGet.Client -ErrorAction Stop; "
+            + ValidationFunction
+            + "$module = Get-ValidatedWinGetModule; "
+            + "Import-Module -Name $module.Path -Force -ErrorAction Stop; "
             + "$updates = @(Get-WinGetPackage -ErrorAction Stop "
             + "| Where-Object IsUpdateAvailable "
             + "| ForEach-Object { [pscustomobject]@{ "
@@ -166,4 +143,24 @@ public sealed class PowerShellWinGetUpdateProvider : IWinGetUpdateProvider
     }
 
     private readonly record struct ProcessResult(int ExitCode, string Output, bool TimedOut);
+
+    private static string ValidationFunction { get; } = $$"""
+        function Get-ValidatedWinGetModule {
+          $module = Get-Module -ListAvailable -Name '{{ModuleName}}' |
+            Where-Object { $_.Version -ge [Version]'{{MinimumModuleVersion}}' } |
+            Sort-Object Version -Descending |
+            Select-Object -First 1
+          if ($null -eq $module) {
+            throw 'A supported WinGet client module version is not installed.'
+          }
+
+          $manifestSignature = Get-AuthenticodeSignature -FilePath $module.Path
+          if ($manifestSignature.Status -ne 'Valid' -or
+              $manifestSignature.SignerCertificate.Subject -notmatch 'O=Microsoft Corporation') {
+            throw 'The WinGet client module manifest is not signed by Microsoft.'
+          }
+
+          return $module
+        }
+        """;
 }

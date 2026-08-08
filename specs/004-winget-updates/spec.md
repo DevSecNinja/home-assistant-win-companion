@@ -55,13 +55,10 @@ locally after a successful enabled check.
 3. **Given** the sensor is disabled, **When** the Sensors page is opened, **Then**
    it explains that enablement is required and performs no WinGet query.
 4. **Given** the required module is missing, **When** the user enables the sensor,
-   **Then** the app explains the download and current-user installation before
-   making any change.
-5. **Given** the user accepts installation, **When** installation runs in the
-   background, **Then** the UI remains responsive and the first check starts after
-   installation succeeds.
-6. **Given** the user cancels or installation fails, **When** enablement finishes,
-   **Then** the sensor remains disabled and the app shows the reason.
+   **Then** the app explains the dependency and provides a copyable current-user
+   installation command.
+5. **Given** the user closes or copies the setup instructions, **When** enablement
+   finishes, **Then** the sensor remains disabled until the module is installed.
 
 ---
 
@@ -91,8 +88,7 @@ fresh check occurs.
 ### Edge Cases
 
 - The `Microsoft.WinGet.Client` PowerShell module is not installed or cannot load.
-- The module installation is cancelled, times out, or fails because PowerShell
-  Gallery cannot be reached.
+- The installed module is too old or is not signed by Microsoft.
 - WinGet itself is unavailable, disabled by policy, or its catalog connection fails.
 - A check exceeds a reasonable timeout.
 - The PowerShell process exits unsuccessfully or emits malformed structured output.
@@ -107,13 +103,12 @@ fresh check occurs.
 - **FR-002**: The sensor MUST be disabled by default.
 - **FR-003**: Checks MUST use the official `Microsoft.WinGet.Client` PowerShell
   module and structured output; localized CLI tables MUST NOT be parsed.
-- **FR-003a**: Enabling the sensor while the module is absent MUST show a
-  confirmation that identifies the official module, its approximate 53 MB
-  installed size, its PowerShell Gallery source, and current-user installation.
-- **FR-003b**: After confirmation, the app MUST install the module asynchronously
-  for the current user without freezing the UI.
-- **FR-003c**: Cancelling or failing installation MUST leave the sensor disabled
-  and MUST surface an actionable message.
+- **FR-003a**: Enabling the sensor while the module is absent MUST explain the
+  official dependency and provide a copyable PowerShell Gallery command using
+  current-user scope.
+- **FR-003b**: The app MUST NOT download, install, or update the PowerShell module.
+- **FR-003c**: The sensor MUST remain disabled until a supported Microsoft-signed
+  module is detected.
 - **FR-004**: Home Assistant MUST receive only the available-update count or an
   unavailable state.
 - **FR-005**: Package names, identifiers, installed versions, and available versions
@@ -153,13 +148,13 @@ fresh check occurs.
   names, identifiers, or versions.
 - **SC-006**: Missing-module and source-failure cases are distinguishable from zero
   available updates.
-- **SC-007**: Cancelling module installation creates no sensor preference, while a
-  successful installation enables the sensor without restarting the app.
+- **SC-007**: Viewing or copying setup instructions creates no sensor preference;
+  after explicit installation the sensor can be enabled without restarting the app.
 
 ## Assumptions
 
-- The app installs `Microsoft.WinGet.Client` from PowerShell Gallery for the current
-  user only after explicit confirmation.
+- Users install `Microsoft.WinGet.Client` explicitly from PowerShell Gallery for
+  their current Windows account.
 - Windows PowerShell 5.1 is available at its standard Windows path.
 - Update details are held only in memory and disappear when the app exits.
 - A two-minute timeout and six-hour refresh interval balance freshness and cost.

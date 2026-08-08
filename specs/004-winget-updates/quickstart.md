@@ -11,11 +11,11 @@ dotnet test tests\HaCompanion.Core.Tests\HaCompanion.Core.Tests.csproj
 
 1. Remove or rename the current-user `Microsoft.WinGet.Client` module for the test.
 2. Open **Sensors...** and switch on **WinGet Updates**.
-3. Confirm the dialog explains the official module, PowerShell Gallery, current-user
-   scope, and approximate size.
-4. Cancel and verify the toggle remains off.
-5. Try again, accept installation, and verify the UI remains responsive.
-6. Confirm the sensor becomes enabled only after installation succeeds.
+3. Confirm the dialog explains the official module and provides a copyable
+   current-user PowerShell Gallery command.
+4. Close the dialog and verify the toggle remains off.
+5. Run the command explicitly in Windows PowerShell.
+6. Enable the sensor again and confirm it accepts the Microsoft-signed module.
 
 ## Update count and privacy
 

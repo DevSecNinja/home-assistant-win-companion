@@ -15,14 +15,12 @@ Alternatives considered:
 - `winget upgrade` parsing: current WinGet has no JSON output for this command and
   its table is localized.
 
-## Decision: Install the module only after native confirmation
+## Decision: Require explicit user installation
 
-The module is not installed with WinGet and occupies roughly 53 MB. First enablement
-checks for the module, explains the source/size/current-user scope, and offers
-**Install and enable** or **Cancel**. Installation uses PowerShell Gallery,
-`CurrentUser` scope, no prompts, and runs asynchronously.
-
-Cancellation or failure leaves the preference disabled. No elevation is requested.
+The module is not installed with WinGet. First enablement checks for a sufficiently
+recent Microsoft-signed module and provides a copyable PowerShell Gallery command
+when it is absent. The app does not download, install, or update executable code.
+The preference remains disabled until the user completes setup explicitly.
 
 ## Decision: Cache checks for six hours
 

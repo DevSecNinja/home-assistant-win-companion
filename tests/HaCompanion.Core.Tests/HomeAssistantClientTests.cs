@@ -192,4 +192,109 @@ public class HomeAssistantClientTests
         Assert.Equal("update_sensor_states", doc.RootElement.GetProperty("type").GetString());
         Assert.Equal("battery_level", doc.RootElement.GetProperty("data")[0].GetProperty("unique_id").GetString());
     }
+
+    [Fact]
+    public async Task GetInstanceInfoAsync_reads_the_device_id_that_proves_the_instance()
+    {
+        var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(
+                """{"hass_device_id":"dev-9","version":"2025.1.0","remote_ui_url":"https://x.ui.nabu.casa"}""",
+                Encoding.UTF8,
+                "application/json")
+        });
+        var client = CreateClient(handler);
+
+        var info = await client.GetInstanceInfoAsync("wh-1");
+
+        Assert.Equal("dev-9", info!.DeviceId);
+        Assert.Equal("2025.1.0", info.Version);
+        Assert.Equal("https://x.ui.nabu.casa", info.RemoteUiUrl);
+        var req = Assert.Single(handler.Requests);
+        Assert.Equal("https://ha.local:8123/api/webhook/wh-1", req.RequestUri!.ToString());
+        using var doc = JsonDocument.Parse(handler.Bodies[0]);
+        Assert.Equal("get_config", doc.RootElement.GetProperty("type").GetString());
+        // The identity check must not carry the access token to an unproven host.
+        Assert.Null(req.Headers.Authorization);
+    }
+
+    [Fact]
+    public async Task GetInstanceInfoAsync_treats_an_empty_body_as_an_unknown_registration()
+    {
+        // Home Assistant answers 200 with no body for a webhook it does not know,
+        // so that an attacker cannot enumerate valid webhook ids.
+        var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(string.Empty)
+        });
+
+        Assert.Null(await CreateClient(handler).GetInstanceInfoAsync("wh-1"));
+    }
+
+    [Fact]
+    public async Task GetInstanceInfoAsync_treats_a_deleted_registration_as_unknown()
+    {
+        var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.Gone));
+
+        Assert.Null(await CreateClient(handler).GetInstanceInfoAsync("wh-1"));
+    }
+
+    [Fact]
+    public async Task GetInstanceInfoAsync_ignores_a_response_without_a_device_id()
+    {
+        var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("""{"version":"2025.1.0"}""", Encoding.UTF8, "application/json")
+        });
+
+        Assert.Null(await CreateClient(handler).GetInstanceInfoAsync("wh-1"));
+    }
+
+    [Fact]
+    public async Task GetInstanceInfoAsync_survives_a_body_that_is_not_json()
+    {
+        var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("<html>portal</html>", Encoding.UTF8, "text/html")
+        });
+
+        Assert.Null(await CreateClient(handler).GetInstanceInfoAsync("wh-1"));
+    }
+
+    [Fact]
+    public async Task GetConfigAsync_reads_the_addresses_home_assistant_suggests()
+    {
+        var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(
+                """{"internal_url":"http://ha.local:8123","external_url":"https://ha.example.com","version":"2025.1.0"}""",
+                Encoding.UTF8,
+                "application/json")
+        });
+
+        var config = await CreateClient(handler).GetConfigAsync();
+
+        Assert.Equal("http://ha.local:8123", config!.InternalUrl);
+        Assert.Equal("https://ha.example.com", config.ExternalUrl);
+        var req = Assert.Single(handler.Requests);
+        Assert.Equal("https://ha.local:8123/api/config", req.RequestUri!.ToString());
+        Assert.Equal("Bearer", req.Headers.Authorization!.Scheme);
+    }
+
+    [Fact]
+    public async Task GetConfigAsync_reports_a_rejected_token_rather_than_guessing()
+    {
+        var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.Unauthorized));
+
+        await Assert.ThrowsAsync<HomeAssistantAuthException>(
+            () => CreateClient(handler).GetConfigAsync());
+    }
+
+    [Fact]
+    public async Task GetConfigAsync_returns_nothing_when_the_endpoint_is_unavailable()
+    {
+        var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.NotFound));
+
+        Assert.Null(await CreateClient(handler).GetConfigAsync());
+    }
 }

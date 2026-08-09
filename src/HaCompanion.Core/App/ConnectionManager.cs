@@ -45,6 +45,28 @@ public sealed class ConnectionManager : IAsyncDisposable
     /// <summary>Sync failures since the last success; resets to zero on success.</summary>
     public int ConsecutiveFailures { get; private set; }
 
+    /// <summary>
+    /// Which of the configured addresses this connection uses. Null for installs
+    /// that still have a single unclassified address.
+    /// </summary>
+    public RouteKind? Route { get; }
+
+    /// <summary>
+    /// Raised when this connection has failed often enough that another address is
+    /// worth trying. The supervisor decides whether one exists; this only reports.
+    /// </summary>
+    public event Action<RouteKind?>? RouteUnhealthy;
+
+    /// <summary>
+    /// Failures tolerated before a route is called into question. Two means one
+    /// transient hiccup is absorbed, but a server that has moved is noticed within
+    /// a couple of sync intervals rather than after an hour of backoff.
+    /// </summary>
+    public const int FailoverFailureThreshold = 2;
+
+    /// <summary>Reconnect attempts tolerated before the route is called into question.</summary>
+    public const int FailoverReconnectThreshold = 2;
+
     public TimeSpan SyncInterval => _syncInterval;
 
     /// <summary>
@@ -72,7 +94,8 @@ public sealed class ConnectionManager : IAsyncDisposable
         string webhookId,
         TimeSpan? syncInterval = null,
         IClock? clock = null,
-        ILogger<ConnectionManager>? log = null)
+        ILogger<ConnectionManager>? log = null,
+        RouteKind? route = null)
     {
         _ws = ws ?? throw new ArgumentNullException(nameof(ws));
         _sensors = sensors ?? throw new ArgumentNullException(nameof(sensors));
@@ -80,6 +103,7 @@ public sealed class ConnectionManager : IAsyncDisposable
         _syncInterval = syncInterval ?? TimeSpan.FromSeconds(60);
         _clock = clock ?? new SystemClock();
         _log = log ?? NullLogger<ConnectionManager>.Instance;
+        Route = route;
         _ws.NotificationReceived += n => NotificationReceived?.Invoke(n);
     }
 
@@ -120,6 +144,7 @@ public sealed class ConnectionManager : IAsyncDisposable
 
             if (ct.IsCancellationRequested) return;
             SetState(ConnectionState.Reconnecting);
+            if (attempt + 1 >= FailoverReconnectThreshold) RouteUnhealthy?.Invoke(Route);
             await Task.Delay(NextBackoff(attempt++), ct).ConfigureAwait(false);
         }
     }
@@ -185,6 +210,7 @@ public sealed class ConnectionManager : IAsyncDisposable
             LastErrorAt = _clock.UtcNow;
             _log.LogWarning(ex, "Sensor sync failed ({Reason}), failure #{Count}.",
                 context.Reason, ConsecutiveFailures);
+            if (ConsecutiveFailures >= FailoverFailureThreshold) RouteUnhealthy?.Invoke(Route);
         }
 
         return false;

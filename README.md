@@ -59,6 +59,9 @@ one that just works with stock Home Assistant.**
 - **Browser-based sign-in** — OAuth2 (IndieAuth) with a loopback redirect. No
   long-lived tokens to create or paste. The refresh token is stored in the Windows
   Credential Locker.
+- **Internal and external URLs** — store the address you use at home and the one
+  you use away, and let the app pick. See
+  [Connecting from home and away](#connecting-from-home-and-away).
 - **Tray-resident** — closing the window hides it to the notification area. The tray
   tooltip shows current health. The status overview can register the app to start
   in the tray when the current Windows user signs in.
@@ -140,6 +143,59 @@ Two things worth knowing if you build by hand:
 On first launch, enter your Home Assistant URL and click **Sign in** — your browser
 opens for login, then the app registers this PC and connects.
 
+## Connecting from home and away
+
+A laptop typically reaches Home Assistant at a LAN address at home and at a public
+address everywhere else. Under **Connection…** you can store both and let the app
+choose:
+
+| Mode | Behaviour |
+| --- | --- |
+| **Automatic** (default) | Internal on a trusted network, external everywhere else. |
+| **Prefer internal** | Internal first, external as a fallback. |
+| **Prefer external** | External first, internal as a fallback. |
+| **Internal only** / **External only** | Never uses the other address. |
+
+The status view shows which address is in use, and the panel can fill in the
+addresses Home Assistant itself reports (`internal_url` / `external_url`) as
+suggestions you can accept or ignore.
+
+**Trusted networks.** Automatic mode only uses the internal address on a network
+you marked as your own — a Wi-Fi network by name, or any wired connection if you
+switch that on. On any other identifiable network the internal address is never
+even probed, so its hostname is not exposed. Matching the exact access point
+(BSSID) is optional and off by default, because mesh Wi-Fi roams between access
+points.
+
+Recognising a Wi-Fi network by name needs the Windows **Location** permission; the
+panel links straight to that setting. Without it every Wi-Fi network looks
+unidentifiable and Automatic mode uses the external address.
+
+These network names stay on your PC. They are never sent to Home Assistant and
+never written to the log, and they are entirely separate from the optional
+`connectivity_ssid` / `connectivity_bssid` sensors.
+
+**Same instance, one registration.** Before saving, both addresses must prove they
+reach the *same* Home Assistant, using its own device-registry id rather than a
+matching name or version. Switching between them keeps the refresh token, the
+webhook, the device and its history — nothing re-registers and no duplicate device
+appears. If an address turns out to be a different instance, nothing is changed and
+the app offers a confirmed replace-and-sign-in instead.
+
+**Security.** The external address must be HTTPS. Redirects that change host or
+drop from HTTPS to HTTP are refused. Every address is confirmed to be a Home
+Assistant frontend *before* any credential is sent to it, so a captive portal or a
+hijacked DNS answer never sees your token. The internal address may be plain HTTP
+with a warning, as before. Certificate validation is never relaxed.
+
+**Upgrading.** An existing install keeps its address and keeps working. Because
+split DNS, reverse proxies and Nabu Casa make a hostname a poor signal, the app
+does not guess whether it is internal or external — it asks once, and preselects a
+suggestion.
+
+Full behaviour, including the deliberate limitations, is recorded in
+[`specs/008-dual-ha-urls/spec.md`](specs/008-dual-ha-urls/spec.md).
+
 ## Architecture
 
 | Project | Purpose |
@@ -149,8 +205,9 @@ opens for login, then the app registers this PC and connects.
 | `tests/HaCompanion.Core.Tests` | xUnit tests for the core library. |
 
 Secrets live only in the Windows Credential Locker, including the refresh token,
-`webhook_id`, and any cloudhook URL. Non-secret config (base URL, device id, sensor
-choices, and registered-sensor metadata) goes to
+`webhook_id`, and any cloudhook URL. Non-secret config (internal and external URLs,
+connection mode, trusted network names, device id, sensor choices, and
+registered-sensor metadata) goes to
 `%LOCALAPPDATA%\HaCompanion\settings.json`. The last observed lifecycle transition
 is journalled separately in `%LOCALAPPDATA%\HaCompanion\lifecycle.json`, so a write
 interrupted by a shutdown cannot damage the configuration. Existing installs migrate
@@ -179,6 +236,12 @@ A few behaviours are easy to get wrong and are worth calling out:
   are retired the same way. Removing one entirely requires deleting the whole
   Mobile App device, which invalidates the registration and forces this app to
   register again.
+- **An unknown webhook id gets HTTP 200 and an empty body.** Home Assistant answers
+  that way on purpose so webhook ids cannot be enumerated; a deleted registration
+  gets `410`. Both mean "this instance does not host this registration", which is
+  how the app tells two Home Assistant servers apart without registering anything.
+  The `get_config` webhook's `hass_device_id` is the identity that proves two
+  addresses are the same instance — names and versions are not unique.
 
 ## Notes on the Windows APIs used
 

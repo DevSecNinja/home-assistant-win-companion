@@ -1,3 +1,4 @@
+using HaCompanion.Core.App;
 using HaCompanion.Core.Lifecycle;
 using HaCompanion.Core.Models;
 using HaCompanion.Core.Sensors;
@@ -26,6 +27,9 @@ public sealed partial class MainWindow : Window
     private bool _connected;
     private int _sensorListBuildVersion;
     private bool _suppressSensorToggle;
+    private List<string> _trustedSsids = [];
+    private List<string> _trustedBssids = [];
+    private bool _suppressBssidToggle;
     private bool _loadingSensorSettings;
     private bool _loadingStartupSetting;
 
@@ -41,6 +45,7 @@ public sealed partial class MainWindow : Window
         _controller = App.Controller;
         _dispatcher = DispatcherQueue.GetForCurrentThread();
         _controller.StateChanged += OnStateChanged;
+        _controller.RouteChanged += OnRouteChanged;
 
         _statusTimer = _dispatcher.CreateTimer();
         _statusTimer.Interval = TimeSpan.FromSeconds(5);
@@ -72,6 +77,14 @@ public sealed partial class MainWindow : Window
             if (_startHidden) Show();
         }
     }
+
+    private void OnRouteChanged() =>
+        _dispatcher.TryEnqueue(() =>
+        {
+            RouteText.Text = _controller.RouteSummary;
+            ServerText.Text = _controller.BaseUrl ?? "—";
+            UpdateHealth();
+        });
 
     private void OnStateChanged(ConnectionState state) =>
         _dispatcher.TryEnqueue(() =>
@@ -196,116 +209,306 @@ public sealed partial class MainWindow : Window
 
     private void OnOpenHomeAssistant(object sender, RoutedEventArgs e) => _controller.OpenHomeAssistant();
 
-    private async void OnChangeServerUrl(object sender, RoutedEventArgs e)
+    private void OnShowConnection(object sender, RoutedEventArgs e)
     {
-        ServerChangeError.Visibility = Visibility.Collapsed;
-        var urlBox = new TextBox
-        {
-            Header = "Home Assistant URL",
-            Text = _controller.BaseUrl ?? string.Empty
-        };
-        var validationError = new TextBlock
-        {
-            Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources[
-                "SystemFillColorCriticalBrush"],
-            TextWrapping = TextWrapping.Wrap,
-            Visibility = Visibility.Collapsed
-        };
-        var content = new StackPanel { Spacing = 8 };
-        content.Children.Add(urlBox);
-        content.Children.Add(validationError);
+        LoadConnectionSettings();
+        ShowView(View.Connection);
+    }
 
-        var dialog = new ContentDialog
+    private void OnCloseConnection(object sender, RoutedEventArgs e)
+    {
+        RefreshStatusFields();
+        ShowView(View.Status);
+    }
+
+    /// <summary>Fills the connection view from the saved settings.</summary>
+    private void LoadConnectionSettings()
+    {
+        var settings = _controller.ConnectionSettings;
+        InternalUrlBox.Text = settings.InternalUrl ?? string.Empty;
+        ExternalUrlBox.Text = settings.ExternalUrl ?? string.Empty;
+        ConnectionModeBox.SelectedIndex = (int)settings.Mode;
+        _trustedSsids = [.. settings.TrustedNetworks.Ssids];
+        _trustedBssids = [.. settings.TrustedNetworks.Bssids];
+
+        _suppressBssidToggle = true;
+        RequireBssidBox.IsChecked = settings.TrustedNetworks.RequireBssidMatch;
+        _suppressBssidToggle = false;
+
+        TrustWiredBox.IsChecked = settings.TrustedNetworks.TrustWiredNetworks;
+        ProbeUnknownBox.IsChecked = settings.TrustedNetworks.ProbeInternalOnUnknownNetworks;
+
+        AcknowledgeUnreachableBox.IsChecked = false;
+        AcknowledgeUnreachableBox.Visibility = Visibility.Collapsed;
+        ConnectionResultText.Visibility = Visibility.Collapsed;
+        SuggestionText.Text = string.Empty;
+
+        MigrationBanner.Visibility = _controller.RouteAssignmentPending
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+        MigrationText.Text =
+            $"{_controller.BaseUrl} is currently the only address. Tell the companion whether it "
+            + "reaches Home Assistant on your own network or from outside it, then add the other one. "
+            + "Nothing is guessed from the hostname.";
+
+        RefreshTrustedNetworkList();
+    }
+
+    private void RefreshTrustedNetworkList()
+    {
+        var network = _controller.CurrentNetwork;
+        CurrentNetworkText.Text = network switch
         {
-            XamlRoot = Content.XamlRoot,
-            Title = "Change server URL",
-            Content = content,
-            PrimaryButtonText = "Validate and change",
-            CloseButtonText = "Cancel",
-            DefaultButton = ContentDialogButton.Primary
+            { Kind: NetworkKind.Wireless, Ssid: { Length: > 0 } ssid } => $"Now on Wi-Fi “{ssid}”",
+            { Kind: NetworkKind.Wireless } => "Now on Wi-Fi (Windows will not reveal the name)",
+            { Kind: NetworkKind.Wired } => "Now on a wired network",
+            { Kind: NetworkKind.Offline } => "Not connected to a network",
+            _ => "Network type unknown"
         };
+        TrustNetworkButton.IsEnabled = network is { Kind: NetworkKind.Wireless, Ssid: { Length: > 0 } }
+                                       && !_trustedSsids.Contains(network.Ssid, StringComparer.Ordinal);
 
-        AppController.ServerUrlChangeResult? changeResult = null;
-        dialog.PrimaryButtonClick += async (_, args) =>
+        TrustedNetworkList.Children.Clear();
+        if (_trustedSsids.Count == 0)
         {
-            var deferral = args.GetDeferral();
-            args.Cancel = true;
-            dialog.IsPrimaryButtonEnabled = false;
-            validationError.Visibility = Visibility.Collapsed;
-
-            try
+            TrustedNetworkList.Children.Add(new TextBlock
             {
-                changeResult = await _controller.ChangeServerUrlAsync(urlBox.Text);
-                args.Cancel = false;
-            }
-            catch (Exception ex)
-            {
-                validationError.Text = ex.Message;
-                validationError.Visibility = Visibility.Visible;
-            }
-            finally
-            {
-                dialog.IsPrimaryButtonEnabled = true;
-                deferral.Complete();
-            }
-        };
-
-        if (await dialog.ShowAsync() != ContentDialogResult.Primary
-            || changeResult is null)
-        {
+                Text = "No trusted Wi-Fi networks yet.",
+                FontSize = 12,
+                Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"]
+            });
             return;
         }
 
-        if (changeResult == AppController.ServerUrlChangeResult.Changed)
+        foreach (var ssid in _trustedSsids.ToList())
         {
-            _connected = _controller.State != ConnectionState.Disconnected;
-            DisconnectButton.Content = _connected ? "Disconnect" : "Reconnect";
-            UpdateNowButton.IsEnabled = _connected;
-            if (_connected) _statusTimer.Start();
-            else _statusTimer.Stop();
-            RefreshStatusFields();
+            var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+            row.Children.Add(new TextBlock { Text = ssid, VerticalAlignment = VerticalAlignment.Center });
+            var remove = new Button { Content = "Remove", Tag = ssid };
+            remove.Click += OnRemoveTrustedNetwork;
+            row.Children.Add(remove);
+            TrustedNetworkList.Children.Add(row);
+        }
+    }
+
+    private void OnTrustCurrentNetwork(object sender, RoutedEventArgs e)
+    {
+        var network = _controller.CurrentNetwork;
+        if (network.Ssid is not { Length: > 0 } ssid) return;
+
+        if (!_trustedSsids.Contains(ssid, StringComparer.Ordinal)) _trustedSsids.Add(ssid);
+
+        // A BSSID is precise location data, so it is only ever recorded when the
+        // user has asked for access-point matching.
+        if (RequireBssidBox.IsChecked == true
+            && network.Bssid is { Length: > 0 } bssid
+            && !_trustedBssids.Contains(bssid, StringComparer.OrdinalIgnoreCase))
+        {
+            _trustedBssids.Add(bssid);
+        }
+
+        RefreshTrustedNetworkList();
+    }
+
+    /// <summary>Turning access-point matching off also discards what it recorded.</summary>
+    private void OnRequireBssidChanged(object sender, RoutedEventArgs e)
+    {
+        if (_suppressBssidToggle) return;
+
+        if (RequireBssidBox.IsChecked == true)
+        {
+            OnTrustCurrentNetwork(sender, e);
             return;
         }
 
+        _trustedBssids.Clear();
+        RefreshTrustedNetworkList();
+    }
+
+    private void OnRemoveTrustedNetwork(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: string ssid }) return;
+        _trustedSsids.RemoveAll(s => string.Equals(s, ssid, StringComparison.Ordinal));
+        // Access-point addresses are not tied to a single network name, so the only
+        // safe moment to drop them is when no trusted network is left.
+        if (_trustedSsids.Count == 0) _trustedBssids.Clear();
+        RefreshTrustedNetworkList();
+    }
+
+    private ConnectionSettingsDraft BuildDraft() => new()
+    {
+        InternalUrl = InternalUrlBox.Text?.Trim(),
+        ExternalUrl = ExternalUrlBox.Text?.Trim(),
+        Mode = (ConnectionMode)Math.Max(0, ConnectionModeBox.SelectedIndex),
+        AcknowledgeUnreachable = AcknowledgeUnreachableBox.IsChecked == true,
+        TrustedNetworks = new TrustedNetworkSettings
+        {
+            Ssids = [.. _trustedSsids],
+            Bssids = [.. _trustedBssids],
+            RequireBssidMatch = RequireBssidBox.IsChecked == true,
+            TrustWiredNetworks = TrustWiredBox.IsChecked == true,
+            ProbeInternalOnUnknownNetworks = ProbeUnknownBox.IsChecked == true
+        }
+    };
+
+    private async void OnTestRoutes(object sender, RoutedEventArgs e)
+    {
+        SetConnectionBusy(true);
         try
         {
-            var replace = new ContentDialog
-            {
-                XamlRoot = Content.XamlRoot,
-                Title = "Sign in to a different server?",
-                Content = "The saved credentials are not valid at this URL. Replacing the "
-                          + "server revokes the current session and creates a new Mobile App "
-                          + "device after browser sign-in.",
-                PrimaryButtonText = "Replace and sign in",
-                CloseButtonText = "Keep current server",
-                DefaultButton = ContentDialogButton.Close
-            };
-
-            if (await replace.ShowAsync() == ContentDialogResult.Primary)
-            {
-                await _controller.RemoveServerAsync();
-                try
-                {
-                    await _controller.SignInAsync(urlBox.Text);
-                    _connected = true;
-                    DisconnectButton.Content = "Disconnect";
-                    UpdateNowButton.IsEnabled = true;
-                    _statusTimer.Start();
-                    ShowPanel(true);
-                    RefreshStatusFields();
-                }
-                catch (Exception ex)
-                {
-                    _connected = false;
-                    ShowView(View.Connect);
-                    ShowConnectError(ex.Message);
-                }
-            }
+            ShowValidationReport(await _controller.TestConnectionSettingsAsync(BuildDraft()));
         }
         catch (Exception ex)
         {
-            ServerChangeError.Text = "Server change failed: " + ex.Message;
-            ServerChangeError.Visibility = Visibility.Visible;
+            ShowConnectionResult(ex.Message, false);
+        }
+        finally
+        {
+            SetConnectionBusy(false);
+        }
+    }
+
+    private async void OnSaveRoutes(object sender, RoutedEventArgs e)
+    {
+        SetConnectionBusy(true);
+        try
+        {
+            var report = await _controller.SaveConnectionSettingsAsync(BuildDraft());
+            ShowValidationReport(report);
+            if (report.CanSave)
+            {
+                MigrationBanner.Visibility = Visibility.Collapsed;
+                AcknowledgeUnreachableBox.Visibility = Visibility.Collapsed;
+                RefreshStatusFields();
+                return;
+            }
+
+            if (report.RequiresSignIn) await OfferReplaceServerAsync();
+        }
+        catch (Exception ex)
+        {
+            ShowConnectionResult(ex.Message, false);
+        }
+        finally
+        {
+            SetConnectionBusy(false);
+        }
+    }
+
+    /// <summary>
+    /// The addresses reach a different instance, so keeping the session is not an
+    /// option. Replacing is destructive, so it is always an explicit choice.
+    /// </summary>
+    private async Task OfferReplaceServerAsync()
+    {
+        var url = ExternalUrlBox.Text?.Trim() is { Length: > 0 } external
+            ? external
+            : InternalUrlBox.Text?.Trim();
+        if (string.IsNullOrWhiteSpace(url)) return;
+
+        var replace = new ContentDialog
+        {
+            XamlRoot = Content.XamlRoot,
+            Title = "Sign in to a different server?",
+            Content = "The saved credentials are not valid at this address. Replacing the "
+                      + "server revokes the current session and creates a new Mobile App "
+                      + "device after browser sign-in.",
+            PrimaryButtonText = "Replace and sign in",
+            CloseButtonText = "Keep current server",
+            DefaultButton = ContentDialogButton.Close
+        };
+
+        if (await replace.ShowAsync() != ContentDialogResult.Primary) return;
+
+        await _controller.RemoveServerAsync();
+        try
+        {
+            await _controller.SignInAsync(url);
+            _connected = true;
+            DisconnectButton.Content = "Disconnect";
+            UpdateNowButton.IsEnabled = true;
+            _statusTimer.Start();
+            ShowPanel(true);
+            RefreshStatusFields();
+        }
+        catch (Exception ex)
+        {
+            _connected = false;
+            ShowView(View.Connect);
+            ShowConnectError(ex.Message);
+        }
+    }
+
+    private void ShowValidationReport(RouteValidationReport report)
+    {
+        var lines = new List<string> { report.Summary };
+        foreach (var entry in report.Entries)
+        {
+            var label = entry.Route == RouteKind.Internal ? "Internal" : "External";
+            lines.Add($"{label}: {entry.Describe()}");
+        }
+
+        AcknowledgeUnreachableBox.Visibility = report.RequiresAcknowledgement
+            ? Visibility.Visible
+            : AcknowledgeUnreachableBox.Visibility;
+
+        ShowConnectionResult(string.Join(Environment.NewLine, lines), report.CanSave);
+    }
+
+    private void ShowConnectionResult(string message, bool positive)
+    {
+        ConnectionResultText.Text = message;
+        ConnectionResultText.Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources[
+            positive ? "SystemFillColorSuccessBrush" : "SystemFillColorCautionBrush"];
+        ConnectionResultText.Visibility = Visibility.Visible;
+    }
+
+    private void SetConnectionBusy(bool busy)
+    {
+        ConnectionProgress.IsActive = busy;
+        TestRoutesButton.IsEnabled = !busy;
+        SaveRoutesButton.IsEnabled = !busy;
+    }
+
+    private async void OnSuggestUrls(object sender, RoutedEventArgs e)
+    {
+        var (internalUrl, externalUrl) = await _controller.SuggestedUrlsAsync();
+        var found = new List<string>();
+
+        if (!string.IsNullOrWhiteSpace(internalUrl) && string.IsNullOrWhiteSpace(InternalUrlBox.Text))
+        {
+            InternalUrlBox.Text = internalUrl;
+            found.Add("internal");
+        }
+
+        if (!string.IsNullOrWhiteSpace(externalUrl) && string.IsNullOrWhiteSpace(ExternalUrlBox.Text))
+        {
+            ExternalUrlBox.Text = externalUrl;
+            found.Add("external");
+        }
+
+        SuggestionText.Text = found.Count == 0
+            ? "Home Assistant did not offer an address to fill in."
+            : $"Filled in the {string.Join(" and ", found)} address; check it before saving.";
+    }
+
+    private async void OnAssignInternal(object sender, RoutedEventArgs e) =>
+        await AssignMigratedRouteAsync(RouteKind.Internal);
+
+    private async void OnAssignExternal(object sender, RoutedEventArgs e) =>
+        await AssignMigratedRouteAsync(RouteKind.External);
+
+    private async Task AssignMigratedRouteAsync(RouteKind route)
+    {
+        try
+        {
+            await _controller.AssignMigratedRouteAsync(route);
+            LoadConnectionSettings();
+            RefreshStatusFields();
+        }
+        catch (Exception ex)
+        {
+            ShowConnectionResult(ex.Message, false);
         }
     }
 
@@ -395,6 +598,7 @@ public sealed partial class MainWindow : Window
             : "No battery (desktop)";
 
         ServerText.Text = _controller.BaseUrl ?? "—";
+        RouteText.Text = _controller.RouteSummary;
 
         var last = _controller.LastSyncedAt;
         LastUpdateText.Text = last is null
@@ -436,13 +640,14 @@ public sealed partial class MainWindow : Window
         ShowView(connected ? View.Status : View.Connect);
     }
 
-    private enum View { Connect, Status, Settings }
+    private enum View { Connect, Status, Settings, Connection }
 
     private void ShowView(View view)
     {
         ConnectPanel.Visibility = view == View.Connect ? Visibility.Visible : Visibility.Collapsed;
         StatusPanel.Visibility = view == View.Status ? Visibility.Visible : Visibility.Collapsed;
         SettingsPanel.Visibility = view == View.Settings ? Visibility.Visible : Visibility.Collapsed;
+        ConnectionPanel.Visibility = view == View.Connection ? Visibility.Visible : Visibility.Collapsed;
 
         if (view == View.Connect)
         {

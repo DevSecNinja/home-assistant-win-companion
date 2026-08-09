@@ -141,6 +141,53 @@ public class SessionStoreTests : IDisposable
         Assert.False(document.RootElement.TryGetProperty("CloudhookUrl", out _));
     }
 
+    [Fact]
+    public void An_install_from_the_single_url_era_is_flagged_for_classification_on_load()
+    {
+        File.WriteAllText(_path, """
+            { "BaseUrl": "https://ha.example.com/", "DeviceId": "dev-1" }
+            """);
+
+        var (store, _, _) = Create();
+        var config = store.Load();
+
+        Assert.NotNull(config);
+        Assert.True(config!.RouteAssignmentPending);
+        // The address keeps working, so the upgrade does not interrupt anything.
+        Assert.Equal("https://ha.example.com/", config.BaseUrl);
+        Assert.Null(config.InternalUrl);
+        Assert.Null(config.ExternalUrl);
+        Assert.Equal(ConnectionMode.Automatic, config.ConnectionMode);
+
+        // The flag is persisted, so the prompt survives a restart.
+        Assert.Contains("RouteAssignmentPending", File.ReadAllText(_path));
+    }
+
+    [Fact]
+    public void An_install_that_already_has_routes_is_loaded_unchanged()
+    {
+        var (store, _, _) = Create();
+        var config = new ServerConfig
+        {
+            BaseUrl = "http://ha.local:8123/",
+            DeviceId = "dev-1",
+            WebhookId = "wh",
+            InternalUrl = "http://ha.local:8123/",
+            ExternalUrl = "https://ha.example.com/",
+            ConnectionMode = ConnectionMode.PreferInternal,
+            InstanceDeviceId = "hass-dev-9"
+        };
+        config.TrustedNetworks.Ssids.Add("HomeNet");
+        store.Save(config);
+
+        var reloaded = store.Load()!;
+
+        Assert.False(reloaded.RouteAssignmentPending);
+        Assert.Equal(ConnectionMode.PreferInternal, reloaded.ConnectionMode);
+        Assert.Equal("hass-dev-9", reloaded.InstanceDeviceId);
+        Assert.Equal(["HomeNet"], reloaded.TrustedNetworks.Ssids);
+    }
+
     public void Dispose()
     {
         if (File.Exists(_path)) File.Delete(_path);

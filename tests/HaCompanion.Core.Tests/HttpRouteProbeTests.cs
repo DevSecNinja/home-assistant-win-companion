@@ -10,7 +10,7 @@ public class HttpRouteProbeTests
 {
     private const string Manifest = """{"name":"Home Assistant","short_name":"Assistant"}""";
 
-    private sealed class RecordingHandler : HttpMessageHandler
+    private class RecordingHandler : HttpMessageHandler
     {
         private readonly Func<HttpRequestMessage, HttpResponseMessage> _responder;
         public readonly List<HttpRequestMessage> Requests = new();
@@ -32,6 +32,9 @@ public class HttpRouteProbeTests
 
     private static HttpResponseMessage Json(string body, HttpStatusCode status = HttpStatusCode.OK) =>
         new(status) { Content = new StringContent(body, Encoding.UTF8, "application/json") };
+
+    /// <summary>Fails the transport itself, the way a non-HTTP listener does.</summary>
+    private sealed class ThrowingHandler(Exception failure) : RecordingHandler(_ => throw failure);
 
     private static HttpRouteProbe Probe(RecordingHandler handler, string? refreshToken = "refresh-me") =>
         new(new HttpClient(handler), () => refreshToken, "https://example.invalid/app");
@@ -216,6 +219,37 @@ public class HttpRouteProbeTests
 
         Assert.Equal(RouteProbeStatus.NotHomeAssistant, result.Status);
         Assert.Single(handler.Requests);
+    }
+
+    /// <summary>
+    /// Carries forward the protocol hardening from the old single-URL change
+    /// path: an endpoint that accepts a socket but does not speak HTTP must fail
+    /// as a plain, non-usable address instead of throwing a transport error.
+    /// </summary>
+    [Fact]
+    public async Task An_endpoint_that_does_not_speak_http_is_not_usable()
+    {
+        var handler = new ThrowingHandler(new IOException("The response ended prematurely."));
+
+        var result = await Probe(handler).ProbeAsync(RouteKind.External, "https://ha.example.com", "wh-1");
+
+        Assert.Equal(RouteProbeStatus.NotHomeAssistant, result.Status);
+        Assert.False(result.Ok);
+        Assert.False(result.IsTransient);
+        Assert.Contains("HTTP", result.Message);
+        Assert.DoesNotContain("prematurely", result.Message);
+    }
+
+    [Fact]
+    public async Task An_unreachable_endpoint_stays_transient()
+    {
+        var handler = new ThrowingHandler(new HttpRequestException("No such host is known."));
+
+        var result = await Probe(handler).ProbeAsync(RouteKind.External, "https://ha.example.com", "wh-1");
+
+        Assert.Equal(RouteProbeStatus.Unreachable, result.Status);
+        Assert.True(result.IsTransient);
+        Assert.DoesNotContain("No such host", result.Message);
     }
 
     [Theory]

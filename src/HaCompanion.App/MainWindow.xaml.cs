@@ -1,6 +1,7 @@
 using HaCompanion.Core.App;
 using HaCompanion.Core.Models;
 using HaCompanion.Core.Sensors;
+using HaCompanion_App.Services;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
@@ -19,6 +20,8 @@ public sealed partial class MainWindow : Window
     private readonly AppController _controller;
     private readonly DispatcherQueue _dispatcher;
     private readonly DispatcherQueueTimer _statusTimer;
+    private readonly WindowsStartupRegistration _startup = new();
+    private readonly bool _startHidden;
     private bool _exiting;
     private bool _connected;
     private int _sensorListBuildVersion;
@@ -26,10 +29,13 @@ public sealed partial class MainWindow : Window
     private List<string> _trustedSsids = [];
     private List<string> _trustedBssids = [];
     private bool _suppressBssidToggle;
+    private bool _loadingSensorSettings;
+    private bool _loadingStartupSetting;
 
-    public MainWindow()
+    public MainWindow(bool startHidden = false)
     {
         InitializeComponent();
+        _startHidden = startHidden;
 
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(AppTitleBar);
@@ -51,10 +57,13 @@ public sealed partial class MainWindow : Window
     private async void OnFirstActivated(object sender, WindowActivatedEventArgs args)
     {
         Activated -= OnFirstActivated;
+        if (_startHidden) AppWindow.Hide();
         try
         {
             var resumed = await _controller.TryResumeAsync();
             ShowPanel(resumed);
+            if (!resumed && _startHidden) Show();
+            RefreshStartupSetting();
             if (resumed)
             {
                 RefreshBattery();
@@ -64,6 +73,7 @@ public sealed partial class MainWindow : Window
         catch
         {
             ShowPanel(false);
+            if (_startHidden) Show();
         }
     }
 
@@ -88,7 +98,10 @@ public sealed partial class MainWindow : Window
             };
 
             if (state == ConnectionState.AuthError)
+            {
                 ShowPanel(false);
+                Show();
+            }
 
             UpdateHealth();
         });
@@ -517,8 +530,60 @@ public sealed partial class MainWindow : Window
 
     private void Show()
     {
+        RefreshStartupSetting();
         AppWindow.Show();
         AppWindow.MoveInZOrderAtTop();
+    }
+
+    private void RefreshStartupSetting()
+    {
+        _loadingStartupSetting = true;
+        try
+        {
+            var state = _startup.GetState();
+            var repaired = false;
+            if (state == StartupRegistrationState.NeedsRepair)
+            {
+                _startup.SetEnabled(true);
+                state = StartupRegistrationState.Enabled;
+                repaired = true;
+            }
+
+            StartWithWindowsToggle.IsOn = state == StartupRegistrationState.Enabled;
+            StartupStatusText.Text = state switch
+            {
+                StartupRegistrationState.Enabled when repaired =>
+                    "Enabled for this Windows user. The startup path was repaired.",
+                StartupRegistrationState.Enabled =>
+                    "Enabled for this Windows user.",
+                _ => "Disabled for this Windows user."
+            };
+        }
+        catch (Exception ex)
+        {
+            StartWithWindowsToggle.IsOn = false;
+            StartupStatusText.Text = "Could not read Windows startup status: " + ex.Message;
+        }
+        finally
+        {
+            _loadingStartupSetting = false;
+        }
+    }
+
+    private void OnStartWithWindowsToggled(object sender, RoutedEventArgs e)
+    {
+        if (_loadingStartupSetting) return;
+
+        try
+        {
+            _startup.SetEnabled(StartWithWindowsToggle.IsOn);
+        }
+        catch (Exception ex)
+        {
+            StartupStatusText.Text = "Could not update Windows startup: " + ex.Message;
+        }
+
+        RefreshStartupSetting();
     }
 
     private void RefreshBattery() => RefreshStatusFields();
@@ -617,7 +682,11 @@ public sealed partial class MainWindow : Window
         }
 
         SensorList.Children.Clear();
+        _loadingSensorSettings = true;
         IdleMinutesBox.Value = Math.Max(1, catalog.Preferences.IdleThresholdSeconds / 60);
+        FrontmostAppModeBox.SelectedIndex =
+            catalog.Preferences.FrontmostAppMode == FrontmostAppMode.FullWindowTitle ? 1 : 0;
+        _loadingSensorSettings = false;
         foreach (var definition in catalog.Definitions)
         {
             var toggle = new ToggleSwitch
@@ -765,6 +834,46 @@ public sealed partial class MainWindow : Window
 
         catalog.Preferences.IdleThresholdSeconds = (int)Math.Max(1, args.NewValue) * 60;
         await _controller.ApplySensorChangesAsync();
+    }
+
+    private async void OnFrontmostAppModeChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_loadingSensorSettings) return;
+
+        var catalog = _controller.Catalog;
+        if (catalog is null) return;
+
+        var selected = FrontmostAppModeBox.SelectedIndex == 1
+            ? FrontmostAppMode.FullWindowTitle
+            : FrontmostAppMode.ApplicationName;
+
+        if (selected == FrontmostAppMode.FullWindowTitle
+            && catalog.Preferences.FrontmostAppMode != FrontmostAppMode.FullWindowTitle)
+        {
+            var dialog = new ContentDialog
+            {
+                XamlRoot = Content.XamlRoot,
+                Title = "Share full window titles?",
+                Content = "Window titles can contain document names, messages, customer names "
+                          + "and complete website titles. This value will be sent to your Home "
+                          + "Assistant server whenever the sensor reports.",
+                PrimaryButtonText = "Use full titles",
+                CloseButtonText = "Keep application names",
+                DefaultButton = ContentDialogButton.Close
+            };
+
+            if (await dialog.ShowAsync() != ContentDialogResult.Primary)
+            {
+                _loadingSensorSettings = true;
+                FrontmostAppModeBox.SelectedIndex = 0;
+                _loadingSensorSettings = false;
+                return;
+            }
+        }
+
+        catalog.Preferences.FrontmostAppMode = selected;
+        _controller.SaveSensorPreferences();
+        await BuildSensorListAsync();
     }
 
     private void SetSignInBusy(bool busy)

@@ -36,6 +36,13 @@ public static class NetworkClassifier
         return usable.Count > 0 ? Ethernet : NotConnected;
     }
 
+    /// <summary>
+    /// Classifies from an adapter snapshot, so the connection type is derived from
+    /// exactly the same enumeration the address and MAC sensors read.
+    /// </summary>
+    public static string ClassifyAdapters(IEnumerable<NetworkAdapterSnapshot> adapters) =>
+        Classify(adapters.Where(a => a.IsUp).Select(a => a.Kind));
+
     public static string IconFor(string connectionType) => connectionType switch
     {
         WiFi => "mdi:wifi",

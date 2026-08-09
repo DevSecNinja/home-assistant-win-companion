@@ -991,6 +991,35 @@ public class LifecycleSensorSourceTests
         new HashSet<string> { LifecycleSensorSource.SystemStateId };
 
     [Fact]
+    public void The_sensor_is_off_until_someone_asks_for_it()
+    {
+        // Its limits are inherent, so it must be a deliberate choice rather than
+        // something that quietly starts reporting and then misses a shutdown.
+        var (source, _, _) = Build();
+
+        var definition = Assert.Single(source.Definitions);
+
+        Assert.Equal(LifecycleSensorSource.SystemStateId, definition.UniqueId);
+        Assert.False(definition.EnabledByDefault);
+    }
+
+    [Fact]
+    public void The_catalog_description_states_every_limit_up_front()
+    {
+        var (source, _, _) = Build();
+
+        var description = Assert.Single(source.Definitions).Description;
+
+        Assert.Contains("Best effort", description, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("may not notify", description, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("may never reach Home Assistant", description, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("hibernate", description, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("restart", description, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("recorded locally", description, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("only trigger", description, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void Reports_running_with_no_stale_transition_attached()
     {
         var (source, _, _) = Build();
@@ -1470,6 +1499,58 @@ public class MessagePumpLifetimeTests
         {
             if (Interlocked.CompareExchange(ref target, value, seen) == seen) return;
         }
+    }
+}
+
+public class LifecycleSensorAdvisoryTests
+{
+    [Fact]
+    public void Only_switching_the_lifecycle_sensor_on_needs_confirming()
+    {
+        const string id = LifecycleSensorSource.SystemStateId;
+
+        Assert.True(LifecycleSensorAdvisory.RequiresConfirmation(id, turningOn: true, currentlyEnabled: false));
+
+        // Turning it off warns about nothing, and neither does re-applying a state
+        // it already has - a rebuilt list must not nag.
+        Assert.False(LifecycleSensorAdvisory.RequiresConfirmation(id, turningOn: false, currentlyEnabled: true));
+        Assert.False(LifecycleSensorAdvisory.RequiresConfirmation(id, turningOn: true, currentlyEnabled: true));
+        Assert.False(LifecycleSensorAdvisory.RequiresConfirmation(id, turningOn: false, currentlyEnabled: false));
+    }
+
+    [Theory]
+    [InlineData("battery_state")]
+    [InlineData("active")]
+    [InlineData("SYSTEM_STATE")]
+    [InlineData("")]
+    public void No_other_sensor_is_affected(string uniqueId)
+    {
+        Assert.False(LifecycleSensorAdvisory.IsAdvisedSensor(uniqueId));
+        Assert.False(LifecycleSensorAdvisory.RequiresConfirmation(uniqueId, turningOn: true, currentlyEnabled: false));
+    }
+
+    [Fact]
+    public void The_lifecycle_sensor_carries_the_badge()
+    {
+        Assert.True(LifecycleSensorAdvisory.IsAdvisedSensor(LifecycleSensorSource.SystemStateId));
+        Assert.False(string.IsNullOrWhiteSpace(LifecycleSensorAdvisory.Badge));
+    }
+
+    [Fact]
+    public void The_warning_names_every_limit_and_offers_a_way_out()
+    {
+        Assert.Equal("Best-effort Windows lifecycle detection", LifecycleSensorAdvisory.Title);
+        Assert.Equal("Enable anyway", LifecycleSensorAdvisory.PrimaryButton);
+        Assert.Equal("Cancel", LifecycleSensorAdvisory.CloseButton);
+
+        var message = LifecycleSensorAdvisory.Message;
+
+        Assert.Contains("does not promise", message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("may never reach Home Assistant", message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("hibernate", message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("restart", message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("local journal", message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("only trigger", message, StringComparison.OrdinalIgnoreCase);
     }
 }
 

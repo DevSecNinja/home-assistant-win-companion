@@ -1,3 +1,4 @@
+using HaCompanion.Core.Lifecycle;
 using HaCompanion.Core.Models;
 using HaCompanion.Core.Sensors;
 using HaCompanion_App.Services;
@@ -508,6 +509,19 @@ public sealed partial class MainWindow : Window
                 });
             }
 
+            if (LifecycleSensorAdvisory.IsAdvisedSensor(definition.UniqueId))
+            {
+                // Says up front what the description spells out, so the caveat is
+                // visible without reading the whole entry.
+                heading.Children.Add(new TextBlock
+                {
+                    Text = LifecycleSensorAdvisory.Badge,
+                    FontSize = 11,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["SystemFillColorCautionBrush"]
+                });
+            }
+
             var text = new StackPanel { Spacing = 2 };
             text.Children.Add(heading);
             text.Children.Add(new TextBlock
@@ -548,6 +562,35 @@ public sealed partial class MainWindow : Window
 
         var catalog = _controller.Catalog;
         if (catalog is null) return;
+
+        if (LifecycleSensorAdvisory.RequiresConfirmation(uniqueId, toggle.IsOn, catalog.IsEnabled(uniqueId)))
+        {
+            var advisory = new ContentDialog
+            {
+                XamlRoot = Content.XamlRoot,
+                Title = LifecycleSensorAdvisory.Title,
+                Content = new TextBlock
+                {
+                    Text = LifecycleSensorAdvisory.Message,
+                    TextWrapping = TextWrapping.Wrap
+                },
+                PrimaryButtonText = LifecycleSensorAdvisory.PrimaryButton,
+                CloseButtonText = LifecycleSensorAdvisory.CloseButton,
+                DefaultButton = ContentDialogButton.Close
+            };
+
+            toggle.IsEnabled = false;
+            var answer = await advisory.ShowAsync();
+            toggle.IsEnabled = true;
+
+            if (answer != ContentDialogResult.Primary || !ReferenceEquals(catalog, _controller.Catalog))
+            {
+                // Nothing is saved or applied on a cancel: the toggle goes back to
+                // where it was and the sensor stays off.
+                SetToggleState(toggle, false);
+                return;
+            }
+        }
 
         if (uniqueId == WinGetUpdateSensorSource.WinGetUpdatesId
             && toggle.IsOn

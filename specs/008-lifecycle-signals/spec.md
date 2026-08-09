@@ -10,6 +10,9 @@ connection.
 
 - Report one `system_state` sensor: `running`, `sleeping`, `signing_out` or
   `shutting_down`, with the Windows reason and a critical flag as attributes.
+- Ship the sensor switched off, describe its limits in the catalog entry, mark it
+  as best effort in the list, and confirm those limits in a dialog before the first
+  time it is switched on; cancelling leaves it off and saves nothing.
 - Observe `WM_POWERBROADCAST`, `WM_QUERYENDSESSION` and `WM_ENDSESSION` on a hidden
   top-level window, plus the equivalent `SystemEvents` notifications; treat the
   overlapping duplicates as idempotent.

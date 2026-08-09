@@ -39,9 +39,14 @@ public sealed class LifecycleSensorSource : ISensorSource
             SystemStateId,
             "System State",
             "Whether this PC is running, going to sleep, signing out or shutting down. "
-            + "Delivery of the final state before the machine goes away is best effort.",
+            + "Best effort only: Windows may not notify the app before a suspend or "
+            + "shutdown, so the final update may never reach Home Assistant, and sleep "
+            + "cannot be told apart from hibernate or a shutdown from a restart. "
+            + "Missed transitions are recorded locally and reported after the next "
+            + "connection, so do not rely on this as the only trigger for a critical "
+            + "automation.",
             SensorPrivacy.Benign,
-            EnabledByDefault: true)
+            EnabledByDefault: false)
     };
 
     public IReadOnlyList<Sensor> Read(IReadOnlySet<string> enabled, SensorReadContext context)

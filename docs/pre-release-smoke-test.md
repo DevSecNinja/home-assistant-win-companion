@@ -52,6 +52,9 @@ Assistant instance.
 
 ## System lifecycle
 
+- [ ] Enable **System State** in the sensor list: the best-effort dialog appears,
+      **Cancel** leaves the toggle off and nothing is saved, and **Enable anyway**
+      turns it on. The `best effort` badge shows next to the sensor.
 - [ ] Sleep and resume; confirm `system_state` returns to `running` and that any
       undelivered `sleeping` transition appears in the `Last Unreported *`
       attributes and then stops being reported.

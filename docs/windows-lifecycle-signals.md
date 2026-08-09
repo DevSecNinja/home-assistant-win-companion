@@ -5,7 +5,7 @@ user out, or shut down - and what it does about it.
 
 ## What is reported
 
-A single `system_state` sensor (enabled by default, diagnostic category) with the
+A single `system_state` sensor (**off by default**, diagnostic category) with the
 states `running`, `sleeping`, `signing_out` and `shutting_down`, plus attributes:
 
 | Attribute | Meaning |
@@ -65,7 +65,10 @@ even when it never created a window, so a stop can neither be lost nor left wait
 
 ## Reliability limits
 
-These are properties of Windows, not defects in the companion:
+These are properties of Windows, not defects in the companion. The sensor is
+therefore **off until you switch it on**, and enabling it asks you to confirm the
+same limits first - somebody who expects a guarantee here would eventually file a
+missed shutdown as a bug.
 
 - **Sleep and hibernate are indistinguishable before the fact.** Both arrive as
   `PBT_APMSUSPEND`. Nothing in the notification says where memory is going, so both
@@ -83,6 +86,10 @@ These are properties of Windows, not defects in the companion:
 - **`ENDSESSION_CRITICAL` and forced restarts may skip the messages entirely.**
 - **Sudden power loss, battery removal, a kernel crash or `TerminateProcess` produce
   no signal at all** - by definition nothing can be reported or recorded.
+
+Because of all of the above, `system_state` is not suitable as the only trigger for
+an automation that matters. Use it to enrich one, or pair it with a timeout on the
+Home Assistant side.
 
 ## How the companion copes
 

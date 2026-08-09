@@ -77,12 +77,12 @@ one that just works with stock Home Assistant.**
   describe the adapter carrying the active route rather than a VPN or Hyper-V
   adapter.
 - **Lifecycle signals** — sleep, sign-out and shutdown are detected without polling
-  and pushed as a `system_state` sensor with a short, strictly bounded final
+  and pushed as an opt-in `system_state` sensor with a short, strictly bounded final
   attempt. Windows may terminate the app first, so anything undelivered is recorded
   locally and reported after the next successful connection. The companion never
-  blocks or delays a shutdown. See
-  [docs/windows-lifecycle-signals.md](docs/windows-lifecycle-signals.md) for the
-  known reliability limits.
+  blocks or delays a shutdown. The sensor is off by default and asks you to confirm
+  its limits before it starts, because they cannot be engineered away — see
+  [docs/windows-lifecycle-signals.md](docs/windows-lifecycle-signals.md).
 - **Health and logs** — a health verdict based on whether the app is actually
   reporting on schedule, plus a rolling local log you can open from the UI.
 - **Open Home Assistant** — one click (window or tray menu) to open your instance in

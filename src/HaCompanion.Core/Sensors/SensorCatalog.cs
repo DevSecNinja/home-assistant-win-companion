@@ -13,6 +13,7 @@ public sealed class SensorCatalog
     private readonly IReadOnlyList<ISensorSource> _sources;
     private readonly SensorPreferences _preferences;
     private readonly HashSet<ISensorSource> _running = new();
+    private readonly object _lifetime = new();
     private Action? _onChanged;
     private bool _started;
 
@@ -43,19 +44,30 @@ public sealed class SensorCatalog
     /// </summary>
     public void Start(Action onChanged)
     {
-        _onChanged = onChanged;
-        _started = true;
+        lock (_lifetime)
+        {
+            _onChanged = onChanged;
+            _started = true;
+        }
+
         SyncRunningSources();
     }
 
     public void Stop()
     {
-        _started = false;
-        foreach (var source in _running.ToList())
+        List<ISensorSource> running;
+        lock (_lifetime)
         {
-            source.Stop();
-            _running.Remove(source);
+            _started = false;
+            running = _running.ToList();
+            _running.Clear();
         }
+
+        // Cleared before stopping, so a hook that fires while it is being
+        // released finds itself unregistered and is dropped rather than pushed
+        // over a connection that is already going away.
+        foreach (var source in running)
+            source.Stop();
     }
 
     /// <summary>Changes a sensor's enablement and starts/stops its source to match.</summary>
@@ -149,24 +161,55 @@ public sealed class SensorCatalog
 
     private void SyncRunningSources()
     {
-        if (!_started) return;
+        lock (_lifetime)
+        {
+            if (!_started) return;
+        }
+
         var enabled = EnabledIds;
 
         foreach (var source in _sources)
         {
             var wanted = source.Definitions.Any(d => enabled.Contains(d.UniqueId));
-            var running = _running.Contains(source);
+            bool running;
+            lock (_lifetime) running = _running.Contains(source);
 
             if (wanted && !running)
             {
-                source.Start(() => _onChanged?.Invoke());
-                _running.Add(source);
+                lock (_lifetime) _running.Add(source);
+                try
+                {
+                    source.Start(() => OnSourceChanged(source));
+                }
+                catch
+                {
+                    lock (_lifetime) _running.Remove(source);
+                    throw;
+                }
             }
             else if (!wanted && running)
             {
+                lock (_lifetime) _running.Remove(source);
                 source.Stop();
-                _running.Remove(source);
             }
         }
+    }
+
+    /// <summary>
+    /// Forwards a source's change notification only while that source is still
+    /// running. OS hooks and poll loops can deliver one last callback after a
+    /// stop; acting on it would push a reading for a sensor the user just
+    /// switched off, or use a connection that is being torn down.
+    /// </summary>
+    private void OnSourceChanged(ISensorSource source)
+    {
+        Action? onChanged;
+        lock (_lifetime)
+        {
+            if (!_started || !_running.Contains(source)) return;
+            onChanged = _onChanged;
+        }
+
+        onChanged?.Invoke();
     }
 }

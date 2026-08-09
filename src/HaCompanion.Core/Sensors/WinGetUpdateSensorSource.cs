@@ -9,13 +9,15 @@ public sealed class WinGetUpdateSensorSource : ISensorSource, IRefreshableSensor
 
     private readonly IWinGetUpdateProvider _provider;
     private readonly SensorPreferences _preferences;
-    private readonly TimeSpan _refreshInterval;
-    private readonly SemaphoreSlim _refreshLock = new(1, 1);
+    private readonly SensorPollLoop _loop;
     private readonly object _gate = new();
-    private readonly object _lifetimeGate = new();
+
+    /// <summary>What Home Assistant has already been told; only a move here is news.</summary>
+    private readonly ChangeGate<(WinGetUpdateStatus Status, int Count)> _published =
+        new((WinGetUpdateStatus.Checking, 0));
+
     private WinGetUpdateResult _result = WinGetUpdateResult.Checking;
     private Action? _onChanged;
-    private CancellationTokenSource? _pollCancellation;
 
     public WinGetUpdateSensorSource(
         IWinGetUpdateProvider provider,
@@ -24,7 +26,7 @@ public sealed class WinGetUpdateSensorSource : ISensorSource, IRefreshableSensor
     {
         _provider = provider ?? throw new ArgumentNullException(nameof(provider));
         _preferences = preferences ?? throw new ArgumentNullException(nameof(preferences));
-        _refreshInterval = refreshInterval ?? TimeSpan.FromHours(6);
+        _loop = new SensorPollLoop(CheckAsync, refreshInterval ?? TimeSpan.FromHours(6));
     }
 
     public IReadOnlyList<SensorDefinition> Definitions { get; } =
@@ -86,93 +88,28 @@ public sealed class WinGetUpdateSensorSource : ISensorSource, IRefreshableSensor
     public void Start(Action onChanged)
     {
         _onChanged = onChanged;
-        CancellationTokenSource cancellation;
-        lock (_lifetimeGate)
-        {
-            if (_pollCancellation is not null) return;
-            cancellation = new CancellationTokenSource();
-            _pollCancellation = cancellation;
-        }
-        _ = PollAsync(cancellation);
+        _loop.Start();
     }
 
-    public void Stop()
+    public void Stop() => _loop.Stop();
+
+    public Task RefreshAsync(CancellationToken cancellationToken = default) =>
+        _loop.RunOnceAsync(cancellationToken);
+
+    private async Task CheckAsync(SensorPollReason reason, CancellationToken cancellationToken)
     {
-        CancellationTokenSource? cancellation;
-        lock (_lifetimeGate)
-        {
-            cancellation = _pollCancellation;
-            _pollCancellation = null;
-        }
-        if (cancellation is null) return;
-        cancellation.Cancel();
-    }
+        var current = await _provider
+            .CheckForUpdatesAsync(cancellationToken)
+            .ConfigureAwait(false);
 
-    public async Task RefreshAsync(CancellationToken cancellationToken = default)
-    {
-        CancellationToken? lifetimeToken;
-        lock (_lifetimeGate)
-            lifetimeToken = _pollCancellation?.Token;
+        lock (_gate) _result = current;
 
-        if (lifetimeToken is null)
+        // A manual refresh is followed by a push anyway, and a scheduled check
+        // that finds the same update count is not worth waking the sync for.
+        if (reason == SensorPollReason.Scheduled
+            && _published.TryUpdate((current.Status, current.Packages.Count)))
         {
-            await RefreshCoreAsync(notify: false, cancellationToken).ConfigureAwait(false);
-            return;
-        }
-
-        using var linked = CancellationTokenSource.CreateLinkedTokenSource(
-            cancellationToken, lifetimeToken.Value);
-        try
-        {
-            await RefreshCoreAsync(notify: false, linked.Token).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException)
-            when (lifetimeToken.Value.IsCancellationRequested
-                  && !cancellationToken.IsCancellationRequested)
-        {
-            // The sensor was disabled or its catalog stopped during the refresh.
-        }
-    }
-
-    private async Task RefreshCoreAsync(bool notify, CancellationToken cancellationToken)
-    {
-        await _refreshLock.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
-        {
-            var current = await _provider
-                .CheckForUpdatesAsync(cancellationToken)
-                .ConfigureAwait(false);
-
-            lock (_gate) _result = current;
-            if (notify) _onChanged?.Invoke();
-        }
-        finally
-        {
-            _refreshLock.Release();
-        }
-    }
-
-    private async Task PollAsync(CancellationTokenSource cancellation)
-    {
-        var cancellationToken = cancellation.Token;
-        try
-        {
-            await RefreshCoreAsync(notify: true, cancellationToken).ConfigureAwait(false);
-            using var timer = new PeriodicTimer(_refreshInterval);
-            while (await timer.WaitForNextTickAsync(cancellationToken).ConfigureAwait(false))
-                await RefreshCoreAsync(notify: true, cancellationToken).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-        }
-        finally
-        {
-            lock (_lifetimeGate)
-            {
-                if (ReferenceEquals(_pollCancellation, cancellation))
-                    _pollCancellation = null;
-            }
-            cancellation.Dispose();
+            _onChanged?.Invoke();
         }
     }
 

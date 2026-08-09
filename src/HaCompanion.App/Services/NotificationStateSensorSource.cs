@@ -4,6 +4,16 @@ using HaCompanion.Core.Sensors;
 
 namespace HaCompanion_App.Services;
 
+/// <summary>
+/// Windows shim for the Notification State sensor.
+/// </summary>
+/// <remarks>
+/// <c>SHQueryUserNotificationState</c> is the only supported source for this, and
+/// it deliberately does not cover the Windows 11 Focus / Do Not Disturb toggle -
+/// see <see cref="NotificationStateFormatter"/>. The state is therefore described
+/// as presentation/full-screen/busy context rather than as a do-not-disturb
+/// signal, and no separate focus entity is published.
+/// </remarks>
 public sealed class NotificationStateSensorSource : ISensorSource
 {
     public const string NotificationStateId = "user_notification_state";
@@ -25,7 +35,9 @@ public sealed class NotificationStateSensorSource : ISensorSource
         new(
             NotificationStateId,
             "Notification State",
-            "Whether Windows considers this PC busy, presenting, full-screen or ready for notifications.",
+            "Whether Windows considers this PC busy, presenting, full-screen or ready "
+            + "for notifications. Windows 11's Focus / Do Not Disturb switch is not "
+            + "included: Windows exposes no supported way to read it.",
             SensorPrivacy.Benign,
             EnabledByDefault: true)
     ];
@@ -46,7 +58,8 @@ public sealed class NotificationStateSensorSource : ISensorSource
                 Name = "Notification State",
                 State = NotificationStateFormatter.Describe(state),
                 EntityCategory = "diagnostic",
-                Icon = IconFor(state)
+                Icon = IconFor(state),
+                Attributes = NotificationStateFormatter.BuildAttributes(state)
             }
         ];
     }

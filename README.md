@@ -66,11 +66,11 @@ one that just works with stock Home Assistant.**
   native toasts, delivered over the `mobile_app` local push channel (Windows has no
   APNS/FCM equivalent).
 - **Opt-in sensor catalog** — battery, active/idle, screen locked, connection type,
-  IPv4/IPv6 address, LAN MAC address, Wi-Fi SSID/BSSID, OS version, last boot,
-  notification/presentation state, microphone
-  and camera use, audio output, headset presence, WinGet update count, system
-  lifecycle state, and an
-  optional frontmost-app/last-update value. Each sensor can be switched on or off
+  IPv4/IPv6 address, LAN MAC address, Wi-Fi SSID/BSSID, OS version, PC model, last
+  boot, display count and resolution, dark mode, locale and time zone, system-drive
+  usage, notification/presentation state, microphone and camera use, audio output,
+  headset presence, WinGet update count, system lifecycle state, and an optional
+  frontmost-app/last-update value. Each sensor can be switched on or off
   individually, shows a local preview, and privacy-sensitive ones are off by
   default. Network identifiers are only read once you enable their own sensor —
   the preview shows nothing beforehand — and the IPv4, IPv6 and MAC readings all
@@ -179,6 +179,28 @@ A few behaviours are easy to get wrong and are worth calling out:
   are retired the same way. Removing one entirely requires deleting the whole
   Mobile App device, which invalidates the registration and forces this app to
   register again.
+
+## Notes on the Windows APIs used
+
+- **Windows 11 Do Not Disturb cannot be read.** `SHQueryUserNotificationState`
+  covers presentation mode, exclusive full-screen apps, the lock screen and the
+  legacy quiet-time window — not the Focus / Do Not Disturb switch, which stays
+  invisible to it. Windows exposes no supported alternative, so the companion ships
+  no focus entity; the **Notification State** sensor says so in its description and
+  in its `includes_do_not_disturb` attribute.
+- **Only the system drive is reported.** Disk sensors read the drive Windows booted
+  from through the standard volume APIs, every 10 minutes, and publish a new value
+  only once it has moved by 0.5 percentage points or 1 GB. Removable, network and
+  BitLocker-locked volumes are never enumerated.
+- **No hardware identifiers are collected.** The **Model** sensor reads only the
+  SMBIOS manufacturer and product name; serial numbers, service tags, SKUs, UUIDs
+  and BIOS identifiers are not read. The display sensors report modes only — never
+  an EDID serial, monitor name or device path — and **Display Resolution** is
+  off by default because it adds fingerprintable detail.
+- **`locale` is the regional format**, e.g. `nl-NL`, because that is what decides
+  date and number presentation. The display language and country are attributes.
+  Windows time zones map to their CLDR-canonical IANA name, so a PC in Amsterdam
+  reports `Europe/Berlin` — same offset and DST rules.
 
 See [`specs/001-ha-companion-mvp/contracts/`](specs/001-ha-companion-mvp/contracts/)
 for the full API contracts.

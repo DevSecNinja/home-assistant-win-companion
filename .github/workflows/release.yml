@@ -42,19 +42,27 @@ jobs:
         id: inno
         shell: pwsh
         env:
-          INNO_URL: https://github.com/jrsoftware/issrc/releases/download/is-7_0_2/innosetup-7.0.2-x64.exe
-          INNO_SHA256: 5ad54ca3def786f8f4212552e54cc6d8d61329e2d24a1cfee0571d42c2684ff1
+          # Renovate keeps INNO_VERSION on the latest jrsoftware/issrc release
+          # (upstream tags use underscores, for example is-7_0_2). See the
+          # "Inno Setup compiler" custom manager in renovate.json5.
+          INNO_VERSION: "7_0_2"
+          INNO_SIGNER: Pyrsys B.V.
         run: |
-          $installer = Join-Path $env:RUNNER_TEMP 'innosetup-7.0.2-x64.exe'
+          $version = $env:INNO_VERSION -replace '_', '.'
+          $asset = "innosetup-$version-x64.exe"
+          $url = "https://github.com/jrsoftware/issrc/releases/download/is-$env:INNO_VERSION/$asset"
+          $installer = Join-Path $env:RUNNER_TEMP $asset
           $directory = Join-Path $env:RUNNER_TEMP 'inno-setup'
-          Invoke-WebRequest $env:INNO_URL -OutFile $installer
-          $actual = (Get-FileHash $installer -Algorithm SHA256).Hash.ToLowerInvariant()
-          if ($actual -ne $env:INNO_SHA256) {
-            throw 'Inno Setup download failed SHA-256 verification.'
-          }
+          Invoke-WebRequest $url -OutFile $installer
+          $hash = (Get-FileHash $installer -Algorithm SHA256).Hash.ToLowerInvariant()
+          Write-Host "Downloaded $asset (SHA-256 $hash)."
           $signature = Get-AuthenticodeSignature $installer
           if ($signature.Status -ne 'Valid') {
             throw "Inno Setup Authenticode signature is $($signature.Status)."
+          }
+          $subject = $signature.SignerCertificate.Subject
+          if ($subject -notlike "*CN=$env:INNO_SIGNER*") {
+            throw "Inno Setup was signed by an unexpected publisher: $subject."
           }
           $process = Start-Process $installer -Wait -PassThru -ArgumentList @(
             '/VERYSILENT',

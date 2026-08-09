@@ -74,18 +74,23 @@ updates for every dependency in this repository:
 - Direct and reusable GitHub Actions, including the SHA-pinned digests and the
   `# renovate: datasource=... depName=...`-annotated version inputs (for example
   `mise-version` and `syft-version`) in `.github/workflows/*.yml`.
+- The Inno Setup compiler pinned as `INNO_VERSION` in
+  `.github/workflows/release.yml`, through the custom manager in
+  `renovate.json5`. Upstream tags are underscore-separated (`is-7_0_2`), so the
+  pin stores `7_0_2` and the workflow derives both the release tag and the
+  dotted asset name (`innosetup-7.0.2-x64.exe`) from it.
 
-Two categories are intentionally exempt or restricted:
+Three dependencies are tracked but need manual review, so `renovate.json5`
+disables automerge for them:
 
 - `H.NotifyIcon.WinUI` and `Microsoft.WindowsAppSDK` in
-  `src/WindowsCompanion.App/WindowsCompanion.App.csproj` are still tracked by
-  Renovate, but `renovate.json5` disables automerge for them: both changes affect
+  `src/WindowsCompanion.App/WindowsCompanion.App.csproj`: both changes affect
   runtime prerequisites (the installed Windows App Runtime, or the minimum .NET
   version) and need manual verification before merging.
-- The Inno Setup installer download in `.github/workflows/release.yml` (`INNO_URL`
-  / `INNO_SHA256`) is **not** managed by Renovate. The workflow verifies the
-  downloaded installer's SHA-256 hash and Authenticode signature before running
-  it, and Renovate cannot compute or verify that hash for a new release. Bumping
-  this pin requires manually downloading the new installer, confirming its
-  Authenticode signature, recomputing the SHA-256 checksum, and updating both
-  values together.
+- `jrsoftware/issrc` (Inno Setup): the installer builds the shipped setup
+  packages, so a compiler bump should be reviewed and, ideally, smoke-tested.
+  The download is not pinned by SHA-256 because Renovate cannot compute a
+  checksum for a new release. Instead the workflow requires a valid Authenticode
+  signature from the pinned publisher (`INNO_SIGNER`) and logs the SHA-256 of
+  the downloaded installer. If upstream ever signs under a different name the
+  release job fails; verify the new publisher before updating `INNO_SIGNER`.

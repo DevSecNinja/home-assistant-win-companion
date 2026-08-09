@@ -25,10 +25,9 @@ public sealed class DisplaySensorSource : ISensorSource
     public const string DisplayCountId = "displays_count";
     public const string DisplayResolutionId = "display_resolution";
 
-    private readonly object _gate = new();
+    private readonly ChangeGate<string> _summary = new(string.Empty);
     private Action? _onChanged;
     private bool _observing;
-    private string _lastSummary = string.Empty;
 
     public IReadOnlyList<SensorDefinition> Definitions { get; } =
     [
@@ -54,7 +53,7 @@ public sealed class DisplaySensorSource : ISensorSource
 
         var displays = Enumerate();
         var summary = DisplaySummary.Describe(displays);
-        lock (_gate) _lastSummary = summary;
+        _summary.Seed(summary);
 
         var count = DisplaySummary.Count(displays);
         var readings = new List<Sensor>();
@@ -95,7 +94,7 @@ public sealed class DisplaySensorSource : ISensorSource
         _onChanged = onChanged;
         if (_observing) return;
 
-        lock (_gate) _lastSummary = DisplaySummary.Describe(Enumerate());
+        _summary.Seed(DisplaySummary.Describe(Enumerate()));
         SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;
         _observing = true;
     }
@@ -114,16 +113,8 @@ public sealed class DisplaySensorSource : ISensorSource
     /// </summary>
     private void OnDisplaySettingsChanged(object? sender, EventArgs e)
     {
-        var summary = DisplaySummary.Describe(Enumerate());
-        bool changed;
-
-        lock (_gate)
-        {
-            changed = !string.Equals(summary, _lastSummary, StringComparison.Ordinal);
-            _lastSummary = summary;
-        }
-
-        if (changed) _onChanged?.Invoke();
+        if (_summary.TryUpdate(DisplaySummary.Describe(Enumerate())))
+            _onChanged?.Invoke();
     }
 
     /// <summary>

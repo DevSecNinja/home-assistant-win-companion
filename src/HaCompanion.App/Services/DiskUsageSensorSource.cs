@@ -28,18 +28,16 @@ public sealed class DiskUsageSensorSource : ISensorSource, IRefreshableSensorSou
     private static readonly TimeSpan PollInterval = TimeSpan.FromMinutes(10);
 
     private readonly Func<DiskUsage> _read;
-    private readonly TimeSpan _pollInterval;
-    private readonly SemaphoreSlim _refreshLock = new(1, 1);
-    private readonly object _gate = new();
-    private readonly object _lifetimeGate = new();
-    private DiskUsage _usage = DiskUsage.Unavailable;
+    private readonly SensorPollLoop _loop;
+    private readonly ChangeGate<DiskUsage> _usage =
+        new(DiskUsage.Unavailable, DiskUsageFormatter.HasMeaningfullyChanged);
+
     private Action? _onChanged;
-    private CancellationTokenSource? _pollCancellation;
 
     public DiskUsageSensorSource(Func<DiskUsage>? read = null, TimeSpan? pollInterval = null)
     {
         _read = read ?? ReadSystemDrive;
-        _pollInterval = pollInterval ?? PollInterval;
+        _loop = new SensorPollLoop(CaptureAsync, pollInterval ?? PollInterval);
     }
 
     public IReadOnlyList<SensorDefinition> Definitions { get; } =
@@ -66,12 +64,8 @@ public sealed class DiskUsageSensorSource : ISensorSource, IRefreshableSensorSou
             EnabledByDefault: false)
     ];
 
-    public IReadOnlyList<Sensor> Read(IReadOnlySet<string> enabled, SensorReadContext context)
-    {
-        DiskUsage usage;
-        lock (_gate) usage = _usage;
-        return Build(usage, enabled);
-    }
+    public IReadOnlyList<Sensor> Read(IReadOnlySet<string> enabled, SensorReadContext context) =>
+        Build(_usage.Current, enabled);
 
     public async ValueTask<IReadOnlyList<Sensor>> PreviewAsync(
         IReadOnlySet<string> requested,
@@ -85,81 +79,20 @@ public sealed class DiskUsageSensorSource : ISensorSource, IRefreshableSensorSou
     public void Start(Action onChanged)
     {
         _onChanged = onChanged;
-        CancellationTokenSource cancellation;
-
-        lock (_lifetimeGate)
-        {
-            if (_pollCancellation is not null) return;
-            cancellation = new CancellationTokenSource();
-            _pollCancellation = cancellation;
-        }
-
-        _ = PollAsync(cancellation);
+        _loop.Start();
     }
 
-    public void Stop()
+    public void Stop() => _loop.Stop();
+
+    public Task RefreshAsync(CancellationToken cancellationToken = default) =>
+        _loop.RunOnceAsync(cancellationToken);
+
+    private async Task CaptureAsync(SensorPollReason reason, CancellationToken cancellationToken)
     {
-        CancellationTokenSource? cancellation;
-        lock (_lifetimeGate)
-        {
-            cancellation = _pollCancellation;
-            _pollCancellation = null;
-        }
+        var current = await Task.Run(_read, cancellationToken).ConfigureAwait(false);
+        var changed = _usage.TryUpdate(current);
 
-        cancellation?.Cancel();
-    }
-
-    public async Task RefreshAsync(CancellationToken cancellationToken = default) =>
-        await CaptureAsync(notify: false, cancellationToken).ConfigureAwait(false);
-
-    private async Task PollAsync(CancellationTokenSource cancellation)
-    {
-        var cancellationToken = cancellation.Token;
-        try
-        {
-            await CaptureAsync(notify: true, cancellationToken).ConfigureAwait(false);
-
-            using var timer = new PeriodicTimer(_pollInterval);
-            while (await timer.WaitForNextTickAsync(cancellationToken).ConfigureAwait(false))
-                await CaptureAsync(notify: true, cancellationToken).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-        }
-        finally
-        {
-            lock (_lifetimeGate)
-            {
-                if (ReferenceEquals(_pollCancellation, cancellation))
-                    _pollCancellation = null;
-            }
-            cancellation.Dispose();
-        }
-    }
-
-    private async Task CaptureAsync(bool notify, CancellationToken cancellationToken)
-    {
-        await _refreshLock.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
-        {
-            var current = await Task.Run(_read, cancellationToken).ConfigureAwait(false);
-            var changed = false;
-
-            lock (_gate)
-            {
-                if (DiskUsageFormatter.HasMeaningfullyChanged(_usage, current))
-                {
-                    _usage = current;
-                    changed = true;
-                }
-            }
-
-            if (notify && changed) _onChanged?.Invoke();
-        }
-        finally
-        {
-            _refreshLock.Release();
-        }
+        if (reason == SensorPollReason.Scheduled && changed) _onChanged?.Invoke();
     }
 
     private static IReadOnlyList<Sensor> Build(DiskUsage usage, IReadOnlySet<string> enabled)

@@ -23,10 +23,9 @@ public sealed class WindowsThemeSensorSource : ISensorSource
     private const string PersonalizeKey =
         @"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize";
 
-    private readonly object _gate = new();
+    private readonly ChangeGate<WindowsThemeState> _state = new(WindowsThemeState.Default);
     private Action? _onChanged;
     private bool _observing;
-    private WindowsThemeState _last = WindowsThemeState.Default;
 
     public IReadOnlyList<SensorDefinition> Definitions { get; } =
     [
@@ -44,7 +43,7 @@ public sealed class WindowsThemeSensorSource : ISensorSource
         if (!enabled.Contains(DarkModeId)) return [];
 
         var state = Query();
-        lock (_gate) _last = state;
+        _state.Seed(state);
 
         return
         [
@@ -66,7 +65,7 @@ public sealed class WindowsThemeSensorSource : ISensorSource
         _onChanged = onChanged;
         if (_observing) return;
 
-        lock (_gate) _last = Query();
+        _state.Seed(Query());
         SystemEvents.UserPreferenceChanged += OnUserPreferenceChanged;
         _observing = true;
     }
@@ -93,16 +92,7 @@ public sealed class WindowsThemeSensorSource : ISensorSource
             return;
         }
 
-        var state = Query();
-        bool changed;
-
-        lock (_gate)
-        {
-            changed = state != _last;
-            _last = state;
-        }
-
-        if (changed) _onChanged?.Invoke();
+        if (_state.TryUpdate(Query())) _onChanged?.Invoke();
     }
 
     private static WindowsThemeState Query()

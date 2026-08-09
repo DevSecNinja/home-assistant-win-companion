@@ -39,6 +39,23 @@ Golden tests deliberately compare full JSON structures, not selected fields. Thi
 protects against adding metadata to `update_sensor_states`, omitting required
 registration fields, or moving `disabled` to the wrong request type.
 
+## Lifecycle and resource-usage tests
+
+Sensor sources are judged on what they cost as much as on what they report, so
+`tests/HaCompanion.Core.Tests/SensorLifecycleTests.cs` covers behavior over time:
+repeated start/stop/restart cycles leave nothing running, a stopped or disabled
+source performs no collection and its late callbacks are dropped, refreshes never
+overlap a poll, a transient collection failure does not retire a sensor, and an
+unchanged reading produces no push.
+
+These tests use handshakes and invariants (maximum observed concurrency, balanced
+start/stop counts, stable counters after a settle) rather than timing benchmarks.
+A benchmark that asserts "under N milliseconds" fails on a loaded CI runner and
+teaches everyone to re-run the job; an invariant fails only when the behavior is
+actually wrong. Shared lifetime logic lives in Core (`SensorPollLoop`,
+`ChangeGate<T>`) precisely so the Windows-only sources inherit tested behavior
+instead of each re-implementing it untested.
+
 ## UI automation
 
 Automated WinUI sign-in and notification tests are not a merge gate. They require an

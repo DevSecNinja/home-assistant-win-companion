@@ -27,10 +27,11 @@ public sealed class LocaleSensorSource : ISensorSource
 
     private const string InternationalKey = @"Control Panel\International";
 
-    private readonly object _gate = new();
+    private readonly ChangeGate<(string Locale, string TimeZone)> _state =
+        new((LocaleFormatter.Unknown, LocaleFormatter.Unknown));
+
     private Action? _onChanged;
     private bool _observing;
-    private (string Locale, string TimeZone) _last = (LocaleFormatter.Unknown, LocaleFormatter.Unknown);
 
     public IReadOnlyList<SensorDefinition> Definitions { get; } =
     [
@@ -53,7 +54,7 @@ public sealed class LocaleSensorSource : ISensorSource
         if (!enabled.Contains(LocaleId) && !enabled.Contains(TimeZoneId)) return [];
 
         var current = Query();
-        lock (_gate) _last = current;
+        _state.Seed(current);
 
         var readings = new List<Sensor>();
 
@@ -92,7 +93,7 @@ public sealed class LocaleSensorSource : ISensorSource
         _onChanged = onChanged;
         if (_observing) return;
 
-        lock (_gate) _last = Query();
+        _state.Seed(Query());
         SystemEvents.UserPreferenceChanged += OnUserPreferenceChanged;
         SystemEvents.TimeChanged += OnTimeChanged;
         _observing = true;
@@ -125,16 +126,7 @@ public sealed class LocaleSensorSource : ISensorSource
 
     private void Publish()
     {
-        var current = Query();
-        bool changed;
-
-        lock (_gate)
-        {
-            changed = current != _last;
-            _last = current;
-        }
-
-        if (changed) _onChanged?.Invoke();
+        if (_state.TryUpdate(Query())) _onChanged?.Invoke();
     }
 
     private static (string Locale, string TimeZone) Query() => (DescribeLocale(), DescribeTimeZone());

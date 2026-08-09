@@ -38,7 +38,8 @@ public sealed class FrontmostAppSensorSource : ISensorSource
             EnabledByDefault: false,
             ResourceUsage: "Low. Watches app changes on this PC, waits 4 seconds for switching to "
                            + "settle, then sends the latest value with the next regular update "
-                           + "(about once per minute).")
+                           + "(about once per minute).",
+            AutomationIdea: "When a chosen game executable is reported, activate gaming lights.")
     ];
 
     public IReadOnlyList<Sensor> Read(

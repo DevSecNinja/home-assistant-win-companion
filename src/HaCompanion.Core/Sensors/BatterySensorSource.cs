@@ -23,13 +23,15 @@ public sealed class BatterySensorSource : ISensorSource
             "Battery Level",
             "Charge percentage of this PC's battery.",
             SensorPrivacy.Benign,
-            EnabledByDefault: true),
+            EnabledByDefault: true,
+            AutomationIdea: "When the battery drops below 20%, send a reminder to charge the PC."),
         new SensorDefinition(
             BatterySensorProvider.BatteryStateId,
             "Battery State",
             "Whether this PC is charging, discharging or plugged in.",
             SensorPrivacy.Benign,
-            EnabledByDefault: true)
+            EnabledByDefault: true,
+            AutomationIdea: "When charging starts, turn a desk indicator light green.")
     };
 
     public IReadOnlyList<Sensor> Read(IReadOnlySet<string> enabled, SensorReadContext context) =>

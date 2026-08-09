@@ -52,7 +52,8 @@ public sealed class NetworkSensorSource : ISensorSource
             SensorPrivacy.Benign,
             EnabledByDefault: false,
             ResourceUsage: "Low. Checks this PC only when Windows reports a network change. Sends "
-                           + "an extra update only if the connection details changed."),
+                           + "an extra update only if the connection details changed.",
+            AutomationIdea: "When Ethernet connects, activate the desk setup."),
         new(
             IpAddressId,
             "IP Address",

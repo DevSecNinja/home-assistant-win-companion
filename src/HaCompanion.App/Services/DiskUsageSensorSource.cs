@@ -49,7 +49,8 @@ public sealed class DiskUsageSensorSource : ISensorSource, IRefreshableSensorSou
             SensorPrivacy.Benign,
             EnabledByDefault: true,
             ResourceUsage: "Low. Checks the Windows drive every 10 minutes. Sends an extra update "
-                           + "only after a noticeable change (0.5% or 1 GB)."),
+                           + "only after a noticeable change (0.5% or 1 GB).",
+            AutomationIdea: "When disk usage rises above 90%, send a reminder to free space."),
         new(
             FreeSpaceId,
             "Disk Free Space",
@@ -58,7 +59,8 @@ public sealed class DiskUsageSensorSource : ISensorSource, IRefreshableSensorSou
             SensorPrivacy.Benign,
             EnabledByDefault: false,
             ResourceUsage: "Low. Shares the same 10-minute drive check and sends an extra update "
-                           + "only after a noticeable change."),
+                           + "only after a noticeable change.",
+            AutomationIdea: "When free space falls below 20 GB, send a storage warning."),
         new(
             UsedSpaceId,
             "Disk Used Space",
@@ -67,7 +69,8 @@ public sealed class DiskUsageSensorSource : ISensorSource, IRefreshableSensorSou
             SensorPrivacy.Benign,
             EnabledByDefault: false,
             ResourceUsage: "Low. Shares the same 10-minute drive check and sends an extra update "
-                           + "only after a noticeable change.")
+                           + "only after a noticeable change.",
+            AutomationIdea: "When used space crosses a chosen limit, start a cleanup reminder.")
     ];
 
     public IReadOnlyList<Sensor> Read(IReadOnlySet<string> enabled, SensorReadContext context) =>

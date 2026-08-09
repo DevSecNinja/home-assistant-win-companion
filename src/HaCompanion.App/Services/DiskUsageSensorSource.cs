@@ -48,8 +48,8 @@ public sealed class DiskUsageSensorSource : ISensorSource, IRefreshableSensorSou
             "How full the Windows system drive is, as a percentage.",
             SensorPrivacy.Benign,
             EnabledByDefault: true,
-            ResourceUsage: "Reads local system-drive totals every 10 minutes. Requests an immediate "
-                           + "batch only after at least 0.5 percentage points or 1 GB of movement."),
+            ResourceUsage: "Low. Checks the Windows drive every 10 minutes. Sends an extra update "
+                           + "only after a noticeable change (0.5% or 1 GB)."),
         new(
             FreeSpaceId,
             "Disk Free Space",
@@ -57,8 +57,8 @@ public sealed class DiskUsageSensorSource : ISensorSource, IRefreshableSensorSou
             + "value moves constantly and writes Home Assistant history.",
             SensorPrivacy.Benign,
             EnabledByDefault: false,
-            ResourceUsage: "Shares the single 10-minute local disk read. Requests an immediate "
-                           + "batch only after meaningful movement."),
+            ResourceUsage: "Low. Shares the same 10-minute drive check and sends an extra update "
+                           + "only after a noticeable change."),
         new(
             UsedSpaceId,
             "Disk Used Space",
@@ -66,8 +66,8 @@ public sealed class DiskUsageSensorSource : ISensorSource, IRefreshableSensorSou
             + "value moves constantly and writes Home Assistant history.",
             SensorPrivacy.Benign,
             EnabledByDefault: false,
-            ResourceUsage: "Shares the single 10-minute local disk read. Requests an immediate "
-                           + "batch only after meaningful movement.")
+            ResourceUsage: "Low. Shares the same 10-minute drive check and sends an extra update "
+                           + "only after a noticeable change.")
     ];
 
     public IReadOnlyList<Sensor> Read(IReadOnlySet<string> enabled, SensorReadContext context) =>

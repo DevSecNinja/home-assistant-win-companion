@@ -47,8 +47,8 @@ public sealed class LifecycleSensorSource : ISensorSource
             + "automation.",
             SensorPrivacy.Benign,
             EnabledByDefault: false,
-            ResourceUsage: "Event-driven with no polling. Sleep, sign-out or shutdown can request "
-                           + "one additional best-effort batch before the PC becomes unavailable.")
+            ResourceUsage: "Low. Does not check repeatedly. May try one extra update before sleep, "
+                           + "sign-out or shutdown, but delivery is not guaranteed.")
     };
 
     public IReadOnlyList<Sensor> Read(IReadOnlySet<string> enabled, SensorReadContext context)

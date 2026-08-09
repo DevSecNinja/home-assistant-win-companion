@@ -31,16 +31,16 @@ public sealed class AudioDeviceSensorSource : ISensorSource
             "The friendly name of the default Windows audio output.",
             SensorPrivacy.Sensitive,
             EnabledByDefault: false,
-            ResourceUsage: "Enumerates local audio devices every 10 seconds while enabled and "
-                           + "requests an immediate batch only when the result changes."),
+            ResourceUsage: "Low. Checks this PC's audio devices every 10 seconds. Sends an extra "
+                           + "update only when the selected output changes."),
         new(
             HeadsetConnectedId,
             "Headset Connected",
             "On while Windows exposes a headset, headphones or earbuds audio endpoint.",
             SensorPrivacy.Sensitive,
             EnabledByDefault: false,
-            ResourceUsage: "Shares one local audio-device scan every 10 seconds with Audio Output "
-                           + "and requests an immediate batch only when the result changes.")
+            ResourceUsage: "Low. Shares the same 10-second audio check. Sends an extra update only "
+                           + "when headset availability changes.")
     ];
 
     public IReadOnlyList<Sensor> Read(

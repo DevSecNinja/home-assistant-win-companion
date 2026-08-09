@@ -257,7 +257,7 @@
             <StackPanel Grid.Row="0" Padding="24,16,24,8" Spacing="4">
                 <TextBlock Text="Sensors" Style="{StaticResource SubtitleTextBlockStyle}" />
                 <TextBlock
-                    Text="Choose what this PC reports to Home Assistant. Enabled sensors are included in the normal batch about once per minute; notes below identify extra local checks or immediate updates. Anything switched off is never collected or sent."
+                    Text="Choose what this PC reports to Home Assistant. Most enabled sensors send their latest value about once per minute. The Impact note explains extra checks, updates or internet use. Anything switched off is never collected or sent."
                     TextWrapping="Wrap"
                     Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
             </StackPanel>

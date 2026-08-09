@@ -37,9 +37,9 @@ public sealed class WinGetUpdateSensorSource : ISensorSource, IRefreshableSensor
             "Number of application updates available through Windows Package Manager.",
             SensorPrivacy.Sensitive,
             EnabledByDefault: false,
-            ResourceUsage: "Runs a WinGet PowerShell query when enabled and every 6 hours. The query "
-                           + "may contact configured package sources; only a changed count requests "
-                           + "an immediate Home Assistant batch.")
+            ResourceUsage: "Moderate. Checks for app updates when enabled and every 6 hours. This "
+                           + "may use your internet connection. Sends an extra update only when the "
+                           + "number of available updates changes.")
     ];
 
     public IReadOnlyList<Sensor> Read(

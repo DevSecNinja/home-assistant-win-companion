@@ -778,7 +778,7 @@ public sealed partial class MainWindow : Window
             {
                 text.Children.Add(new TextBlock
                 {
-                    Text = $"Updates and resource use: {definition.ResourceUsage}",
+                    Text = $"Impact: {definition.ResourceUsage}",
                     TextWrapping = TextWrapping.Wrap,
                     FontSize = 12,
                     Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources[

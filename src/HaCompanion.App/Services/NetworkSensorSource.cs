@@ -51,16 +51,16 @@ public sealed class NetworkSensorSource : ISensorSource
             "Whether this PC is on Wi-Fi, Ethernet or offline.",
             SensorPrivacy.Benign,
             EnabledByDefault: false,
-            ResourceUsage: "Event-driven. Reads one local adapter snapshot after Windows reports a "
-                           + "network change and requests an immediate batch only if values changed."),
+            ResourceUsage: "Low. Checks this PC only when Windows reports a network change. Sends "
+                           + "an extra update only if the connection details changed."),
         new(
             IpAddressId,
             "IP Address",
             "This PC's local IPv4 address on your network.",
             SensorPrivacy.Sensitive,
             EnabledByDefault: false,
-            ResourceUsage: "Event-driven and shares the Connection Type adapter snapshot. No "
-                           + "internet request is sent to discover the address."),
+            ResourceUsage: "Low. Checks this PC only after a network change. It does not contact "
+                           + "an internet service to find the address."),
         new(
             Ipv6AddressId,
             "IPv6 Address",
@@ -68,8 +68,8 @@ public sealed class NetworkSensorSource : ISensorSource
             + "routable, so it can identify this PC on the internet.",
             SensorPrivacy.Sensitive,
             EnabledByDefault: false,
-            ResourceUsage: "Event-driven and shares one local adapter snapshot with the other "
-                           + "network sensors. No external IP service is contacted."),
+            ResourceUsage: "Low. Checks this PC only after a network change. It does not contact "
+                           + "an internet service to find the address."),
         new(
             MacAddressId,
             "MAC Address",
@@ -77,8 +77,8 @@ public sealed class NetworkSensorSource : ISensorSource
             + "through. A stable identifier for this machine on your network.",
             SensorPrivacy.Sensitive,
             EnabledByDefault: false,
-            ResourceUsage: "Event-driven and shares one local adapter snapshot with the other "
-                           + "network sensors. No network traffic is generated to read the MAC.")
+            ResourceUsage: "Low. Reads the address from this PC only after a network change. It "
+                           + "does not send network traffic to discover it.")
     ];
 
     public IReadOnlyList<Sensor> Read(IReadOnlySet<string> enabled, SensorReadContext context)

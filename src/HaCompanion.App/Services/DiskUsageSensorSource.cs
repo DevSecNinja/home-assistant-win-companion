@@ -47,21 +47,27 @@ public sealed class DiskUsageSensorSource : ISensorSource, IRefreshableSensorSou
             "Disk Usage",
             "How full the Windows system drive is, as a percentage.",
             SensorPrivacy.Benign,
-            EnabledByDefault: true),
+            EnabledByDefault: true,
+            ResourceUsage: "Reads local system-drive totals every 10 minutes. Requests an immediate "
+                           + "batch only after at least 0.5 percentage points or 1 GB of movement."),
         new(
             FreeSpaceId,
             "Disk Free Space",
             "Free space on the Windows system drive. Off by default because the "
             + "value moves constantly and writes Home Assistant history.",
             SensorPrivacy.Benign,
-            EnabledByDefault: false),
+            EnabledByDefault: false,
+            ResourceUsage: "Shares the single 10-minute local disk read. Requests an immediate "
+                           + "batch only after meaningful movement."),
         new(
             UsedSpaceId,
             "Disk Used Space",
             "Used space on the Windows system drive. Off by default because the "
             + "value moves constantly and writes Home Assistant history.",
             SensorPrivacy.Benign,
-            EnabledByDefault: false)
+            EnabledByDefault: false,
+            ResourceUsage: "Shares the single 10-minute local disk read. Requests an immediate "
+                           + "batch only after meaningful movement.")
     ];
 
     public IReadOnlyList<Sensor> Read(IReadOnlySet<string> enabled, SensorReadContext context) =>

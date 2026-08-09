@@ -46,7 +46,9 @@ public sealed class LifecycleSensorSource : ISensorSource
             + "connection, so do not rely on this as the only trigger for a critical "
             + "automation.",
             SensorPrivacy.Benign,
-            EnabledByDefault: false)
+            EnabledByDefault: false,
+            ResourceUsage: "Event-driven with no polling. Sleep, sign-out or shutdown can request "
+                           + "one additional best-effort batch before the PC becomes unavailable.")
     };
 
     public IReadOnlyList<Sensor> Read(IReadOnlySet<string> enabled, SensorReadContext context)

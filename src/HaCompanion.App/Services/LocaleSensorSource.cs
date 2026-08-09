@@ -40,13 +40,16 @@ public sealed class LocaleSensorSource : ISensorSource
             "Locale",
             "The Windows regional format for this user, such as nl-NL.",
             SensorPrivacy.Benign,
-            EnabledByDefault: true),
+            EnabledByDefault: true,
+            ResourceUsage: "Event-driven with no polling. Reads local regional settings only after "
+                           + "Windows reports a change."),
         new(
             TimeZoneId,
             "Time Zone",
             "The time zone this PC is set to, preferring the IANA name Home Assistant uses.",
             SensorPrivacy.Benign,
-            EnabledByDefault: true)
+            EnabledByDefault: true,
+            ResourceUsage: "Event-driven with no polling and shares the Locale settings read.")
     ];
 
     public IReadOnlyList<Sensor> Read(IReadOnlySet<string> enabled, SensorReadContext context)

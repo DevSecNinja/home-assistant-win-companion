@@ -32,7 +32,9 @@ public sealed class LastUpdateSensorSource : ISensorSource
             + "every sync. Home Assistant's built-in last_reported already tracks this without "
             + "the recorder cost.",
             SensorPrivacy.Benign,
-            EnabledByDefault: false)
+            EnabledByDefault: false,
+            ResourceUsage: "Changes in every normal batch, creating a Home Assistant recorder entry "
+                           + "about once per minute even when nothing else changed.")
     };
 
     public IReadOnlyList<Sensor> Read(IReadOnlySet<string> enabled, SensorReadContext context)

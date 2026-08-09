@@ -39,7 +39,9 @@ public sealed class NotificationStateSensorSource : ISensorSource
             + "for notifications. Windows 11's Focus / Do Not Disturb switch is not "
             + "included: Windows exposes no supported way to read it.",
             SensorPrivacy.Benign,
-            EnabledByDefault: true)
+            EnabledByDefault: true,
+            ResourceUsage: "Runs one lightweight local Windows query every 10 seconds and requests "
+                           + "an immediate batch only when the state changes.")
     ];
 
     public IReadOnlyList<Sensor> Read(

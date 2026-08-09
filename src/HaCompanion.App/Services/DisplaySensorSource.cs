@@ -36,14 +36,18 @@ public sealed class DisplaySensorSource : ISensorSource
             "Displays",
             "How many displays are currently active on this PC.",
             SensorPrivacy.Benign,
-            EnabledByDefault: true),
+            EnabledByDefault: true,
+            ResourceUsage: "Event-driven with no polling. Re-enumerates local displays and requests "
+                           + "an immediate batch after Windows reports a topology change."),
         new(
             DisplayResolutionId,
             "Display Resolution",
             "The resolutions, refresh rates and scaling of the active displays. "
             + "Reveals more about this PC's hardware, so it is off by default.",
             SensorPrivacy.Sensitive,
-            EnabledByDefault: false)
+            EnabledByDefault: false,
+            ResourceUsage: "Event-driven and shares display enumeration with Displays; no polling "
+                           + "or network request.")
     ];
 
     public IReadOnlyList<Sensor> Read(IReadOnlySet<string> enabled, SensorReadContext context)

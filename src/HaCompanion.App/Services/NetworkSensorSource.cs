@@ -50,27 +50,35 @@ public sealed class NetworkSensorSource : ISensorSource
             "Connection Type",
             "Whether this PC is on Wi-Fi, Ethernet or offline.",
             SensorPrivacy.Benign,
-            EnabledByDefault: false),
+            EnabledByDefault: false,
+            ResourceUsage: "Event-driven. Reads one local adapter snapshot after Windows reports a "
+                           + "network change and requests an immediate batch only if values changed."),
         new(
             IpAddressId,
             "IP Address",
             "This PC's local IPv4 address on your network.",
             SensorPrivacy.Sensitive,
-            EnabledByDefault: false),
+            EnabledByDefault: false,
+            ResourceUsage: "Event-driven and shares the Connection Type adapter snapshot. No "
+                           + "internet request is sent to discover the address."),
         new(
             Ipv6AddressId,
             "IPv6 Address",
             "This PC's IPv6 address on the active network adapter. Usually globally "
             + "routable, so it can identify this PC on the internet.",
             SensorPrivacy.Sensitive,
-            EnabledByDefault: false),
+            EnabledByDefault: false,
+            ResourceUsage: "Event-driven and shares one local adapter snapshot with the other "
+                           + "network sensors. No external IP service is contacted."),
         new(
             MacAddressId,
             "MAC Address",
             "The hardware address of the network adapter this PC is connected "
             + "through. A stable identifier for this machine on your network.",
             SensorPrivacy.Sensitive,
-            EnabledByDefault: false)
+            EnabledByDefault: false,
+            ResourceUsage: "Event-driven and shares one local adapter snapshot with the other "
+                           + "network sensors. No network traffic is generated to read the MAC.")
     ];
 
     public IReadOnlyList<Sensor> Read(IReadOnlySet<string> enabled, SensorReadContext context)

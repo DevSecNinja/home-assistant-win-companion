@@ -30,7 +30,7 @@ sensor rejection bodies, disabled entity behavior, and the local push channel.
 
 ## Golden payload maintenance
 
-Golden JSON files live under `tests/HaCompanion.Core.Tests/Golden/`. Change them only
+Golden JSON files live under `tests/WindowsCompanion.Core.Tests/Golden/`. Change them only
 when verified Home Assistant behavior changes. A code change that alters a payload
 must explain the upstream contract evidence in its pull request and update the
 relevant specification contract.

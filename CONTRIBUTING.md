@@ -22,7 +22,7 @@ gracefully before building and offers an explicit force-close fallback if needed
 Run the Core tests through:
 
 ```powershell
-dotnet test tests\HaCompanion.Core.Tests\HaCompanion.Core.Tests.csproj
+dotnet test tests\WindowsCompanion.Core.Tests\WindowsCompanion.Core.Tests.csproj
 ```
 
 `dotnet run` is not supported for this unpackaged WinUI project. See the README for
@@ -32,8 +32,8 @@ the runtime-resolution details.
 
 - Use [Conventional Commits](https://www.conventionalcommits.org/) for commit and
   pull request titles.
-- Keep platform-independent logic in `HaCompanion.Core`; Windows API integration
-  belongs in `HaCompanion.App`.
+- Keep platform-independent logic in `WindowsCompanion.Core`; Windows API integration
+  belongs in `WindowsCompanion.App`.
 - Add happy-path and failure-path unit tests for new Core contracts.
 - Update the relevant specification or issue when implementation discoveries
   change expected behavior.
@@ -54,7 +54,7 @@ Security vulnerabilities must be reported privately according to
 
 The repository deliberately does not provide a Linux devcontainer: it cannot build
 or run the WinUI application and would create a misleading partial development
-environment. `HaCompanion.Core` remains portable and can be tested independently,
+environment. `WindowsCompanion.Core` remains portable and can be tested independently,
 but full feature work requires Windows.
 
 Mise is used only to pin repository lint/security tools consumed by the shared

@@ -7,8 +7,8 @@ requests an immediate sync.
 
 Files:
 
-- `src/HaCompanion.Core/Sensors/FrontmostAppState.cs`
-- `src/HaCompanion.Core/Sensors/SensorPreferences.cs`
-- `src/HaCompanion.App/Services/FrontmostAppSensorSource.cs`
-- `src/HaCompanion.App/MainWindow.xaml(.cs)`
-- `tests/HaCompanion.Core.Tests/FrontmostAppTests.cs`
+- `src/WindowsCompanion.Core/Sensors/FrontmostAppState.cs`
+- `src/WindowsCompanion.Core/Sensors/SensorPreferences.cs`
+- `src/WindowsCompanion.App/Services/FrontmostAppSensorSource.cs`
+- `src/WindowsCompanion.App/MainWindow.xaml(.cs)`
+- `tests/WindowsCompanion.Core.Tests/FrontmostAppTests.cs`

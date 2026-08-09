@@ -1,0 +1,116 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net9.0-windows10.0.26100.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
+    <RootNamespace>WindowsCompanion_App</RootNamespace>
+    <!--
+      The shipped executable is WindowsCompanion.exe. The project is named
+      WindowsCompanion.App to match the Core/Tests naming, but the assembly drops
+      the suffix so users see a product name rather than an internal layer name.
+    -->
+    <AssemblyName>WindowsCompanion</AssemblyName>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!--
+      Gives the executable itself a Win32 icon, so Explorer, the taskbar, Alt+Tab
+      and the SmartScreen prompt all show the brand rather than a blank default.
+      Regenerate with .\scripts\build-brand-assets.ps1; never edit the .ico.
+    -->
+    <ApplicationIcon>Assets\AppIcon.ico</ApplicationIcon>
+    <!--
+      Display metadata. The assembly and executable stay named WindowsCompanion.App:
+      the "Start with Windows" registry entry points at that exact file name, so
+      renaming it would orphan existing users' startup entries.
+    -->
+    <Product>Windows Companion for Home Assistant</Product>
+    <AssemblyTitle>Windows Companion for Home Assistant</AssemblyTitle>
+    <Company>DevSecNinja</Company>
+    <Authors>DevSecNinja</Authors>
+    <Description>An independent Windows companion that publishes PC sensors to Home Assistant and shows its notifications. Not affiliated with or endorsed by the Open Home Foundation.</Description>
+    <Copyright>Copyright (c) DevSecNinja</Copyright>
+    <!--
+      x86 is deliberately not supported: Windows 11 is x64/ARM64 only, and offering
+      it made the solution's default "Any CPU" build a 32-bit app while the 64-bit
+      output was the one being run - so a stale binary could be launched silently.
+    -->
+    <Platforms>x64;ARM64</Platforms>
+    <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">win-$([System.Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture.ToString().ToLowerInvariant())</RuntimeIdentifier>
+    <PublishProfile Condition="Exists('Properties\PublishProfiles\win-$(Platform).pubxml')">win-$(Platform).pubxml</PublishProfile>
+    <UseWinUI>true</UseWinUI>
+    <WinUISDKReferences>false</WinUISDKReferences>
+    <EnableMsixTooling>true</EnableMsixTooling>
+    <!--
+      The companion ships unpackaged (xcopy-deployable). This makes the Windows App
+      SDK use the bootstrapper to locate the installed runtime instead of the
+      DeploymentManager, which requires MSIX package identity.
+    -->
+    <WindowsPackageType>None</WindowsPackageType>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Content Include="Assets\SplashScreen.scale-200.png" />
+    <Content Include="Assets\Square150x150Logo.scale-200.png" />
+    <Content Include="Assets\Square44x44Logo.scale-200.png" />
+    <Content Include="Assets\Square44x44Logo.targetsize-24_altform-unplated.png" />
+    <Content Include="Assets\Square44x44Logo.targetsize-48_altform-lightunplated.png" />
+    <Content Include="Assets\StoreLogo.png" />
+    <Content Include="Assets\AppIcon.ico" />
+    <Content Include="Assets\Wide310x150Logo.scale-200.png" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Manifest Include="$(ApplicationManifest)" />
+  </ItemGroup>
+
+  <!--
+    Defining the "Msix" ProjectCapability here allows the Single-project MSIX Packaging
+    Tools extension to be activated for this project even if the Windows App SDK Nuget
+    package has not yet been restored.
+  -->
+  <ItemGroup Condition="'$(DisableMsixProjectCapabilityAddedByProject)'!='true' and '$(EnableMsixTooling)'=='true'">
+    <ProjectCapability Include="Msix" />
+  </ItemGroup>
+
+  <!--
+    Microsoft.Windows.SDK.BuildTools.WinApp adds first-class support for
+    `dotnet run` on packaged WinUI apps: it hooks the .NET CLI Run target to
+    register a debug identity via the winapp CLI and launch the app with
+    package identity (AUMID).
+    Set <EnableWinAppRunSupport>false</EnableWinAppRunSupport> in a
+    <PropertyGroup> above to opt out.
+  -->
+  <ItemGroup>
+    <!-- 2.4.1 requires .NET 10; keep updates manual until the app moves runtimes. -->
+    <PackageReference Include="H.NotifyIcon.WinUI" Version="2.3.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.10" />
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.28000.2526" />
+    <!--
+      This must match the Windows App Runtime users install. Updating it changes
+      deployment prerequisites for the unpackaged app, so Renovate review is manual.
+    -->
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.3.1" />
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools.WinApp" Version="0.5.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\WindowsCompanion.Core\WindowsCompanion.Core.csproj" />
+  </ItemGroup>
+
+  <!--
+    Defining the "HasPackageAndPublishMenuAddedByProject" property here allows the Solution
+    Explorer "Package and Publish" context menu entry to be enabled for this project even if
+    the Windows App SDK Nuget package has not yet been restored.
+  -->
+  <PropertyGroup Condition="'$(DisableHasPackageAndPublishMenuAddedByProject)'!='true' and '$(EnableMsixTooling)'=='true'">
+    <HasPackageAndPublishMenu>true</HasPackageAndPublishMenu>
+  </PropertyGroup>
+
+  <!-- Publish Properties -->
+  <PropertyGroup>
+    <PublishReadyToRun Condition="'$(Configuration)' == 'Debug'">False</PublishReadyToRun>
+    <PublishReadyToRun Condition="'$(Configuration)' != 'Debug'">True</PublishReadyToRun>
+    <PublishTrimmed Condition="'$(Configuration)' == 'Debug'">False</PublishTrimmed>
+    <PublishTrimmed Condition="'$(Configuration)' != 'Debug'">True</PublishTrimmed>
+  </PropertyGroup>
+</Project>

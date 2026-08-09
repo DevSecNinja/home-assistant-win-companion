@@ -4,7 +4,7 @@ The companion currently ships as an unpackaged Windows application. A future Win
 package is tracked in [issue #39](https://github.com/DevSecNinja/home-assistant-win-companion/issues/39).
 
 The product is named **Windows Companion for Home Assistant**. The executable is
-`HaCompanion.App.exe`; that file name is deliberately unchanged, because the
+`WindowsCompanion.exe`; that file name is deliberately unchanged, because the
 "Start with Windows" entry points at the exact path of that file.
 
 It is an independent project and is not affiliated with, endorsed by, or sponsored by
@@ -53,7 +53,7 @@ Do not download an artifact merely because its workflow succeeded.
    ZIP. The computed value must match the published checksum:
 
    ```powershell
-   Get-FileHash .\HaCompanion-<version>-win-<architecture>.zip -Algorithm SHA256
+   Get-FileHash .\WindowsCompanion-<version>-win-<architecture>.zip -Algorithm SHA256
    ```
 
    Actions test artifacts do not currently have a separately published checksum;
@@ -69,7 +69,7 @@ Do not download an artifact merely because its workflow succeeded.
    produced by this repository's workflow:
 
    ```powershell
-   gh attestation verify .\HaCompanion-<version>-win-<architecture>.zip `
+   gh attestation verify .\WindowsCompanion-<version>-win-<architecture>.zip `
      --repo DevSecNinja/home-assistant-win-companion
    ```
 
@@ -80,10 +80,10 @@ Do not download an artifact merely because its workflow succeeded.
 4. Extract the ZIP to a permanent user-writable directory, recommended:
 
    ```text
-   %LOCALAPPDATA%\Programs\HaCompanion\
+   %LOCALAPPDATA%\Programs\WindowsCompanion\
    ```
 
-5. Launch `HaCompanion.App.exe`.
+5. Launch `WindowsCompanion.exe`.
 6. Enter the Home Assistant URL and complete sign-in in the browser.
 7. Optionally enable **Start with Windows** in the status overview.
 
@@ -94,7 +94,7 @@ location.
 Current builds are unsigned and may show **Windows protected your PC** from
 Microsoft Defender SmartScreen. Only after verifying the repository, workflow run,
 commit, and architecture above, choose **More info**, confirm the app is
-`HaCompanion.App.exe` with an unknown publisher, and choose **Run anyway**. A managed
+`WindowsCompanion.exe` with an unknown publisher, and choose **Run anyway**. A managed
 or organizational Windows policy may prohibit unsigned apps; do not weaken that
 policy to install this test build.
 
@@ -121,13 +121,36 @@ explicitly labelled unsigned. The longer-term decision remains tracked in
 
 The following user data is outside the application directory and is preserved:
 
-- `%LOCALAPPDATA%\HaCompanion\settings.json`
-- `%LOCALAPPDATA%\HaCompanion\logs\`
+- `%LOCALAPPDATA%\WindowsCompanion\settings.json`
+- `%LOCALAPPDATA%\WindowsCompanion\logs\`
 - OAuth and webhook credentials in Windows Credential Locker
 
 Start with Windows continues to work when the executable path stays the same. If the
 directory moves, launch the app manually once; an existing startup entry is repaired
 to the current executable path.
+
+### Updating from a build older than the rename
+
+Earlier builds shipped as `HaCompanion.App.exe` and stored data under
+`%LOCALAPPDATA%\HaCompanion\`. The first launch of a renamed build migrates what it
+can:
+
+- the data directory is moved to `%LOCALAPPDATA%\WindowsCompanion\`, keeping
+  settings, logs and the lifecycle journal
+- Credential Locker entries found under the old `HaCompanion` resource are re-saved
+  under `WindowsCompanion`
+- a `HaCompanion` startup registry value is replaced by a `WindowsCompanion` one the
+  next time **Start with Windows** is toggled
+
+**Expect to sign in once after upgrading.** The Credential Locker scopes entries to
+the calling application, so a renamed executable may not be able to read credentials
+written by the old one; the fallback above only helps when it can. Signing in again
+is harmless: the device id is kept in `settings.json`, which does migrate, so Home
+Assistant updates the existing device rather than adding a second one.
+
+The old executable is not removed for you. Delete the previous
+`HaCompanion.App.exe` and its directory after confirming the new build starts and
+reconnects.
 
 ## Uninstall
 
@@ -136,7 +159,7 @@ to the current executable path.
    registration should be revoked.
 3. Select **Exit** from the tray menu.
 4. Delete the application directory.
-5. Optionally delete `%LOCALAPPDATA%\HaCompanion\` to remove settings and logs.
+5. Optionally delete `%LOCALAPPDATA%\WindowsCompanion\` to remove settings and logs.
 
 If the application was deleted before **Remove server…** was used, reinstall or
 temporarily extract the same application, launch it as the same Windows user, and

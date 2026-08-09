@@ -17,7 +17,7 @@ const BRAND = path.resolve(import.meta.dirname);
 const REPO = path.resolve(BRAND, '..');
 const SRC = path.join(BRAND, 'src');
 const DIST = path.join(BRAND, 'dist');
-const APP_ASSETS = path.join(REPO, 'src', 'HaCompanion.App', 'Assets');
+const APP_ASSETS = path.join(REPO, 'src', 'WindowsCompanion.App', 'Assets');
 
 const CHECK = process.argv.includes('--check');
 

@@ -25,7 +25,7 @@
 > the app's own output folder and fails with a misleading "You must install or
 > update .NET" dialog even when the runtime is present. Note also that a failed
 > launch does not exit - the apphost stays alive showing an error dialog titled
-> `HaCompanion.App.exe` - so a running process is not proof that the app started.
+> `WindowsCompanion.exe` - so a running process is not proof that the app started.
 
 > WinUI 3 apps may require the Windows App SDK runtime; unpackaged runs use the
 > bootstrapper referenced by the app project.
@@ -61,7 +61,7 @@
 ## Run tests
 
 ```powershell
-dotnet test tests/HaCompanion.Core.Tests/HaCompanion.Core.Tests.csproj
+dotnet test tests/WindowsCompanion.Core.Tests/WindowsCompanion.Core.Tests.csproj
 ```
 
 ## Pause or remove the connection

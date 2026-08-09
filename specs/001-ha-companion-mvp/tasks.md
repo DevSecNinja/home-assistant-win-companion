@@ -23,16 +23,16 @@ description: "Task list for Home Assistant Windows Companion (MVP)"
 
 ## Path Conventions
 
-Two-project solution: `src/HaCompanion.Core/`, `src/HaCompanion.App/`,
-tests in `tests/HaCompanion.Core.Tests/`.
+Two-project solution: `src/WindowsCompanion.Core/`, `src/WindowsCompanion.App/`,
+tests in `tests/WindowsCompanion.Core.Tests/`.
 
 ---
 
 ## Phase 1: Setup (Shared Infrastructure)
 
-- [ ] T001 Create `HaCompanion.sln` and project skeletons: `src/HaCompanion.Core`
-      (classlib, net9.0), `src/HaCompanion.App` (WinUI 3, net9.0-windows), and
-      `tests/HaCompanion.Core.Tests` (xUnit). Add project references.
+- [ ] T001 Create `WindowsCompanion.sln` and project skeletons: `src/WindowsCompanion.Core`
+      (classlib, net9.0), `src/WindowsCompanion.App` (WinUI 3, net9.0-windows), and
+      `tests/WindowsCompanion.Core.Tests` (xUnit). Add project references.
 - [ ] T002 Add NuGet packages: App → `Microsoft.WindowsAppSDK`,
       `H.NotifyIcon.WinUI`; Core →
       `Microsoft.Extensions.Logging.Abstractions`; Tests → xUnit + runner.
@@ -45,19 +45,19 @@ tests in `tests/HaCompanion.Core.Tests/`.
 
 **⚠️ CRITICAL**: Completes the core contracts and models all stories depend on.
 
-- [ ] T004 [P] Create DTOs/models in `src/HaCompanion.Core/Models/`:
+- [ ] T004 [P] Create DTOs/models in `src/WindowsCompanion.Core/Models/`:
       `ServerConfig`, `DeviceRegistrationRequest`, `DeviceRegistrationResponse`,
       `Sensor`, `SystemStatus`, `NotificationMessage`, `ConnectionState`.
-- [ ] T005 [P] Define abstractions in `src/HaCompanion.Core/Abstractions/`:
+- [ ] T005 [P] Define abstractions in `src/WindowsCompanion.Core/Abstractions/`:
       `IHomeAssistantClient`, `ISecretStore`, `ISystemStatusProvider`, `IClock`.
 - [ ] T006 [P] Implement secret redaction helpers in
-      `src/HaCompanion.Core/Security/` and a `SystemDefaults`/settings loader
-      (`%LOCALAPPDATA%\HaCompanion\settings.json`) with no-secret guarantees.
+      `src/WindowsCompanion.Core/Security/` and a `SystemDefaults`/settings loader
+      (`%LOCALAPPDATA%\WindowsCompanion\settings.json`) with no-secret guarantees.
 - [ ] T007 Implement `HomeAssistantClient` (REST + webhook) in
-      `src/HaCompanion.Core/HomeAssistant/` using `HttpClient`: `ValidateAsync`
+      `src/WindowsCompanion.Core/HomeAssistant/` using `HttpClient`: `ValidateAsync`
       (GET `/api/`), `RegisterDeviceAsync` (POST `/registrations`),
       `RegisterSensorAsync` / `UpdateSensorsAsync` (webhook).
-- [ ] T008 Implement `ConnectionManager` skeleton in `src/HaCompanion.Core/App/`
+- [ ] T008 Implement `ConnectionManager` skeleton in `src/WindowsCompanion.Core/App/`
       holding `ConnectionState` with reconnect/backoff scaffolding + logging.
 
 **Checkpoint**: Core compiles; models + client + interfaces ready.
@@ -70,18 +70,18 @@ tests in `tests/HaCompanion.Core.Tests/`.
 
 - [ ] T009 [P] [US1] Unit tests for `HomeAssistantClient.ValidateAsync` and request
       construction (base URL handling, bearer header) using a fake HTTP handler in
-      `tests/HaCompanion.Core.Tests/HomeAssistantClientTests.cs`.
+      `tests/WindowsCompanion.Core.Tests/HomeAssistantClientTests.cs`.
 - [ ] T010 [P] [US1] Unit tests for settings load/save round-trip and that secrets
       are never serialized to settings.json.
 
 ### Implementation for US1
 
 - [ ] T011 [US1] Implement `WindowsSecretStore` (PasswordVault) in
-      `src/HaCompanion.App/Services/`.
+      `src/WindowsCompanion.App/Services/`.
 - [ ] T012 [US1] Implement the OAuth loopback login: `LoopbackOAuthListener`
       (fixed-port `TcpListener` capturing the `code`) and `OAuthLoginService`
       (build authorize URL, open browser, exchange code) in
-      `src/HaCompanion.App/Services/`.
+      `src/WindowsCompanion.App/Services/`.
 - [ ] T013 [US1] Implement `MainWindow` with a Connect view (URL entry + "Sign in")
       and a lean Status view (connection state, battery, "Open Home Assistant" that
       launches BaseUrl in the default browser, "Disconnect"). No embedded web view.
@@ -109,10 +109,10 @@ tests in `tests/HaCompanion.Core.Tests/`.
 ### Implementation for US2
 
 - [ ] T018 [US2] Implement `WindowsSystemStatusProvider` in
-      `src/HaCompanion.App/Services/` via P/Invoke `GetSystemPowerStatus`.
+      `src/WindowsCompanion.App/Services/` via P/Invoke `GetSystemPowerStatus`.
 - [ ] T019 [P] [US2] Implement `BatterySensorProvider` in
-      `src/HaCompanion.Core/Sensors/` producing the two sensors from `SystemStatus`.
-- [ ] T020 [US2] Implement `SensorSyncService` in `src/HaCompanion.Core/Sensors/`:
+      `src/WindowsCompanion.Core/Sensors/` producing the two sensors from `SystemStatus`.
+- [ ] T020 [US2] Implement `SensorSyncService` in `src/WindowsCompanion.Core/Sensors/`:
       ensure device registered, register sensors once, then `update` on a timer.
 - [ ] T021 [US2] On successful connect, call `RegisterDeviceAsync` if not yet
       registered; start `SensorSyncService`; refresh on power-mode change.
@@ -131,14 +131,14 @@ tests in `tests/HaCompanion.Core.Tests/`.
 
 ### Implementation for US3
 
-- [ ] T023 [US3] Implement `HaWebSocketClient` in `src/HaCompanion.Core/HomeAssistant/`:
+- [ ] T023 [US3] Implement `HaWebSocketClient` in `src/WindowsCompanion.Core/HomeAssistant/`:
       connect, auth, open `mobile_app/push_notification_channel`, confirm each
       delivery via `mobile_app/push_notification_confirm`, emit
       `NotificationMessage` events; ping/pong liveness. Declare
       `app_data.push_websocket_channel` at registration so the PC is a notify target.
 - [ ] T024 [US3] Integrate WS lifecycle into `ConnectionManager` with reconnect +
       re-open of the push channel and `AuthError` handling.
-- [ ] T025 [US3] Implement `ToastNotifier` in `src/HaCompanion.App/Services/` using
+- [ ] T025 [US3] Implement `ToastNotifier` in `src/WindowsCompanion.App/Services/` using
       Windows App SDK `AppNotification`; show title/message; activation restores window.
 - [ ] T026 [US3] Bridge WS `NotificationMessage` events → `ToastNotifier` in the app.
 

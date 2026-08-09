@@ -20,8 +20,8 @@ from the app output directory and can show a misleading missing-runtime dialog.
 Build the app for the supported architectures:
 
 ```powershell
-dotnet build src\HaCompanion.App\HaCompanion.App.csproj -c Release -p:Platform=x64 -r win-x64 --nologo
-dotnet build src\HaCompanion.App\HaCompanion.App.csproj -c Release -p:Platform=ARM64 -r win-arm64 --nologo
+dotnet build src\WindowsCompanion.App\WindowsCompanion.App.csproj -c Release -p:Platform=x64 -r win-x64 --nologo
+dotnet build src\WindowsCompanion.App\WindowsCompanion.App.csproj -c Release -p:Platform=ARM64 -r win-arm64 --nologo
 ```
 
 Run tests and coverage:
@@ -31,12 +31,12 @@ Run tests and coverage:
 .\scripts\test.ps1 -Coverage
 ```
 
-Coverage applies to `HaCompanion.Core`; the gates are 85% line and 70% branch.
+Coverage applies to `WindowsCompanion.Core`; the gates are 85% line and 70% branch.
 Run a class or single xUnit test with:
 
 ```powershell
-dotnet test tests\HaCompanion.Core.Tests\HaCompanion.Core.Tests.csproj -c Release --filter "FullyQualifiedName~RouteValidatorTests"
-dotnet test tests\HaCompanion.Core.Tests\HaCompanion.Core.Tests.csproj -c Release --filter "FullyQualifiedName~RouteValidatorTests.One_url_is_the_default_configuration"
+dotnet test tests\WindowsCompanion.Core.Tests\WindowsCompanion.Core.Tests.csproj -c Release --filter "FullyQualifiedName~RouteValidatorTests"
+dotnet test tests\WindowsCompanion.Core.Tests\WindowsCompanion.Core.Tests.csproj -c Release --filter "FullyQualifiedName~RouteValidatorTests.One_url_is_the_default_configuration"
 ```
 
 CI is defined in `.github/workflows/ci.yml` and builds x64 and ARM64, uploads
@@ -47,17 +47,17 @@ unsigned artifacts, and runs Core tests. Linting is delegated by
 
 ## Architecture
 
-- `HaCompanion.Core` contains platform-independent Home Assistant protocol,
+- `WindowsCompanion.Core` contains platform-independent Home Assistant protocol,
   connection/routing state machines, persistence models, lifecycle decisions, and
   sensor logic. It must remain unit-testable without WinUI or Windows APIs.
-- `HaCompanion.App` is the thin Windows shell: WinUI/tray UI, P/Invoke and
+- `WindowsCompanion.App` is the thin Windows shell: WinUI/tray UI, P/Invoke and
   `SystemEvents` sources, Credential Locker, OAuth loopback listener, toasts,
   logging, and startup registration.
 - `AppController` is the composition root. It loads the session, runs OAuth/device
   registration, selects a route, builds REST/WebSocket clients and the sensor
   catalog, owns reconnect/failover, and maps notifications to Windows toasts.
 - `SessionStore` deliberately splits persistence: non-secrets are in
-  `%LOCALAPPDATA%\HaCompanion\settings.json`; refresh tokens, webhook IDs, and
+  `%LOCALAPPDATA%\WindowsCompanion\settings.json`; refresh tokens, webhook IDs, and
   cloudhook URLs use `ISecretStore`/Windows Credential Locker. Preserve migration
   paths so upgrades do not register duplicate Home Assistant devices.
 - `ConnectionManager` owns the long-lived WebSocket and periodic sensor sync.
@@ -116,7 +116,7 @@ unsigned artifacts, and runs Core tests. Linting is delegated by
   thread-pool starvation. Prefer `TaskCompletionSource` handshakes and fake clocks
   over short `Task.Delay` polling/timeouts.
 - Home Assistant golden payloads live under
-  `tests\HaCompanion.Core.Tests\Golden`. Change them only for an intentional,
+  `tests\WindowsCompanion.Core.Tests\Golden`. Change them only for an intentional,
   evidence-backed protocol change and update the relevant contract/spec.
 
 ## Repository workflow

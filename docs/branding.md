@@ -16,13 +16,48 @@ names, package metadata and documentation headings. The short form **Windows
 Companion** exists only for space-constrained surfaces such as the notification-area
 tooltip, which Windows truncates at 127 characters including any status text.
 
-The repository slug (`home-assistant-win-companion`), the assembly and the executable
-(`HaCompanion.App.exe`) are unchanged. The "Start with Windows" registry entry points
-at that exact file name, so renaming the executable would orphan existing users'
-startup entries.
+The repository slug (`home-assistant-win-companion`) is unchanged: it is descriptive,
+already indexed, and renaming it would break existing links for no benefit.
 
-Both names are defined once in `src/HaCompanion.App/Branding.cs`. Use those constants
+Both names are defined once in `src/WindowsCompanion.App/Branding.cs`. Use those constants
 rather than repeating string literals.
+
+### Technical identity
+
+`WindowsCompanion` is the single token used everywhere the product needs a
+machine-readable name. Keep these consistent; a new surface should not invent a
+fourth spelling.
+
+| Surface | Value |
+| --- | --- |
+| Executable | `WindowsCompanion.exe` |
+| Assembly | `WindowsCompanion` |
+| Projects | `WindowsCompanion.App`, `WindowsCompanion.Core`, `WindowsCompanion.Core.Tests` |
+| Namespaces | `WindowsCompanion.Core.*`, `WindowsCompanion_App.*` |
+| Data directory | `%LOCALAPPDATA%\WindowsCompanion\` |
+| Credential Locker resource | `WindowsCompanion` |
+| Startup registry value | `HKCU\...\Run\WindowsCompanion` |
+| Release artifacts | `WindowsCompanion-<version>-win-<arch>.zip` |
+| Planned WinGet package | `DevSecNinja.WindowsCompanion` |
+
+### The previous identity
+
+Before the rename everything above used `HaCompanion`, and the display name led with
+the Home Assistant trademark. Three legacy constants remain in the code purely to
+migrate existing installations, and each is the only reference to the old name:
+
+| Constant | File |
+| --- | --- |
+| `AppDataPaths.LegacyDirectoryName` | `WindowsCompanion.Core/App/AppDataPaths.cs` |
+| `WindowsSecretStore.LegacyResource` | `WindowsCompanion.App/Services/WindowsSecretStore.cs` |
+| `WindowsStartupRegistration.LegacyValueName` | `WindowsCompanion.App/Services/WindowsStartupRegistration.cs` |
+
+They exist so an upgrade keeps as much as possible: settings and the device id always
+migrate, and Credential Locker entries migrate when the OS lets the renamed
+executable read them. Because the device id survives, a re-sign-in updates the
+existing Home Assistant device instead of creating a duplicate. Do not remove these
+constants without a deprecation window, and do not add new references to the old
+name.
 
 ## Trademark and non-endorsement
 
@@ -132,11 +167,11 @@ will silently discard the change.
 
 This rewrites:
 
-- `src/HaCompanion.App/Assets/AppIcon.ico` — 16, 20, 24, 32, 40, 48, 64, 128 and
+- `src/WindowsCompanion.App/Assets/AppIcon.ico` — 16, 20, 24, 32, 40, 48, 64, 128 and
   256 px. Entries up to 64 px are uncompressed 32-bit DIBs, which every Windows icon
   consumer understands; 128 and 256 px are PNG. The 16 px entry comes from the hinted
   master, so the notification-area icon is crisp at 100%, 125%, 150% and 200% scaling.
-- the packaging PNGs under `src/HaCompanion.App/Assets/`
+- the packaging PNGs under `src/WindowsCompanion.App/Assets/`
 - the distributable artwork and social preview under `brand/dist/`
 
 To verify committed assets still match the masters without rewriting them:
@@ -157,7 +192,7 @@ in, and it is the first thing a change breaks.
 
 | Surface | Source |
 | --- | --- |
-| Executable icon (Explorer, taskbar, Alt+Tab, SmartScreen) | `ApplicationIcon` in `HaCompanion.App.csproj` |
+| Executable icon (Explorer, taskbar, Alt+Tab, SmartScreen) | `ApplicationIcon` in `WindowsCompanion.App.csproj` |
 | Window and title-bar icon | `MainWindow.xaml`, `MainWindow.xaml.cs` |
 | Notification-area icon | `TaskbarIcon` in `MainWindow.xaml` |
 | Future MSIX/WinGet tiles and store logo | `Package.appxmanifest` |

@@ -7,6 +7,7 @@ using HaCompanion.Core.Sensors;
 
 namespace HaCompanion.Core.Tests;
 
+[Collection(AsyncLifecycleCollection.Name)]
 public class ConnectionManagerTests
 {
     [Fact]
@@ -16,9 +17,14 @@ public class ConnectionManagerTests
             """{"type":"auth_required"}""",
             """{"type":"auth_invalid"}""");
         var client = CreateManager(() => socket, new FakeClient(), new MutableClock());
+        var authError = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        client.StateChanged += state =>
+        {
+            if (state == ConnectionState.AuthError) authError.TrySetResult();
+        };
 
         client.Start();
-        await WaitUntilAsync(() => client.State == ConnectionState.AuthError);
+        await authError.Task.WaitAsync(TimeSpan.FromSeconds(10));
         var connectCount = socket.ConnectCount;
         await Task.Delay(100);
 
@@ -32,10 +38,12 @@ public class ConnectionManagerTests
     {
         var attempts = 0;
         var states = new List<ConnectionState>();
+        var retried = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var client = CreateManager(
             () =>
             {
                 attempts++;
+                if (attempts >= 2) retried.TrySetResult();
                 return attempts == 1
                     ? new ThrowingSocket()
                     : new BlockingSocket();
@@ -45,7 +53,7 @@ public class ConnectionManagerTests
         client.StateChanged += states.Add;
 
         client.Start();
-        await WaitUntilAsync(() => attempts >= 2);
+        await retried.Task.WaitAsync(TimeSpan.FromSeconds(10));
 
         Assert.Contains(ConnectionState.Reconnecting, states);
         Assert.True(attempts >= 2);
@@ -92,11 +100,57 @@ public class ConnectionManagerTests
         Assert.Equal(TimeSpan.FromSeconds(60), client.NextBackoff(20));
     }
 
+    [Fact]
+    public async Task Repeated_sync_failures_ask_for_another_address_to_be_tried()
+    {
+        var homeAssistant = new FakeClient();
+        var client = CreateManager(
+            () => new BlockingSocket(), homeAssistant, new MutableClock(), route: RouteKind.Internal);
+        var reported = new List<RouteKind?>();
+        client.RouteUnhealthy += reported.Add;
+
+        client.Start();
+        await WaitUntilAsync(() => client.LastSyncedAt is not null);
+
+        homeAssistant.FailNextUpdate = true;
+        await client.SyncNowAsync();
+        // One failure is a blip, not a reason to move the whole connection.
+        Assert.Empty(reported);
+
+        homeAssistant.FailNextUpdate = true;
+        await client.SyncNowAsync();
+
+        Assert.Equal([RouteKind.Internal], reported);
+        Assert.Equal(RouteKind.Internal, client.Route);
+        await client.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task A_connection_with_no_route_still_reports_failover_interest()
+    {
+        var homeAssistant = new FakeClient();
+        var client = CreateManager(() => new BlockingSocket(), homeAssistant, new MutableClock());
+        var raised = 0;
+        client.RouteUnhealthy += _ => raised++;
+
+        client.Start();
+        await WaitUntilAsync(() => client.LastSyncedAt is not null);
+        homeAssistant.FailNextUpdate = true;
+        await client.SyncNowAsync();
+        homeAssistant.FailNextUpdate = true;
+        await client.SyncNowAsync();
+
+        Assert.Equal(1, raised);
+        Assert.Null(client.Route);
+        await client.DisposeAsync();
+    }
+
     private static ConnectionManager CreateManager(
         Func<IHaSocket> socketFactory,
         FakeClient client,
         MutableClock clock,
-        TimeSpan? syncInterval = null)
+        TimeSpan? syncInterval = null,
+        RouteKind? route = null)
     {
         var webSocket = new HaWebSocketClient(
             socketFactory,
@@ -112,7 +166,8 @@ public class ConnectionManagerTests
             sensors,
             "hook",
             syncInterval ?? TimeSpan.FromHours(1),
-            clock);
+            clock,
+            route: route);
     }
 
     private static async Task WaitUntilAsync(Func<bool> condition)
@@ -156,6 +211,13 @@ public class ConnectionManagerTests
 
             return Task.CompletedTask;
         }
+
+        public Task<HaInstanceInfo?> GetInstanceInfoAsync(
+            string webhookId, CancellationToken ct = default) =>
+            Task.FromResult<HaInstanceInfo?>(new HaInstanceInfo { DeviceId = "device" });
+
+        public Task<HaConfigInfo?> GetConfigAsync(CancellationToken ct = default) =>
+            Task.FromResult<HaConfigInfo?>(null);
     }
 
     private sealed class StubSource : ISensorSource

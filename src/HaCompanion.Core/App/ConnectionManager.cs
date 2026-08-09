@@ -45,6 +45,28 @@ public sealed class ConnectionManager : IAsyncDisposable
     /// <summary>Sync failures since the last success; resets to zero on success.</summary>
     public int ConsecutiveFailures { get; private set; }
 
+    /// <summary>
+    /// Which of the configured addresses this connection uses. Null for installs
+    /// that still have a single unclassified address.
+    /// </summary>
+    public RouteKind? Route { get; }
+
+    /// <summary>
+    /// Raised when this connection has failed often enough that another address is
+    /// worth trying. The supervisor decides whether one exists; this only reports.
+    /// </summary>
+    public event Action<RouteKind?>? RouteUnhealthy;
+
+    /// <summary>
+    /// Failures tolerated before a route is called into question. Two means one
+    /// transient hiccup is absorbed, but a server that has moved is noticed within
+    /// a couple of sync intervals rather than after an hour of backoff.
+    /// </summary>
+    public const int FailoverFailureThreshold = 2;
+
+    /// <summary>Reconnect attempts tolerated before the route is called into question.</summary>
+    public const int FailoverReconnectThreshold = 2;
+
     public TimeSpan SyncInterval => _syncInterval;
 
     /// <summary>
@@ -60,13 +82,20 @@ public sealed class ConnectionManager : IAsyncDisposable
     public event Action<ConnectionState>? StateChanged;
     public event Action<NotificationMessage>? NotificationReceived;
 
+    /// <summary>
+    /// Raised after Home Assistant accepted a sensor batch. Lets a caller treat a
+    /// push as delivered only when it actually was, rather than when it was sent.
+    /// </summary>
+    public event Action<SensorReadContext>? SyncSucceeded;
+
     public ConnectionManager(
         HaWebSocketClient ws,
         SensorSyncService sensors,
         string webhookId,
         TimeSpan? syncInterval = null,
         IClock? clock = null,
-        ILogger<ConnectionManager>? log = null)
+        ILogger<ConnectionManager>? log = null,
+        RouteKind? route = null)
     {
         _ws = ws ?? throw new ArgumentNullException(nameof(ws));
         _sensors = sensors ?? throw new ArgumentNullException(nameof(sensors));
@@ -74,6 +103,7 @@ public sealed class ConnectionManager : IAsyncDisposable
         _syncInterval = syncInterval ?? TimeSpan.FromSeconds(60);
         _clock = clock ?? new SystemClock();
         _log = log ?? NullLogger<ConnectionManager>.Instance;
+        Route = route;
         _ws.NotificationReceived += n => NotificationReceived?.Invoke(n);
     }
 
@@ -114,6 +144,7 @@ public sealed class ConnectionManager : IAsyncDisposable
 
             if (ct.IsCancellationRequested) return;
             SetState(ConnectionState.Reconnecting);
+            if (attempt + 1 >= FailoverReconnectThreshold) RouteUnhealthy?.Invoke(Route);
             await Task.Delay(NextBackoff(attempt++), ct).ConfigureAwait(false);
         }
     }
@@ -135,13 +166,30 @@ public sealed class ConnectionManager : IAsyncDisposable
         }
     }
 
-    /// <summary>Runs a single sensor sync now (e.g. on power-state change).</summary>
-    public Task SyncNowAsync(SensorReadContext? context = null) =>
-        SyncOnceAsync(context ?? SensorReadContext.StateChange, _cts?.Token ?? CancellationToken.None);
-
-    private async Task SyncOnceAsync(SensorReadContext context, CancellationToken ct)
+    /// <summary>
+    /// Runs a single sensor sync now (e.g. on power-state change) and reports
+    /// whether Home Assistant accepted it. <paramref name="ct"/> lets a caller put
+    /// its own deadline on the attempt, which the lifecycle final push depends on.
+    /// </summary>
+    public Task<bool> SyncNowAsync(SensorReadContext? context = null, CancellationToken ct = default)
     {
-        if (State == ConnectionState.AuthError) return;
+        var own = _cts?.Token ?? CancellationToken.None;
+        if (!ct.CanBeCanceled)
+            return SyncOnceAsync(context ?? SensorReadContext.StateChange, own);
+
+        return SyncWithDeadlineAsync(context ?? SensorReadContext.StateChange, own, ct);
+    }
+
+    private async Task<bool> SyncWithDeadlineAsync(
+        SensorReadContext context, CancellationToken own, CancellationToken ct)
+    {
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(own, ct);
+        return await SyncOnceAsync(context, linked.Token).ConfigureAwait(false);
+    }
+
+    private async Task<bool> SyncOnceAsync(SensorReadContext context, CancellationToken ct)
+    {
+        if (State == ConnectionState.AuthError) return false;
         try
         {
             await _sensors.SyncAsync(_webhookId, context, ct).ConfigureAwait(false);
@@ -151,6 +199,8 @@ public sealed class ConnectionManager : IAsyncDisposable
             _log.LogDebug("Sensor sync succeeded ({Reason}).", context.Reason);
             if (State is ConnectionState.Connecting or ConnectionState.Reconnecting)
                 SetState(ConnectionState.Connected);
+            SyncSucceeded?.Invoke(context);
+            return true;
         }
         catch (OperationCanceledException) { }
         catch (Exception ex)
@@ -160,7 +210,10 @@ public sealed class ConnectionManager : IAsyncDisposable
             LastErrorAt = _clock.UtcNow;
             _log.LogWarning(ex, "Sensor sync failed ({Reason}), failure #{Count}.",
                 context.Reason, ConsecutiveFailures);
+            if (ConsecutiveFailures >= FailoverFailureThreshold) RouteUnhealthy?.Invoke(Route);
         }
+
+        return false;
     }
 
     internal TimeSpan NextBackoff(int attempt)

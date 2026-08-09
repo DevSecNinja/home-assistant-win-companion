@@ -101,9 +101,7 @@ disabled.
    reports, **Then** the state is "Not Connected" rather than an error.
 3. **Given** the network changes, **When** the change occurs, **Then** enabled sensors
    update without waiting for a full sync interval.
-4. **Given** the optional Last Update Time sensor, **When** the app pushes to Home
-   Assistant, **Then** it reflects that most recent successful push.
-5. **Given** the OS version sensor, **When** it reports, **Then** it shows the
+4. **Given** the OS version sensor, **When** it reports, **Then** it shows the
    Windows version and build.
 
 ### Edge Cases
@@ -144,11 +142,12 @@ disabled.
   `OS Version` and `Last Boot` sensors. Wi-Fi SSID/BSSID are out of scope
   (Windows Location capability; see research.md).
 - **FR-012**: The app MUST display the time of its most recent successful push in
-  its own status view. It MAY offer an opt-in `last_update_time` timestamp sensor
-  (off by default, because it writes recorder history every sync). It MUST NOT ship a
-  sensor whose state is effectively constant as a liveness signal, because Home
-  Assistant surfaces change time rather than report time and such a sensor reads as
-  permanently stale.
+  its own status view. It MUST NOT expose a `last_update_time` timestamp sensor:
+  Home Assistant's built-in `last_reported` already provides that information
+  without creating a recorder history entry every sync. It MUST NOT ship a sensor
+  whose state is effectively constant as a liveness signal, because Home Assistant
+  surfaces change time rather than report time and such a sensor reads as permanently
+  stale.
 - **FR-012a**: The app MUST show a health verdict (in the window and the tray
   tooltip) based on whether it is reporting on schedule, not merely connected.
 - **FR-012b**: The app MUST write a rolling local log the user can open from the UI,

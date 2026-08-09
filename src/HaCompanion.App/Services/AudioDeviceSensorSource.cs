@@ -30,13 +30,17 @@ public sealed class AudioDeviceSensorSource : ISensorSource
             "Audio Output",
             "The friendly name of the default Windows audio output.",
             SensorPrivacy.Sensitive,
-            EnabledByDefault: false),
+            EnabledByDefault: false,
+            ResourceUsage: "Low. Checks this PC's audio devices every 10 seconds. Sends an extra "
+                           + "update only when the selected output changes."),
         new(
             HeadsetConnectedId,
             "Headset Connected",
             "On while Windows exposes a headset, headphones or earbuds audio endpoint.",
             SensorPrivacy.Sensitive,
-            EnabledByDefault: false)
+            EnabledByDefault: false,
+            ResourceUsage: "Low. Shares the same 10-second audio check. Sends an extra update only "
+                           + "when headset availability changes.")
     ];
 
     public IReadOnlyList<Sensor> Read(

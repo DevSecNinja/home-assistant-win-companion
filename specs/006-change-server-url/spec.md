@@ -1,9 +1,15 @@
 # Feature Specification: Change Server URL
 
-**Status**: Shipped
+**Status**: Superseded by [008-dual-ha-urls](../008-dual-ha-urls/spec.md)
 
 Users can replace the URL used to reach the same Home Assistant instance without
 losing the refresh token, webhook registration, entities, or history.
+
+The single "Change server URL" dialog this describes has been replaced by the
+Connection settings panel, which edits an internal and an external address
+together. The same-instance guarantee below still holds, and is now proved
+through Home Assistant's own device-registry id rather than through a successful
+API call alone.
 
 ## Requirements
 

@@ -77,7 +77,6 @@ a personal machine. Sensors are classified and defaulted accordingly:
 | --- | --- | --- |
 | `active`, `screen_locked` | On | Presence/automation value, reveals no content |
 | `battery_level`, `battery_state` | On | Already shipped |
-| `last_update_time` | **Off** | Writes recorder history every sync |
 | `os_version` | On | Low sensitivity, diagnostic |
 | `ip_address` | **Off** | Network topology; low risk but not needed by default |
 | `connectivity_connection_type` | **Off** | Optional network context |
@@ -167,9 +166,9 @@ Freshness is instead surfaced where it is unambiguous:
 - The companion shows its own last successful push time and a health verdict.
 - Home Assistant's built-in `last_reported` already records every report, including
   unchanged ones, without writing history.
-- An optional `last_update_time` timestamp sensor exists for people who want
-  staleness visible in the normal UI. It is **off by default** because it changes on
-  every sync and therefore writes a recorder entry every interval.
+- The companion does not expose a `last_update_time` entity. Home Assistant's
+  built-in `last_reported` already provides the same information without forcing
+  a new recorder history entry every sync.
 
 **General lesson**: a sensor whose value rarely changes is a poor liveness signal in
 Home Assistant, because the UI surfaces *change* time, not *report* time.

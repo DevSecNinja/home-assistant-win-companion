@@ -35,13 +35,17 @@ public sealed class CapabilityUsageSensorSource : ISensorSource
             "Microphone In Use",
             "On while any application is using a microphone.",
             SensorPrivacy.Sensitive,
-            EnabledByDefault: false),
+            EnabledByDefault: false,
+            ResourceUsage: "Low. Checks Windows every 10 seconds. Sends an extra update only when "
+                           + "microphone use starts or stops."),
         new(
             CameraId,
             "Camera In Use",
             "On while any application is using a camera.",
             SensorPrivacy.Sensitive,
-            EnabledByDefault: false)
+            EnabledByDefault: false,
+            ResourceUsage: "Low. Checks Windows every 10 seconds. Sends an extra update only when "
+                           + "camera use starts or stops.")
     ];
 
     public IReadOnlyList<Sensor> Read(

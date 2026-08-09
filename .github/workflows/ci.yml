@@ -39,12 +39,28 @@ jobs:
         run: >-
           dotnet build src\HaCompanion.App\HaCompanion.App.csproj -c Release
           -p:Platform=x64 -r win-x64 --no-restore --nologo
-      - name: Upload unsigned Windows build
+      - name: Upload unsigned Windows x64 build
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: unsigned-windows-x64-${{ github.sha }}
           path: >-
             src\HaCompanion.App\bin\x64\Release\net9.0-windows10.0.26100.0\win-x64\**
+          if-no-files-found: error
+          retention-days: 14
+      - name: Restore Windows ARM64 app
+        run: >-
+          dotnet restore src\HaCompanion.App\HaCompanion.App.csproj
+          -p:Platform=ARM64 -r win-arm64 --nologo
+      - name: Build Windows ARM64 app
+        run: >-
+          dotnet build src\HaCompanion.App\HaCompanion.App.csproj -c Release
+          -p:Platform=ARM64 -r win-arm64 --no-restore --nologo
+      - name: Upload unsigned Windows ARM64 build
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: unsigned-windows-arm64-${{ github.sha }}
+          path: >-
+            src\HaCompanion.App\bin\ARM64\Release\net9.0-windows10.0.26100.0\win-arm64\**
           if-no-files-found: error
           retention-days: 14
       - name: Run core tests

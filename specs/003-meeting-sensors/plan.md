@@ -21,7 +21,7 @@ poller exists only while one of its sensors is enabled.
 `Windows.Devices.Enumeration` and `Windows.Media.Devices`; .NET BCL timers
 
 **Storage**: Existing `SensorPreferences` in
-`%LOCALAPPDATA%\HaCompanion\settings.json`
+`%LOCALAPPDATA%\WindowsCompanion\settings.json`
 
 **Testing**: xUnit unit tests for state mapping, capability activity evaluation,
 headset classification, preview behavior, and source lifecycle
@@ -72,16 +72,16 @@ specs/003-meeting-sensors/
 
 ```text
 src/
-├── HaCompanion.Core/Sensors/
+├── WindowsCompanion.Core/Sensors/
 │   ├── CapabilityActivity.cs
 │   ├── HeadsetClassifier.cs
 │   └── NotificationState.cs
-└── HaCompanion.App/Services/
+└── WindowsCompanion.App/Services/
     ├── AudioDeviceSensorSource.cs
     ├── CapabilityUsageSensorSource.cs
     └── NotificationStateSensorSource.cs
 
-tests/HaCompanion.Core.Tests/
+tests/WindowsCompanion.Core.Tests/
 └── MeetingSensorTests.cs
 ```
 

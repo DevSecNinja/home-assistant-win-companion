@@ -40,7 +40,7 @@ produces them; see the limits below.
 | `SystemEvents.SessionSwitch` (`SessionLogoff` only) | Managed | `signing_out` |
 
 Both paths run at once and are expected to produce duplicates. The tracker in
-`HaCompanion.Core` applies the more final transition once, so overlapping and
+`WindowsCompanion.Core` applies the more final transition once, so overlapping and
 repeated notifications are idempotent and a late suspend broadcast cannot downgrade
 a shutdown that is already under way.
 
@@ -95,7 +95,7 @@ Home Assistant side.
 
 The local journal is the reliable mechanism; the final push is only an optimisation.
 
-1. A transition is written to `%LOCALAPPDATA%\HaCompanion\lifecycle.json` first,
+1. A transition is written to `%LOCALAPPDATA%\WindowsCompanion\lifecycle.json` first,
    marked unacknowledged. It is a separate file from `settings.json` so a write
    interrupted by shutdown cannot damage the configuration or the pointer to stored
    credentials, and every journal operation swallows its own failures.

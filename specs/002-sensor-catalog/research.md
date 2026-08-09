@@ -143,7 +143,7 @@ so "connected" is not a sufficient signal. The companion reports itself healthy
 only when it is connected, has no consecutive sync failures, and completed a
 successful push within 2.5x the sync interval. The verdict is shown in the app and
 in the tray tooltip, and a rolling file log
-(`%LOCALAPPDATA%\HaCompanion\logs\`) is user-openable for troubleshooting.
+(`%LOCALAPPDATA%\WindowsCompanion\logs\`) is user-openable for troubleshooting.
 
 **Note on apparent staleness**: Home Assistant only advances an entity's
 `last_updated` when the state or attributes actually change - a battery sitting at

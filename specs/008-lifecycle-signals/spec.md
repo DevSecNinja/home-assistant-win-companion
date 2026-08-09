@@ -17,7 +17,7 @@ connection.
   top-level window, plus the equivalent `SystemEvents` notifications; treat the
   overlapping duplicates as idempotent.
 - Keep the transition model, deduplication, journal and recovery in
-  `HaCompanion.Core` with unit tests; keep the Windows hook thin.
+  `WindowsCompanion.Core` with unit tests; keep the Windows hook thin.
 - Record every transition locally before attempting to send it, in a file separate
   from `settings.json`, and never let that write break app exit.
 - Attempt exactly one final sensor push, bounded by a two-second timeout, on a

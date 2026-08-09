@@ -4,7 +4,7 @@
 
 .DESCRIPTION
     The Windows application icon, the packaging PNGs under
-    src/HaCompanion.App/Assets, the distributable artwork in brand/dist and the
+    src/WindowsCompanion.App/Assets, the distributable artwork in brand/dist and the
     GitHub social preview are all generated. None of those files should ever be
     edited by hand.
 

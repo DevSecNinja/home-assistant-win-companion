@@ -39,6 +39,21 @@ Golden tests deliberately compare full JSON structures, not selected fields. Thi
 protects against adding metadata to `update_sensor_states`, omitting required
 registration fields, or moving `disabled` to the wrong request type.
 
+## Reliability and resource-usage tests
+
+Sensor sources hold OS hooks and read privileged state, so their lifecycle is
+covered by deterministic Core tests rather than wall-clock benchmarks. They assert
+behavior that would otherwise regress silently: repeated start/stop/restart holds
+exactly one subscription, a stopped source is never called back, a disabled sensor
+performs zero enumeration and zero route probes, one grouped refresh takes one
+snapshot, concurrent change notifications are serialised and coalesced, a burst of
+identical changes publishes once, and probe handles are released on success,
+failure and cancellation alike.
+
+Keeping this testable is why platform sources delegate their lifecycle to a Core
+coordinator and their OS hook to a small watcher interface. Stress tests use fakes
+and counters and never sleep for a threshold, so they stay deterministic in CI.
+
 ## UI automation
 
 Automated WinUI sign-in and notification tests are not a merge gate. They require an

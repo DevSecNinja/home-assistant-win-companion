@@ -28,7 +28,11 @@ connection type and IPv4 sensors, all derived from one shared adapter snapshot.
 - IPv4, IPv6 and MAC are diagnostic entities with string states and no attributes,
   so no alternate or historical adapter addresses are ever exposed.
 - Observe network change events only while at least one sensor is enabled; no
-  polling.
+  polling. A change is captured once and only pushed when the reported values
+  actually differ, so the bursts Windows raises while an adapter comes up cost one
+  local capture rather than a Home Assistant round trip each.
+- Hold exactly one OS subscription while enabled and none once stopped, and release
+  every route probe handle whether the lookup succeeds, fails or is cancelled.
 
 ## Privacy
 

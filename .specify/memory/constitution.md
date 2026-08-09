@@ -12,7 +12,7 @@ Sync Impact Report
 - Follow-up TODOs: none.
 -->
 
-# Home Assistant Windows Companion Constitution
+# Windows Companion for Home Assistant Constitution
 
 ## Core Principles
 

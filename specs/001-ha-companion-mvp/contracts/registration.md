@@ -14,7 +14,7 @@ Headers: `Authorization: Bearer <access-token>`, `Content-Type: application/json
 {
   "device_id": "<stable-guid>",
   "app_id": "io.homeassistant.windows",
-  "app_name": "Home Assistant Windows Companion",
+  "app_name": "Windows Companion for Home Assistant",
   "app_version": "0.1.0",
   "device_name": "DESKTOP-ABC123",
   "manufacturer": "Contoso",

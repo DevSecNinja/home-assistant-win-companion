@@ -14,6 +14,30 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 jobs:
+  brand-assets:
+    name: Brand assets
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up mise tools
+        uses: jdx/mise-action@7e36c90d9ab29c415a2384db3006f3ec8a8cc654 # v4.2.4
+        with:
+          # renovate: datasource=github-releases depName=jdx/mise
+          version: "2026.7.12"
+          install_args: node
+          cache: true
+      - name: Install brand tooling
+        working-directory: brand
+        run: npm ci --no-audit --no-fund
+      # Proves the committed icons and images still match the vector masters, so a
+      # master can never be edited without the shipped assets being regenerated.
+      - name: Verify generated assets match the vector masters
+        run: node brand/build-assets.mjs --check
+
   build-test:
     name: Build and test
     runs-on: windows-latest

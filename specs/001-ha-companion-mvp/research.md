@@ -1,4 +1,4 @@
-# Phase 0 Research: Home Assistant Windows Companion (MVP)
+# Phase 0 Research: Windows Companion for Home Assistant (MVP)
 
 ## Decision: UI framework — WinUI 3 (Windows App SDK)
 
@@ -50,7 +50,7 @@ remote_ui_url? }`. `webhook_id` is then used for all sensor traffic. We persist 
 stable `device_id` (GUID) and the returned `webhook_id`.
 
 **Key fields we send**: `device_id`, `app_id=io.homeassistant.windows`,
-`app_name="Home Assistant Windows Companion"`, `app_version`, `device_name`
+`app_name="Windows Companion for Home Assistant"`, `app_version`, `device_name`
 (machine name), `manufacturer`, `model`, `os_name="Windows"`, `os_version`,
 `supports_encryption=false`.
 

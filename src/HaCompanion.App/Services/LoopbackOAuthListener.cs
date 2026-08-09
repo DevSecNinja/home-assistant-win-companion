@@ -86,7 +86,7 @@ public sealed class LoopbackOAuthListener
 
     private static async Task WriteAsync(NetworkStream stream, string message, CancellationToken ct)
     {
-        var body = $"<!doctype html><html><head><meta charset=\"utf-8\"><title>Home Assistant Companion</title></head>"
+        var body = $"<!doctype html><html><head><meta charset=\"utf-8\"><title>{Branding.ProductName}</title></head>"
                  + $"<body style=\"font-family:Segoe UI,sans-serif;padding:2rem\">{WebUtility.HtmlEncode(message)}</body></html>";
         var bytes = Encoding.UTF8.GetBytes(body);
         var header = "HTTP/1.1 200 OK\r\n"

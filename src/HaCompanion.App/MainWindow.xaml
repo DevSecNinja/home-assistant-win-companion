@@ -7,7 +7,7 @@
     xmlns:local="using:HaCompanion_App"
     xmlns:tb="using:H.NotifyIcon"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-    Title="Home Assistant Companion"
+    Title="Windows Companion for Home Assistant"
     mc:Ignorable="d">
     <Window.SystemBackdrop>
         <MicaBackdrop />
@@ -19,7 +19,7 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <TitleBar x:Name="AppTitleBar" Title="Home Assistant Companion">
+        <TitleBar x:Name="AppTitleBar" Title="Windows Companion for Home Assistant">
             <TitleBar.IconSource>
                 <ImageIconSource ImageSource="Assets/AppIcon.ico" />
             </TitleBar.IconSource>
@@ -27,7 +27,7 @@
 
         <tb:TaskbarIcon
             x:Name="TrayIcon"
-            ToolTipText="Home Assistant Companion"
+            ToolTipText="Windows Companion for Home Assistant"
             IconSource="Assets/AppIcon.ico">
             <tb:TaskbarIcon.ContextFlyout>
                 <MenuFlyout>
@@ -81,7 +81,7 @@
             HorizontalAlignment="Center"
             Spacing="12"
             Visibility="Collapsed">
-            <TextBlock Text="Home Assistant Companion" Style="{StaticResource SubtitleTextBlockStyle}" />
+            <TextBlock Text="Windows Companion for Home Assistant" Style="{StaticResource SubtitleTextBlockStyle}" />
             <StackPanel Orientation="Horizontal" Spacing="8">
                 <TextBlock Text="Server:" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                 <TextBlock x:Name="ServerText" Text="—" TextTrimming="CharacterEllipsis" />

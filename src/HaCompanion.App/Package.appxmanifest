@@ -16,8 +16,8 @@
   <mp:PhoneIdentity PhoneProductId="4A404302-78DE-4474-9A88-2740DC4241BB" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
 
   <Properties>
-    <DisplayName>HaCompanion.App</DisplayName>
-    <PublisherDisplayName>AppPublisher</PublisherDisplayName>
+    <DisplayName>Windows Companion for Home Assistant</DisplayName>
+    <PublisherDisplayName>DevSecNinja</PublisherDisplayName>
     <Logo>Assets\StoreLogo.png</Logo>
   </Properties>
 
@@ -35,8 +35,8 @@
       Executable="$targetnametoken$.exe"
       EntryPoint="$targetentrypoint$">
       <uap:VisualElements
-        DisplayName="HaCompanion.App"
-        Description="HaCompanion.App"
+        DisplayName="Windows Companion for Home Assistant"
+        Description="Publishes PC sensors to Home Assistant and shows its notifications. An independent project, not affiliated with or endorsed by the Open Home Foundation."
         BackgroundColor="transparent"
         Square150x150Logo="Assets\Square150x150Logo.png"
         Square44x44Logo="Assets\Square44x44Logo.png">

@@ -6,6 +6,23 @@
     <RootNamespace>HaCompanion_App</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <!--
+      Gives the executable itself a Win32 icon, so Explorer, the taskbar, Alt+Tab
+      and the SmartScreen prompt all show the brand rather than a blank default.
+      Regenerate with .\scripts\build-brand-assets.ps1; never edit the .ico.
+    -->
+    <ApplicationIcon>Assets\AppIcon.ico</ApplicationIcon>
+    <!--
+      Display metadata. The assembly and executable stay named HaCompanion.App:
+      the "Start with Windows" registry entry points at that exact file name, so
+      renaming it would orphan existing users' startup entries.
+    -->
+    <Product>Windows Companion for Home Assistant</Product>
+    <AssemblyTitle>Windows Companion for Home Assistant</AssemblyTitle>
+    <Company>DevSecNinja</Company>
+    <Authors>DevSecNinja</Authors>
+    <Description>An independent Windows companion that publishes PC sensors to Home Assistant and shows its notifications. Not affiliated with or endorsed by the Open Home Foundation.</Description>
+    <Copyright>Copyright (c) DevSecNinja</Copyright>
+    <!--
       x86 is deliberately not supported: Windows 11 is x64/ARM64 only, and offering
       it made the solution's default "Any CPU" build a 32-bit app while the 64-bit
       output was the one being run - so a stale binary could be launched silently.
@@ -28,7 +45,6 @@
 
   <ItemGroup>
     <Content Include="Assets\SplashScreen.scale-200.png" />
-    <Content Include="Assets\LockScreenLogo.scale-200.png" />
     <Content Include="Assets\Square150x150Logo.scale-200.png" />
     <Content Include="Assets\Square44x44Logo.scale-200.png" />
     <Content Include="Assets\Square44x44Logo.targetsize-24_altform-unplated.png" />

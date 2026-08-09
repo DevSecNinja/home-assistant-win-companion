@@ -1,7 +1,21 @@
-# Home Assistant Windows Companion
+<p align="center">
+  <img src="brand/dist/mark-128.png" width="96" height="96" alt="" />
+</p>
 
-A lean, native Windows companion for [Home Assistant](https://www.home-assistant.io/) —
-the Windows counterpart to the official [iOS/macOS app](https://github.com/home-assistant/iOS).
+<h1 align="center">Windows Companion for Home Assistant</h1>
+
+<p align="center">
+  A lean, native Windows companion for
+  <a href="https://www.home-assistant.io/">Home Assistant</a> — the Windows
+  counterpart to the official
+  <a href="https://github.com/home-assistant/iOS">iOS/macOS app</a>.
+</p>
+
+> [!NOTE]
+> An independent project. Not affiliated with, endorsed by, or sponsored by the Open
+> Home Foundation, Nabu Casa, or the Home Assistant project. "Home Assistant" is a
+> trademark of the Open Home Foundation. "Windows" is a trademark of the Microsoft
+> group of companies.
 
 It is **not** a dashboard. It stays out of your way in the system tray, reports your
 PC's status to Home Assistant, turns Home Assistant notifications into native Windows
@@ -209,6 +223,7 @@ Full behaviour, including the deliberate limitations, is recorded in
 | `src/HaCompanion.Core` | Platform-agnostic logic: HA REST/webhook client, OAuth, WebSocket protocol, sensors, reconnect. No UI dependency and covered by unit tests. |
 | `src/HaCompanion.App` | WinUI 3 (Windows App SDK) shell: OAuth loopback listener, tray icon, toasts, Credential Locker, battery via `GetSystemPowerStatus`. |
 | `tests/HaCompanion.Core.Tests` | xUnit tests for the core library. |
+| `brand/` | Vector masters for the logo and the script that generates every shipped icon and image from them. See [`docs/branding.md`](docs/branding.md). |
 
 Secrets live only in the Windows Credential Locker, including the refresh token,
 `webhook_id`, and any cloudhook URL. Non-secret config (the primary URL, optional

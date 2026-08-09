@@ -1,0 +1,25 @@
+<!--
+  Windows Companion for Home Assistant - primary application mark.
+  Master artwork. Generated assets are produced from this file by
+  `brand/build-assets.mjs`; never edit the generated PNG/ICO files directly.
+
+  Geometry (256 grid): window title bar y 59..99, 16-unit knockout gap,
+  body y 115..219, both x 32..224 with 24-unit corner radii. The companion
+  sphere is r=44 at (176, 79) and is separated from the window by a 16-unit
+  halo carved with the mask below. Artwork bounding box is y 35..219, which
+  sits one unit above the geometric centre to optically compensate for the
+  bottom-heavy window body.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <mask id="companion-halo">
+      <rect width="256" height="256" fill="#ffffff" />
+      <circle cx="176" cy="79" r="60" fill="#000000" />
+    </mask>
+  </defs>
+  <g mask="url(#companion-halo)">
+    <path d="M 32 99 L 32 83 A 24 24 0 0 1 56 59 L 200 59 A 24 24 0 0 1 224 83 L 224 99 Z" fill="#000000" />
+    <path d="M 32 115 L 224 115 L 224 195 A 24 24 0 0 1 200 219 L 56 219 A 24 24 0 0 1 32 195 Z" fill="#000000" />
+  </g>
+  <circle cx="176" cy="79" r="44" fill="#000000" />
+</svg>

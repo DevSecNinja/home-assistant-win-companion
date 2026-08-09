@@ -3,6 +3,13 @@
 The companion currently ships as an unpackaged Windows application. A future WinGet
 package is tracked in [issue #39](https://github.com/DevSecNinja/home-assistant-win-companion/issues/39).
 
+The product is named **Windows Companion for Home Assistant**. The executable is
+`HaCompanion.App.exe`; that file name is deliberately unchanged, because the
+"Start with Windows" entry points at the exact path of that file.
+
+It is an independent project and is not affiliated with, endorsed by, or sponsored by
+the Open Home Foundation, Nabu Casa, or the Home Assistant project.
+
 ## Requirements
 
 - Windows 10 build 19041 or later, or Windows 11.

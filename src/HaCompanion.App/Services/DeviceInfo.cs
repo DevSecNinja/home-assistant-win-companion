@@ -13,7 +13,7 @@ public static class DeviceInfo
         {
             DeviceId = deviceId,
             AppId = "io.homeassistant.windows",
-            AppName = "Home Assistant Windows Companion",
+            AppName = "Windows Companion for Home Assistant",
             AppVersion = version,
             DeviceName = Environment.MachineName,
             // The real SMBIOS manufacturer/model make the Home Assistant device card

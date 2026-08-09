@@ -12,7 +12,7 @@ public sealed class DeviceRegistrationRequest
     public string AppId { get; set; } = "io.homeassistant.windows";
 
     [JsonPropertyName("app_name")]
-    public string AppName { get; set; } = "Home Assistant Windows Companion";
+    public string AppName { get; set; } = "Windows Companion for Home Assistant";
 
     [JsonPropertyName("app_version")]
     public string AppVersion { get; set; } = "0.1.0";

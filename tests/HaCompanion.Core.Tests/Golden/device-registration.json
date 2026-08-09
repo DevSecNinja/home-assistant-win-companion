@@ -1,7 +1,7 @@
 {
   "device_id": "device-123",
   "app_id": "io.homeassistant.windows",
-  "app_name": "Home Assistant Windows Companion",
+  "app_name": "Windows Companion for Home Assistant",
   "app_version": "1.2.3",
   "device_name": "DESKTOP-TEST",
   "manufacturer": "Contoso",

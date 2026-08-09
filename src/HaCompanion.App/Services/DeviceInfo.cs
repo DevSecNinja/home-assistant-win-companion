@@ -16,8 +16,10 @@ public static class DeviceInfo
             AppName = "Home Assistant Windows Companion",
             AppVersion = version,
             DeviceName = Environment.MachineName,
-            Manufacturer = "PC",
-            Model = RuntimeInformation.OSArchitecture.ToString() + " Windows PC",
+            // The real SMBIOS manufacturer/model make the Home Assistant device card
+            // recognisable. No serial, SKU or UUID is read; see HardwareInfo.
+            Manufacturer = HardwareInfo.Manufacturer() ?? "PC",
+            Model = HardwareInfo.Model() ?? RuntimeInformation.OSArchitecture + " Windows PC",
             OsName = "Windows",
             OsVersion = Environment.OSVersion.Version.ToString(),
             SupportsEncryption = false

@@ -54,6 +54,14 @@ Keeping this testable is why platform sources delegate their lifecycle to a Core
 coordinator and their OS hook to a small watcher interface. Stress tests use fakes
 and counters and never sleep for a threshold, so they stay deterministic in CI.
 
+Polled sources follow the same rule through `SensorPollLoop` and `ChangeGate<T>`:
+start/stop/restart, single-flight collection, quiet cancellation and change
+detection live in Core, so the Windows-only sources inherit tested behavior
+instead of each re-implementing it untested. A scheduled collection that fails
+leaves the poller alive rather than silently retiring the sensor until the next
+app start, and that too is a test rather than a comment.
+
+
 ## UI automation
 
 Automated WinUI sign-in and notification tests are not a merge gate. They require an

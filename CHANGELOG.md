@@ -1,5 +1,36 @@
 # Changelog
 
+## [0.2.0](https://github.com/DevSecNinja/home-assistant-win-companion/compare/v0.1.0...v0.2.0) (2026-08-09)
+
+
+### ⚠ BREAKING CHANGES
+
+* the executable is now WindowsCompanion.exe and user data lives in %LOCALAPPDATA%\WindowsCompanion\. Release archives are named WindowsCompanion-<version>-win-<arch>.zip. Upgrading users should expect to sign in once.
+
+### Features
+
+* **brand:** add original project identity and reproducible assets ([53403e7](https://github.com/DevSecNinja/home-assistant-win-companion/commit/53403e701519eab419c19649e22bd0520567f7fc))
+* **brand:** add original project identity and reproducible assets ([c4c6fc8](https://github.com/DevSecNinja/home-assistant-win-companion/commit/c4c6fc8bd8bdc10852b0aaa6d0e8b61a73ef2640))
+* **deps:** update dependency sharp ( 0.34.5 ➔ 0.35.0 ) [security] ([#80](https://github.com/DevSecNinja/home-assistant-win-companion/issues/80)) ([83cb2a2](https://github.com/DevSecNinja/home-assistant-win-companion/commit/83cb2a26e914a7f6bea425ab40e3c1b1ddc2ed99))
+* **installer:** add per-user Windows setup ([d867032](https://github.com/DevSecNinja/home-assistant-win-companion/commit/d867032df21e9cdab0a3f9a01b242218a5df83d5))
+* **installer:** add per-user Windows setup ([96ddacb](https://github.com/DevSecNinja/home-assistant-win-companion/commit/96ddacb77f5eed745229d74a7d59b20b3f3c3d97))
+* **mise:** Update tool node ( 22.23.2 ➔ 24.18.0 ) ([bb4aca8](https://github.com/DevSecNinja/home-assistant-win-companion/commit/bb4aca8f5178360aca63c1c4bb9c2596a11b3ae9))
+* **mise:** Update tool node ( 22.23.2 ➔ 24.18.0 ) ([946b70b](https://github.com/DevSecNinja/home-assistant-win-companion/commit/946b70b3d0c7a5aad4fd512d2b2bb7eb3166d5e9))
+
+
+### Bug Fixes
+
+* **brand:** compare generated PNGs by pixels, not compressed bytes ([360880d](https://github.com/DevSecNinja/home-assistant-win-companion/commit/360880d13168bdaf908a56b5528b10890e297b41))
+* **build:** align installer with renamed project ([cd49d76](https://github.com/DevSecNinja/home-assistant-win-companion/commit/cd49d76703f541dd9ab7c722c9afacebb783e36b))
+* **deps:** update dependency sharp ( 0.35.0 ➔ 0.35.3 ) [automerge] ([#83](https://github.com/DevSecNinja/home-assistant-win-companion/issues/83)) ([c4b0b5f](https://github.com/DevSecNinja/home-assistant-win-companion/commit/c4b0b5f292fefd73e789a10290c1370b32c7f3f3))
+* repair Release builds and submit the sign-in form on Enter ([2ba81da](https://github.com/DevSecNinja/home-assistant-win-companion/commit/2ba81daeba113d47961cfaaf7cc1e7a59910e787))
+* repair Release builds and submit the sign-in form on Enter ([0348977](https://github.com/DevSecNinja/home-assistant-win-companion/commit/03489777b6199d0a24949d02cb057071018c98dc))
+
+
+### Code Refactoring
+
+* rename the product identity to WindowsCompanion ([30b62ab](https://github.com/DevSecNinja/home-assistant-win-companion/commit/30b62ab39b531e3dcab2fa5cf0b5a189d0754d7f))
+
 ## 0.1.0 (2026-08-09)
 
 

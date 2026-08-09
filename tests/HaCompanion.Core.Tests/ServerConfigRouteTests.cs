@@ -10,16 +10,14 @@ public class ServerConfigRouteTests
     private const string External = "https://ha.example.com/";
 
     [Fact]
-    public void An_install_from_the_single_url_era_keeps_working_and_asks_to_be_classified()
+    public void An_install_from_the_single_url_era_stays_in_single_url_mode()
     {
         var config = new ServerConfig { BaseUrl = External };
 
-        Assert.True(config.MigrateRoutes());
-
-        Assert.True(config.RouteAssignmentPending);
+        Assert.False(config.MigrateRoutes());
+        Assert.False(config.UseSeparateUrls);
+        Assert.False(config.RouteAssignmentPending);
         Assert.Equal(External, config.BaseUrl);
-        // Deliberately not guessed: split DNS and reverse proxies make the hostname
-        // a poor signal, so nothing is assigned until the user says so.
         Assert.Null(config.InternalUrl);
         Assert.Null(config.ExternalUrl);
     }
@@ -29,7 +27,7 @@ public class ServerConfigRouteTests
     {
         var config = new ServerConfig { BaseUrl = External };
 
-        Assert.True(config.MigrateRoutes());
+        Assert.False(config.MigrateRoutes());
         Assert.False(config.MigrateRoutes());
     }
 
@@ -39,16 +37,55 @@ public class ServerConfigRouteTests
         var config = new ServerConfig();
 
         Assert.False(config.MigrateRoutes());
+        Assert.False(config.UseSeparateUrls);
         Assert.False(config.RouteAssignmentPending);
     }
 
     [Fact]
-    public void An_install_that_already_has_routes_is_never_flagged()
+    public void One_route_from_the_first_dual_url_release_becomes_the_single_url()
     {
         var config = new ServerConfig { BaseUrl = External, ExternalUrl = External };
 
-        Assert.False(config.MigrateRoutes());
+        Assert.True(config.MigrateRoutes());
+        Assert.False(config.UseSeparateUrls);
+        Assert.Equal(External, config.BaseUrl);
+        Assert.Null(config.ExternalUrl);
         Assert.False(config.RouteAssignmentPending);
+    }
+
+    [Fact]
+    public void Two_existing_routes_preserve_the_opted_in_dual_url_configuration()
+    {
+        var config = new ServerConfig
+        {
+            BaseUrl = External,
+            InternalUrl = Internal,
+            ExternalUrl = External
+        };
+
+        Assert.True(config.MigrateRoutes());
+        Assert.True(config.UseSeparateUrls);
+        Assert.Equal(Internal, config.InternalUrl);
+        Assert.Equal(External, config.ExternalUrl);
+    }
+
+    [Fact]
+    public void An_opted_in_single_route_configuration_stays_opted_in()
+    {
+        var config = new ServerConfig
+        {
+            BaseUrl = External,
+            ExternalUrl = External,
+            UseSeparateUrls = true,
+            ConnectionMode = ConnectionMode.ExternalOnly,
+            TrustedNetworks = new TrustedNetworkSettings { Ssids = { "HomeNet" } }
+        };
+
+        Assert.False(config.MigrateRoutes());
+        Assert.True(config.UseSeparateUrls);
+        Assert.Equal(ConnectionMode.ExternalOnly, config.ConnectionMode);
+        Assert.Equal(["HomeNet"], config.TrustedNetworks.Ssids);
+        Assert.Equal(External, config.ExternalUrl);
     }
 
     [Fact]
@@ -62,18 +99,29 @@ public class ServerConfigRouteTests
         };
 
         Assert.True(config.MigrateRoutes());
+        Assert.False(config.UseSeparateUrls);
         Assert.False(config.RouteAssignmentPending);
+        Assert.Equal(External, config.BaseUrl);
+        Assert.Null(config.ExternalUrl);
     }
 
     [Fact]
-    public void Assigning_a_route_resolves_the_migration_prompt()
+    public void Setting_a_single_url_clears_route_specific_settings()
     {
-        var config = new ServerConfig { BaseUrl = External, RouteAssignmentPending = true };
+        var config = new ServerConfig
+        {
+            BaseUrl = External,
+            InternalUrl = Internal,
+            ExternalUrl = External,
+            UseSeparateUrls = true
+        };
 
-        config.SetRoute(RouteKind.External, External);
+        config.SetSingleUrl(External);
 
+        Assert.False(config.UseSeparateUrls);
         Assert.False(config.RouteAssignmentPending);
-        Assert.Equal(External, config.UrlFor(RouteKind.External));
+        Assert.Null(config.InternalUrl);
+        Assert.Null(config.ExternalUrl);
     }
 
     [Fact]
@@ -126,6 +174,7 @@ public class ServerConfigRouteTests
         var config = new ServerConfig
         {
             BaseUrl = Internal,
+            UseSeparateUrls = true,
             InternalUrl = Internal,
             ExternalUrl = External,
             ConnectionMode = ConnectionMode.PreferInternal,
@@ -138,6 +187,7 @@ public class ServerConfigRouteTests
         var restored = JsonSerializer.Deserialize<ServerConfig>(json)!;
 
         Assert.Contains("\"PreferInternal\"", json, StringComparison.Ordinal);
+        Assert.True(restored.UseSeparateUrls);
         Assert.Equal(ConnectionMode.PreferInternal, restored.ConnectionMode);
         Assert.Equal(RouteKind.Internal, restored.LastSuccessfulRoute);
         Assert.Equal(Internal, restored.InternalUrl);

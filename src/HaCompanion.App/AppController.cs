@@ -70,7 +70,7 @@ public sealed class AppController : IAsyncDisposable
     /// <summary>Which address is in use, and how routing is currently doing.</summary>
     public RouteStatus RouteState =>
         _config is null ? RouteStatus.Offline
-        : _config.RouteAssignmentPending && _supervisor?.ActiveRoute is null ? RouteStatus.Unassigned
+        : !_config.UseSeparateUrls ? RouteStatus.SingleUrl
         : _supervisor?.Status ?? RouteStatus.Offline;
 
     /// <summary>One word for the status view and tray tooltip.</summary>
@@ -79,12 +79,9 @@ public sealed class AppController : IAsyncDisposable
         RouteStatus.Internal => "Internal",
         RouteStatus.External => "External",
         RouteStatus.FailingOver => "Failing over",
-        RouteStatus.Unassigned => "Single address",
+        RouteStatus.SingleUrl => "Single URL",
         _ => "Offline"
     };
-
-    /// <summary>True while a migrated install still has one unclassified address.</summary>
-    public bool RouteAssignmentPending => _config?.RouteAssignmentPending ?? false;
 
     /// <summary>The local network snapshot, for the trusted-network settings UI.</summary>
     public NetworkContext CurrentNetwork => _network.GetCurrent();
@@ -213,9 +210,7 @@ public sealed class AppController : IAsyncDisposable
         if (string.IsNullOrEmpty(config.DeviceId))
             config.DeviceId = Guid.NewGuid().ToString("N");
 
-        // A single address at sign-in is not evidence of being internal or
-        // external, so it is flagged for the user to classify rather than guessed.
-        if (config.ConfiguredRoutes().Count == 0) config.RouteAssignmentPending = true;
+        config.SetSingleUrl(baseUrl);
 
         _settings.Save(config);
         _config = config;
@@ -236,6 +231,8 @@ public sealed class AppController : IAsyncDisposable
 
             return new ConnectionSettingsDraft
             {
+                PrimaryUrl = config.BaseUrl,
+                UseSeparateUrls = config.UseSeparateUrls,
                 InternalUrl = config.InternalUrl,
                 ExternalUrl = config.ExternalUrl,
                 Mode = config.ConnectionMode,
@@ -284,11 +281,14 @@ public sealed class AppController : IAsyncDisposable
         var previous = Snapshot(config);
         RouteValidator.Apply(config, draft, report);
         _settings.Save(config);
+        _supervisor = null;
+        var activeUrl = config.UseSeparateUrls ? null : config.BaseUrl;
 
         try
         {
             await PrepareRouteAsync(RouteTrigger.UserRequested, lease.Token).ConfigureAwait(false);
-            if (!string.Equals(_supervisor?.ActiveUrl, previous.BaseUrl, StringComparison.OrdinalIgnoreCase)
+            activeUrl ??= _supervisor?.ActiveUrl;
+            if (!string.Equals(activeUrl, previous.BaseUrl, StringComparison.OrdinalIgnoreCase)
                 && _connection is not null)
             {
                 await RestartOnActiveRouteAsync(lease.Token).ConfigureAwait(false);
@@ -326,48 +326,6 @@ public sealed class AppController : IAsyncDisposable
     }
 
     /// <summary>
-    /// Records the user's decision about a migrated single address. Deliberately
-    /// explicit: a hostname cannot tell internal from external once split DNS,
-    /// reverse proxies or Nabu Casa are involved.
-    /// </summary>
-    public async Task AssignMigratedRouteAsync(RouteKind route, CancellationToken ct = default)
-    {
-        using var lease = await _lifecycle
-            .AcquireAsync(LifecycleIntent.Reconfigure, ct)
-            .ConfigureAwait(false);
-
-        var config = _config ?? throw new InvalidOperationException("No connected server.");
-        if (string.IsNullOrWhiteSpace(config.BaseUrl))
-            throw new InvalidOperationException("There is no saved address to classify.");
-
-        // Classifying is still a route assignment, so it obeys the same transport
-        // rule as the settings panel: a plain-HTTP address cannot become external.
-        var url = RouteUrlPolicy.Normalize(config.BaseUrl, route);
-        if (!url.Accepted || url.Url is null)
-        {
-            throw new InvalidOperationException(
-                url.Message ?? "The saved address cannot be used for that route.");
-        }
-
-        config.SetRoute(route, url.Url);
-        config.RouteAssignmentPending = false;
-        config.LastSuccessfulRoute = route;
-        _settings.Save(config);
-        _supervisor ??= CreateSupervisor(config);
-        _supervisor.Adopt(route, url.Url);
-        RouteChanged?.Invoke();
-    }
-
-    /// <summary>
-    /// Which classification the saved address most likely is. A suggestion for the
-    /// UI to preselect; the user still chooses.
-    /// </summary>
-    public RouteKind SuggestRouteForSavedUrl() =>
-        _config is not null && RouteUrlPolicy.LooksPrivate(_config.BaseUrl)
-            ? RouteKind.Internal
-            : RouteKind.External;
-
-    /// <summary>
     /// Addresses Home Assistant itself reports, offered as suggestions only. The
     /// cloudhook URL is never offered: it embeds the webhook capability secret.
     /// </summary>
@@ -396,17 +354,18 @@ public sealed class AppController : IAsyncDisposable
         RouteChanged?.Invoke();
     }
 
-    private static (string BaseUrl, string? Internal, string? External, ConnectionMode Mode,
+    private static (string BaseUrl, bool Separate, string? Internal, string? External, ConnectionMode Mode,
         TrustedNetworkSettings Trusted, bool Pending) Snapshot(ServerConfig config) =>
-        (config.BaseUrl, config.InternalUrl, config.ExternalUrl, config.ConnectionMode,
+        (config.BaseUrl, config.UseSeparateUrls, config.InternalUrl, config.ExternalUrl, config.ConnectionMode,
             config.TrustedNetworks, config.RouteAssignmentPending);
 
     private static void Restore(
         ServerConfig config,
-        (string BaseUrl, string? Internal, string? External, ConnectionMode Mode,
+        (string BaseUrl, bool Separate, string? Internal, string? External, ConnectionMode Mode,
             TrustedNetworkSettings Trusted, bool Pending) snapshot)
     {
         config.BaseUrl = snapshot.BaseUrl;
+        config.UseSeparateUrls = snapshot.Separate;
         config.InternalUrl = snapshot.Internal;
         config.ExternalUrl = snapshot.External;
         config.ConnectionMode = snapshot.Mode;
@@ -687,7 +646,7 @@ public sealed class AppController : IAsyncDisposable
         var config = _config!;
         _supervisor ??= CreateSupervisor(config);
 
-        if (config.ConfiguredRoutes().Count == 0) return;
+        if (!config.UseSeparateUrls || config.ConfiguredRoutes().Count == 0) return;
 
         var decision = await _supervisor
             .EvaluateAsync(_network.GetCurrent(), trigger, ct)
@@ -754,7 +713,7 @@ public sealed class AppController : IAsyncDisposable
         var config = _config;
         var supervisor = _supervisor;
         if (config is null || supervisor is null) return;
-        if (config.ConfiguredRoutes().Count == 0) return;
+        if (!config.UseSeparateUrls || config.ConfiguredRoutes().Count == 0) return;
 
         try
         {

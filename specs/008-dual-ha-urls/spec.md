@@ -3,13 +3,15 @@
 **Status**: Shipped
 **Supersedes**: [006-change-server-url](../006-change-server-url/spec.md)
 
-Store an internal and an external Home Assistant address, choose between them
-from the current network, and fail over between them without re-registering the
-device or losing the refresh token, webhook, entities or history.
+Use one Home Assistant address by default. Users whose internal and external
+addresses differ can explicitly enable route selection and failover without
+re-registering the device or losing the refresh token, webhook, entities or history.
 
 ## Requirements
 
-- Store an internal address, an external address, or both, plus a connection mode.
+- Keep the signed-in address as the default single-URL configuration.
+- Reveal internal/external addresses, trusted networks and connection modes only
+  after the user opts into separate URLs.
 - Offer five modes: Automatic, Prefer internal, Prefer external, Internal only,
   External only.
 - Prove both addresses reach the same Home Assistant instance before saving.
@@ -27,13 +29,14 @@ device or losing the refresh token, webhook, entities or history.
 | Field | Purpose |
 | --- | --- |
 | `BaseUrl` | The address in use right now. Kept in step with the active route. |
+| `UseSeparateUrls` | Explicit opt-in to internal/external route selection; false by default. |
 | `InternalUrl` | Address used on the user's own network. May be plain HTTP. |
 | `ExternalUrl` | Address used from anywhere else. HTTPS only. |
 | `ConnectionMode` | `Automatic`, `PreferInternal`, `PreferExternal`, `InternalOnly`, `ExternalOnly`. |
 | `TrustedNetworks` | SSIDs, optional BSSIDs, and the wired/unknown-network switches. |
 | `LastSuccessfulRoute` / `LastSuccessfulRouteAt` | The route that last carried a validated connection. |
 | `InstanceDeviceId` | Home Assistant's device-registry id for this registration. |
-| `RouteAssignmentPending` | Set on a migrated single-URL install until the user classifies it. |
+| `RouteAssignmentPending` | Legacy compatibility field; cleared during migration. |
 
 `BaseUrl` stays authoritative so anything that only needs "where is Home
 Assistant right now" keeps working. Modes and routes serialize as strings, so the
@@ -163,17 +166,13 @@ sync loops and notification subscriptions — running invisibly alongside each o
 
 ## Migration
 
-An install saved by a single-URL version keeps its `BaseUrl` and keeps working;
-startup is unaffected. It is flagged `RouteAssignmentPending` and the Connection
-settings panel asks the user whether that address is internal or external.
+An install saved by a single-URL version keeps its `BaseUrl`, remains connected,
+and stays in the default single-URL mode. No classification prompt is shown.
 
-The classification is deliberately **not** guessed. Split DNS, reverse proxies
-and Nabu Casa all make a hostname a poor signal, and guessing wrong would either
-leak an internal hostname to an untrusted network or pin the user to an
-unreachable address. `RouteUrlPolicy.LooksPrivate` only preselects a suggestion.
-
-Classifying obeys the same transport rule as the settings panel, so a saved
-plain-HTTP address cannot be turned into the external route.
+Configurations from the first dual-URL release that contain both route addresses
+are migrated with `UseSeparateUrls` enabled. A configuration containing only one
+route-specific address is collapsed back to `BaseUrl`, because one address does
+not need network classification or failover.
 
 ## Privacy
 

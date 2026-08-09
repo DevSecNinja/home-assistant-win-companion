@@ -5,6 +5,8 @@ namespace HaCompanion.Core.App;
 /// <summary>The connection settings the user is proposing, before validation.</summary>
 public sealed record ConnectionSettingsDraft
 {
+    public string? PrimaryUrl { get; init; }
+    public bool UseSeparateUrls { get; init; }
     public string? InternalUrl { get; init; }
     public string? ExternalUrl { get; init; }
     public ConnectionMode Mode { get; init; } = ConnectionMode.Automatic;
@@ -81,6 +83,9 @@ public static class RouteValidator
         ArgumentNullException.ThrowIfNull(draft);
         ArgumentNullException.ThrowIfNull(probe);
 
+        if (!draft.UseSeparateUrls)
+            return await ValidateSingleAsync(current, draft, probe, ct).ConfigureAwait(false);
+
         var internalUrl = RouteUrlPolicy.Normalize(draft.InternalUrl, RouteKind.Internal);
         var externalUrl = RouteUrlPolicy.Normalize(draft.ExternalUrl, RouteKind.External);
 
@@ -120,7 +125,35 @@ public static class RouteValidator
             entries.Add(new RouteValidationEntry(route, url with { Url = result.ResolvedUrl ?? url.Url }, result));
         }
 
-        return Judge(current, draft, entries);
+        return Judge(current, draft, entries, singleUrl: false);
+    }
+
+    private static async Task<RouteValidationReport> ValidateSingleAsync(
+        ServerConfig current,
+        ConnectionSettingsDraft draft,
+        IRouteProbe probe,
+        CancellationToken ct)
+    {
+        var url = RouteUrlPolicy.Normalize(draft.PrimaryUrl, RouteKind.Internal);
+        if (!url.Accepted)
+        {
+            return new RouteValidationReport(
+                [new RouteValidationEntry(RouteKind.Internal, url, null)],
+                false,
+                url.Message ?? "The address is not usable.");
+        }
+
+        if (url.Url is null)
+            return new RouteValidationReport([], false, "Enter a Home Assistant address.");
+
+        var result = await probe
+            .ProbeAsync(RouteKind.Internal, url.Url, current.WebhookId, ct)
+            .ConfigureAwait(false);
+        var entry = new RouteValidationEntry(
+            RouteKind.Internal,
+            url with { Url = result.ResolvedUrl ?? url.Url },
+            result);
+        return Judge(current, draft, [entry], singleUrl: true);
     }
 
     private static string? ModeRequirementUnmet(
@@ -135,23 +168,30 @@ public static class RouteValidator
         };
 
     private static RouteValidationReport Judge(
-        ServerConfig current, ConnectionSettingsDraft draft, List<RouteValidationEntry> entries)
+        ServerConfig current,
+        ConnectionSettingsDraft draft,
+        List<RouteValidationEntry> entries,
+        bool singleUrl)
     {
         var tested = entries.Where(e => e.Probe is not null).ToList();
 
         if (tested.Any(e => e.Probe!.Status == RouteProbeStatus.CredentialsRejected))
         {
             return new RouteValidationReport(entries, false,
-                "One address did not accept this PC's saved sign-in, so it is not the same "
-                + "Home Assistant instance. Nothing was changed.",
+                singleUrl
+                    ? "The address did not accept this PC's saved sign-in. Nothing was changed."
+                    : "One address did not accept this PC's saved sign-in, so it is not the same "
+                      + "Home Assistant instance. Nothing was changed.",
                 RequiresSignIn: true);
         }
 
         if (tested.Any(e => e.Probe!.Status == RouteProbeStatus.DifferentInstance))
         {
             return new RouteValidationReport(entries, false,
-                "One address points at a different Home Assistant instance. Both addresses "
-                + "must reach the same instance for the device, entities and history to survive.",
+                singleUrl
+                    ? "The address points at a different Home Assistant instance."
+                    : "One address points at a different Home Assistant instance. Both addresses "
+                      + "must reach the same instance for the device, entities and history to survive.",
                 RequiresSignIn: true);
         }
 
@@ -181,8 +221,9 @@ public static class RouteValidator
             && !string.Equals(current.InstanceDeviceId, identities[0], StringComparison.Ordinal))
         {
             return new RouteValidationReport(entries, false,
-                "These addresses reach a different Home Assistant instance than this PC is "
-                + "registered with. Remove the server and sign in again to move instance.",
+                (singleUrl ? "This address reaches" : "These addresses reach")
+                + " a different Home Assistant instance than this PC is registered with. "
+                + "Remove the server and sign in again to move instance.",
                 RequiresSignIn: true);
         }
 
@@ -190,23 +231,32 @@ public static class RouteValidator
         if (unreachable.Count > 0 && !draft.AcknowledgeUnreachable)
         {
             return new RouteValidationReport(entries, false,
-                $"The {Describe(unreachable)} address could not be reached from this network. "
-                + "Confirm that this is expected to save it anyway; it is checked again when "
-                + "it can be reached.",
+                singleUrl
+                    ? "The address could not be reached from this network. Confirm that this is "
+                      + "expected to save it anyway."
+                    : $"The {Describe(unreachable)} address could not be reached from this network. "
+                      + "Confirm that this is expected to save it anyway; it is checked again when "
+                      + "it can be reached.",
                 RequiresAcknowledgement: true);
         }
 
         if (!tested.Any(e => e.Probe!.Ok))
         {
             return new RouteValidationReport(entries, false,
-                "Neither address could be validated, so the previous configuration was kept.",
+                singleUrl
+                    ? "The address could not be validated, so the previous configuration was kept."
+                    : "Neither address could be validated, so the previous configuration was kept.",
                 RequiresAcknowledgement: unreachable.Count > 0);
         }
 
         return new RouteValidationReport(entries, true,
             unreachable.Count == 0
-                ? "Both addresses reach the same Home Assistant instance."
-                : $"Saved; the {Describe(unreachable)} address will be validated when it can be reached.",
+                ? singleUrl
+                    ? "The address reaches this Home Assistant instance."
+                    : "Both addresses reach the same Home Assistant instance."
+                : singleUrl
+                    ? "Saved; the address will be validated when it can be reached."
+                    : $"Saved; the {Describe(unreachable)} address will be validated when it can be reached.",
             identities.FirstOrDefault());
     }
 
@@ -225,8 +275,19 @@ public static class RouteValidator
         ArgumentNullException.ThrowIfNull(report);
         if (!report.CanSave) throw new InvalidOperationException("The draft was not validated.");
 
+        if (!draft.UseSeparateUrls)
+        {
+            var url = report.For(RouteKind.Internal)?.Url.Url
+                      ?? throw new InvalidOperationException("The single address was not validated.");
+            config.SetSingleUrl(url);
+            if (!string.IsNullOrEmpty(report.InstanceDeviceId))
+                config.InstanceDeviceId = report.InstanceDeviceId;
+            return;
+        }
+
         config.SetRoute(RouteKind.Internal, report.For(RouteKind.Internal)?.Url.Url);
         config.SetRoute(RouteKind.External, report.For(RouteKind.External)?.Url.Url);
+        config.UseSeparateUrls = true;
         config.ConnectionMode = draft.Mode;
         config.TrustedNetworks = draft.TrustedNetworks;
         config.RouteAssignmentPending = false;

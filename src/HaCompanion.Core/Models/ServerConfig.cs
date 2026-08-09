@@ -22,6 +22,12 @@ public sealed class ServerConfig
     /// <summary>Address used from anywhere else. HTTPS only.</summary>
     public string? ExternalUrl { get; set; }
 
+    /// <summary>
+    /// Whether the user opted into separate internal/external routing. The default
+    /// is one address in <see cref="BaseUrl"/>.
+    /// </summary>
+    public bool UseSeparateUrls { get; set; }
+
     [JsonConverter(typeof(JsonStringEnumConverter))]
     public ConnectionMode ConnectionMode { get; set; } = ConnectionMode.Automatic;
 
@@ -47,9 +53,8 @@ public sealed class ServerConfig
     public string? InstanceDeviceId { get; set; }
 
     /// <summary>
-    /// Set when an install with a single URL was migrated. The address keeps
-    /// working; the user is asked to say whether it is internal or external
-    /// rather than having it guessed from the hostname.
+    /// Retained for compatibility with the first dual-URL release. Current
+    /// versions migrate this state back to the default single-URL experience.
     /// </summary>
     public bool RouteAssignmentPending { get; set; }
 
@@ -145,6 +150,20 @@ public sealed class ServerConfig
         if (ConfiguredRoutes().Count > 0) RouteAssignmentPending = false;
     }
 
+    /// <summary>Uses one address everywhere and clears route-specific settings.</summary>
+    public void SetSingleUrl(string url)
+    {
+        BaseUrl = url;
+        InternalUrl = null;
+        ExternalUrl = null;
+        UseSeparateUrls = false;
+        ConnectionMode = ConnectionMode.Automatic;
+        TrustedNetworks = new TrustedNetworkSettings();
+        LastSuccessfulRoute = null;
+        LastSuccessfulRouteAt = null;
+        RouteAssignmentPending = false;
+    }
+
     /// <summary>Marks a route as active, keeping <see cref="BaseUrl"/> in step.</summary>
     public void SetActiveRoute(RouteKind route, DateTimeOffset at)
     {
@@ -156,25 +175,40 @@ public sealed class ServerConfig
     }
 
     /// <summary>
-    /// Brings an install saved by a single-URL version forward. The existing
-    /// address stays in use so startup is unaffected; it is only flagged for the
-    /// user to classify, because internal versus external cannot be inferred
-    /// reliably from a hostname (split DNS, reverse proxies and Nabu Casa all
-    /// break the guess).
+    /// Brings earlier routing configurations forward. One address remains the
+    /// default; two configured addresses imply that the user had opted into
+    /// separate routing before this flag existed.
     /// </summary>
     /// <returns>True when the configuration changed and should be saved.</returns>
     public bool MigrateRoutes()
     {
-        if (ConfiguredRoutes().Count > 0)
+        var routes = ConfiguredRoutes();
+        if (routes.Count >= 2)
         {
-            if (!RouteAssignmentPending) return false;
+            var changed = !UseSeparateUrls || RouteAssignmentPending;
+            UseSeparateUrls = true;
             RouteAssignmentPending = false;
+            return changed;
+        }
+
+        if (routes.Count == 1)
+        {
+            if (UseSeparateUrls)
+            {
+                if (!RouteAssignmentPending) return false;
+                RouteAssignmentPending = false;
+                return true;
+            }
+
+            var routeUrl = UrlFor(routes[0])!;
+            SetSingleUrl(routeUrl);
             return true;
         }
 
-        if (string.IsNullOrWhiteSpace(BaseUrl) || RouteAssignmentPending) return false;
+        if (!RouteAssignmentPending && !UseSeparateUrls) return false;
 
-        RouteAssignmentPending = true;
+        RouteAssignmentPending = false;
+        UseSeparateUrls = false;
         return true;
     }
 

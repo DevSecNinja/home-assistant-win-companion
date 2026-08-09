@@ -30,14 +30,13 @@ public enum RouteKind
 }
 
 /// <summary>
-/// What the user sees about routing. <see cref="Unassigned"/> covers installs
-/// migrated from a single URL that have not yet been classified by the user.
+/// What the user sees about routing.
 /// </summary>
 public enum RouteStatus
 {
     Offline,
+    SingleUrl,
     Internal,
     External,
-    FailingOver,
-    Unassigned
+    FailingOver
 }

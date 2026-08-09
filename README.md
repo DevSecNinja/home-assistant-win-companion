@@ -182,16 +182,20 @@ webhook, the device and its history — nothing re-registers and no duplicate de
 appears. If an address turns out to be a different instance, nothing is changed and
 the app offers a confirmed replace-and-sign-in instead.
 
+**One URL by default.** Most users only need the address they signed in with. The
+Connection panel shows that single address first; internal/external routing,
+trusted networks and failover remain hidden until **I use different internal and
+external URLs** is enabled.
+
 **Security.** The external address must be HTTPS. Redirects that change host or
 drop from HTTPS to HTTP are refused. Every address is confirmed to be a Home
 Assistant frontend *before* any credential is sent to it, so a captive portal or a
 hijacked DNS answer never sees your token. The internal address may be plain HTTP
 with a warning, as before. Certificate validation is never relaxed.
 
-**Upgrading.** An existing install keeps its address and keeps working. Because
-split DNS, reverse proxies and Nabu Casa make a hostname a poor signal, the app
-does not guess whether it is internal or external — it asks once, and preselects a
-suggestion.
+**Upgrading.** An existing single-address install keeps that address and stays in
+the default one-URL mode. Existing configurations that already contain both an
+internal and external address keep advanced routing enabled.
 
 Full behaviour, including the deliberate limitations, is recorded in
 [`specs/008-dual-ha-urls/spec.md`](specs/008-dual-ha-urls/spec.md).
@@ -205,9 +209,9 @@ Full behaviour, including the deliberate limitations, is recorded in
 | `tests/HaCompanion.Core.Tests` | xUnit tests for the core library. |
 
 Secrets live only in the Windows Credential Locker, including the refresh token,
-`webhook_id`, and any cloudhook URL. Non-secret config (internal and external URLs,
-connection mode, trusted network names, device id, sensor choices, and
-registered-sensor metadata) goes to
+`webhook_id`, and any cloudhook URL. Non-secret config (the primary URL, optional
+internal/external URLs, connection mode, trusted network names, device id, sensor
+choices, and registered-sensor metadata) goes to
 `%LOCALAPPDATA%\HaCompanion\settings.json`. The last observed lifecycle transition
 is journalled separately in `%LOCALAPPDATA%\HaCompanion\lifecycle.json`, so a write
 interrupted by a shutdown cannot damage the configuration. Existing installs migrate

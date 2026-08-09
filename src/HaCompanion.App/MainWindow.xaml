@@ -140,92 +140,87 @@
             <StackPanel Grid.Row="0" Padding="24,16,24,8" Spacing="4">
                 <TextBlock Text="Connection" Style="{StaticResource SubtitleTextBlockStyle}" />
                 <TextBlock
-                    Text="Two addresses for the same Home Assistant. The companion picks the right one for the network you are on and keeps the same device, entities and history."
+                    Text="Use one Home Assistant address by default. If your internal and external addresses differ, enable separate URLs below."
                     TextWrapping="Wrap"
                     Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
             </StackPanel>
 
             <ScrollViewer Grid.Row="1" Padding="24,0,24,0">
                 <StackPanel Spacing="12">
-                    <StackPanel
-                        x:Name="MigrationBanner"
-                        Spacing="8"
-                        Padding="12"
-                        Visibility="Collapsed"
-                        BorderThickness="1"
-                        CornerRadius="4"
-                        BorderBrush="{ThemeResource SystemFillColorCautionBrush}">
+                    <TextBox
+                        x:Name="SingleUrlBox"
+                        Header="Home Assistant address"
+                        PlaceholderText="https://homeassistant.example.com" />
+                    <CheckBox
+                        x:Name="UseSeparateUrlsBox"
+                        Content="I use different internal and external URLs"
+                        Checked="OnUseSeparateUrlsChanged"
+                        Unchecked="OnUseSeparateUrlsChanged" />
+
+                    <StackPanel x:Name="SeparateUrlsPanel" Spacing="12" Visibility="Collapsed">
                         <TextBlock
-                            Text="Your saved address needs classifying"
-                            FontWeight="SemiBold"
-                            TextWrapping="Wrap" />
-                        <TextBlock
-                            x:Name="MigrationText"
+                            Text="Both addresses must reach the same Home Assistant instance. Keep the same sign-in, device, entities and history."
                             TextWrapping="Wrap"
+                            FontSize="12"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        <TextBox
+                            x:Name="InternalUrlBox"
+                            Header="Internal address (on your own network)"
+                            PlaceholderText="http://homeassistant.local:8123" />
+                        <TextBox
+                            x:Name="ExternalUrlBox"
+                            Header="External address (from anywhere else, HTTPS only)"
+                            PlaceholderText="https://example.duckdns.org" />
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Button Content="Suggest from Home Assistant" Click="OnSuggestUrls" />
+                            <TextBlock
+                                x:Name="SuggestionText"
+                                VerticalAlignment="Center"
+                                TextWrapping="Wrap"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        </StackPanel>
+
+                        <ComboBox
+                            x:Name="ConnectionModeBox"
+                            Header="When to use which address"
+                            HorizontalAlignment="Stretch">
+                            <ComboBoxItem Content="Automatic" />
+                            <ComboBoxItem Content="Prefer internal" />
+                            <ComboBoxItem Content="Prefer external" />
+                            <ComboBoxItem Content="Internal only" />
+                            <ComboBoxItem Content="External only" />
+                        </ComboBox>
+
+                        <TextBlock Text="Trusted networks" FontWeight="SemiBold" />
+                        <TextBlock
+                            Text="The internal address is only used on networks you list here. These names stay on this PC: they are never sent to Home Assistant, never written to the log, and listing a network does not switch on the Wi-Fi sensors."
+                            TextWrapping="Wrap"
+                            FontSize="12"
                             Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                         <StackPanel Orientation="Horizontal" Spacing="8">
-                            <Button Content="It is internal" Click="OnAssignInternal" />
-                            <Button Content="It is external" Click="OnAssignExternal" />
+                            <TextBlock x:Name="CurrentNetworkText" VerticalAlignment="Center" TextWrapping="Wrap" />
+                            <Button x:Name="TrustNetworkButton" Content="Trust this network" Click="OnTrustCurrentNetwork" />
                         </StackPanel>
-                    </StackPanel>
-
-                    <TextBox
-                        x:Name="InternalUrlBox"
-                        Header="Internal address (on your own network)"
-                        PlaceholderText="http://homeassistant.local:8123" />
-                    <TextBox
-                        x:Name="ExternalUrlBox"
-                        Header="External address (from anywhere else, HTTPS only)"
-                        PlaceholderText="https://example.duckdns.org" />
-                    <StackPanel Orientation="Horizontal" Spacing="8">
-                        <Button Content="Suggest from Home Assistant" Click="OnSuggestUrls" />
+                        <StackPanel x:Name="TrustedNetworkList" Spacing="4" />
+                        <CheckBox
+                            x:Name="RequireBssidBox"
+                            Content="Also match the exact access point (records its address; mesh Wi-Fi may fail)"
+                            Checked="OnRequireBssidChanged"
+                            Unchecked="OnRequireBssidChanged" />
+                        <CheckBox x:Name="TrustWiredBox" Content="Treat any wired network as my own network" />
+                        <CheckBox
+                            x:Name="ProbeUnknownBox"
+                            Content="Try the internal address as a fallback on unrecognised networks" />
+                        <Button
+                            Content="Open Windows Location settings"
+                            Click="OnOpenLocationSettings"
+                            HorizontalAlignment="Stretch" />
                         <TextBlock
-                            x:Name="SuggestionText"
-                            VerticalAlignment="Center"
+                            Text="Windows only reveals the Wi-Fi network name to this app when Location is allowed. Without it, unrecognised networks use the external address."
                             TextWrapping="Wrap"
+                            FontSize="12"
                             Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                     </StackPanel>
-
-                    <ComboBox
-                        x:Name="ConnectionModeBox"
-                        Header="When to use which address"
-                        HorizontalAlignment="Stretch">
-                        <ComboBoxItem Content="Automatic" />
-                        <ComboBoxItem Content="Prefer internal" />
-                        <ComboBoxItem Content="Prefer external" />
-                        <ComboBoxItem Content="Internal only" />
-                        <ComboBoxItem Content="External only" />
-                    </ComboBox>
-
-                    <TextBlock Text="Trusted networks" FontWeight="SemiBold" />
-                    <TextBlock
-                        Text="The internal address is only used on networks you list here. These names stay on this PC: they are never sent to Home Assistant, never written to the log, and listing a network does not switch on the Wi-Fi sensors."
-                        TextWrapping="Wrap"
-                        FontSize="12"
-                        Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                    <StackPanel Orientation="Horizontal" Spacing="8">
-                        <TextBlock x:Name="CurrentNetworkText" VerticalAlignment="Center" TextWrapping="Wrap" />
-                        <Button x:Name="TrustNetworkButton" Content="Trust this network" Click="OnTrustCurrentNetwork" />
-                    </StackPanel>
-                    <StackPanel x:Name="TrustedNetworkList" Spacing="4" />
-                    <CheckBox
-                        x:Name="RequireBssidBox"
-                        Content="Also match the exact access point (records its address; mesh Wi-Fi may fail)"
-                        Checked="OnRequireBssidChanged"
-                        Unchecked="OnRequireBssidChanged" />
-                    <CheckBox x:Name="TrustWiredBox" Content="Treat any wired network as my own network" />
-                    <CheckBox
-                        x:Name="ProbeUnknownBox"
-                        Content="Try the internal address as a fallback on unrecognised networks" />
-                    <Button
-                        Content="Open Windows Location settings"
-                        Click="OnOpenLocationSettings"
-                        HorizontalAlignment="Stretch" />
-                    <TextBlock
-                        Text="Windows only reveals the Wi-Fi network name to this app when Location is allowed. Without it, unrecognised networks use the external address."
-                        TextWrapping="Wrap"
-                        FontSize="12"
-                        Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
 
                     <CheckBox
                         x:Name="AcknowledgeUnreachableBox"
@@ -240,7 +235,7 @@
 
             <StackPanel Grid.Row="2" Padding="24,8,24,20" Spacing="8">
                 <ProgressRing x:Name="ConnectionProgress" IsActive="False" Width="20" Height="20" HorizontalAlignment="Left" />
-                <Button x:Name="TestRoutesButton" Content="Test both URLs" Click="OnTestRoutes" HorizontalAlignment="Stretch" />
+                <Button x:Name="TestRoutesButton" Content="Test URL" Click="OnTestRoutes" HorizontalAlignment="Stretch" />
                 <Button
                     x:Name="SaveRoutesButton"
                     Content="Validate and save"

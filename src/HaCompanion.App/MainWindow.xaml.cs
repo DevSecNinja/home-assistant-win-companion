@@ -516,9 +516,28 @@ public sealed partial class MainWindow : Window
 
     private void OnExit(object sender, RoutedEventArgs e)
     {
+        if (_exiting) return;
         _exiting = true;
+
+        // Let the tray flyout finish dispatching its click before disposing the
+        // icon and its WinUI objects. Tearing them down inside their own callback
+        // can raise a CoreMessaging stowed exception.
+        if (!_dispatcher.TryEnqueue(async () => await CompleteExitAsync()))
+            _exiting = false;
+    }
+
+    internal async Task RequestExitAsync()
+    {
+        if (_exiting) return;
+
+        _exiting = true;
+        await CompleteExitAsync();
+    }
+
+    private async Task CompleteExitAsync()
+    {
         TrayIcon.Dispose();
-        Application.Current.Exit();
+        await ((App)Application.Current).ShutdownAsync();
     }
 
     private void OnWindowClosing(Microsoft.UI.Windowing.AppWindow sender,

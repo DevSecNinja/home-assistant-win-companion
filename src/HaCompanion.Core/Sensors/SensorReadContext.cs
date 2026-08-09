@@ -16,4 +16,7 @@ public readonly record struct SensorReadContext(string Reason)
     public static SensorReadContext Periodic => new("Periodic");
     public static SensorReadContext StateChange => new("State Change");
     public static SensorReadContext SettingsChanged => new("Settings Changed");
+
+    /// <summary>The machine is sleeping, signing out or shutting down.</summary>
+    public static SensorReadContext LifecycleTransition => new("Lifecycle Transition");
 }

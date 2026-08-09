@@ -36,8 +36,8 @@ public sealed class WindowsThemeSensorSource : ISensorSource
             + "are reported through the sensor's attributes.",
             SensorPrivacy.Benign,
             EnabledByDefault: true,
-            ResourceUsage: "Event-driven with no polling. Reads local Windows theme settings and "
-                           + "requests an immediate batch only when they change.")
+            ResourceUsage: "Low. Does not check repeatedly. Sends an extra update only when the "
+                           + "Windows theme changes.")
     ];
 
     public IReadOnlyList<Sensor> Read(IReadOnlySet<string> enabled, SensorReadContext context)

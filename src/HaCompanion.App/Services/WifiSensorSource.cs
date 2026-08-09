@@ -29,17 +29,16 @@ public sealed class WifiSensorSource : ISensorSource
             "The connected Wi-Fi network name. Windows treats this as location data.",
             SensorPrivacy.Sensitive,
             EnabledByDefault: false,
-            ResourceUsage: "Reads the local Wi-Fi connection after Windows reports a network "
-                           + "change. Each Windows network-change event requests an immediate "
-                           + "batch, and those events can arrive in short bursts."),
+            ResourceUsage: "Usually low. Sends an extra update when Windows reports a network "
+                           + "change. Windows can report several changes close together."),
         new(
             BssidId,
             "Wi-Fi BSSID",
             "The connected access point identifier. Windows treats this as precise location data.",
             SensorPrivacy.Sensitive,
             EnabledByDefault: false,
-            ResourceUsage: "Shares the event-driven local Wi-Fi query with SSID and requests an "
-                           + "immediate batch for each Windows network-change event.")
+            ResourceUsage: "Usually low. Shares the Wi-Fi check with SSID and sends an extra update "
+                           + "for each Windows network-change notice.")
     ];
 
     public IReadOnlyList<Sensor> Read(

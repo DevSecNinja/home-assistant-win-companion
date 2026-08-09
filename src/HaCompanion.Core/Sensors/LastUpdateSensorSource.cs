@@ -33,8 +33,8 @@ public sealed class LastUpdateSensorSource : ISensorSource
             + "the recorder cost.",
             SensorPrivacy.Benign,
             EnabledByDefault: false,
-            ResourceUsage: "Changes in every normal batch, creating a Home Assistant recorder entry "
-                           + "about once per minute even when nothing else changed.")
+            ResourceUsage: "Higher Home Assistant history use. Creates a new history entry about "
+                           + "once per minute, even when nothing else changed.")
     };
 
     public IReadOnlyList<Sensor> Read(IReadOnlySet<string> enabled, SensorReadContext context)

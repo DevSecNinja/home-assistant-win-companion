@@ -35,7 +35,9 @@ public sealed class WindowsThemeSensorSource : ISensorSource
             "On while Windows apps are using the dark theme. High-contrast themes "
             + "are reported through the sensor's attributes.",
             SensorPrivacy.Benign,
-            EnabledByDefault: true)
+            EnabledByDefault: true,
+            ResourceUsage: "Event-driven with no polling. Reads local Windows theme settings and "
+                           + "requests an immediate batch only when they change.")
     ];
 
     public IReadOnlyList<Sensor> Read(IReadOnlySet<string> enabled, SensorReadContext context)

@@ -35,7 +35,10 @@ public sealed class FrontmostAppSensorSource : ISensorSource
             "Frontmost App",
             "The active application. Full window titles may reveal documents, messages and websites.",
             SensorPrivacy.Sensitive,
-            EnabledByDefault: false)
+            EnabledByDefault: false,
+            ResourceUsage: "Event-driven local Windows hook. Waits 4 seconds for app switching "
+                           + "to settle, then includes the latest value in the normal batch; it "
+                           + "does not send every foreground change.")
     ];
 
     public IReadOnlyList<Sensor> Read(

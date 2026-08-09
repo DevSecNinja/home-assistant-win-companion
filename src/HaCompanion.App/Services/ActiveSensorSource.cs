@@ -45,13 +45,18 @@ public sealed class ActiveSensorSource : ISensorSource
             "Active",
             "On while you are actively using this PC. Off when locked, asleep or idle.",
             SensorPrivacy.Benign,
-            EnabledByDefault: true),
+            EnabledByDefault: true,
+            ResourceUsage: "Checks idle time locally every 5 seconds with a lightweight Windows "
+                           + "call. Lock, unlock and sleep are event-driven; a changed state "
+                           + "requests an immediate batch."),
         new SensorDefinition(
             ScreenLockedId,
             "Screen Locked",
             "On while this PC's screen is locked.",
             SensorPrivacy.Benign,
-            EnabledByDefault: true)
+            EnabledByDefault: true,
+            ResourceUsage: "Uses Windows lock/unlock events. Shares the Active sensor's lightweight "
+                           + "5-second idle check and requests an immediate batch when state changes.")
     };
 
     public IReadOnlyList<Sensor> Read(IReadOnlySet<string> enabled, SensorReadContext context)

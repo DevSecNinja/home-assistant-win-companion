@@ -752,6 +752,17 @@ public sealed partial class MainWindow : Window
                 FontSize = 12,
                 Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"]
             });
+            if (!string.IsNullOrWhiteSpace(definition.ResourceUsage))
+            {
+                text.Children.Add(new TextBlock
+                {
+                    Text = $"Updates and resource use: {definition.ResourceUsage}",
+                    TextWrapping = TextWrapping.Wrap,
+                    FontSize = 12,
+                    Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources[
+                        "TextFillColorSecondaryBrush"]
+                });
+            }
             text.Children.Add(new TextBlock
             {
                 Text = previews.TryGetValue(definition.UniqueId, out var value)

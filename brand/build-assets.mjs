@@ -39,20 +39,46 @@ async function emit(target, buffer, { deterministic = true } = {}) {
   const rel = path.relative(REPO, target).replace(/\\/g, '/');
   if (CHECK) {
     // Assets whose bytes depend on the host's installed fonts cannot be
-    // compared byte-for-byte across machines, so --check only asserts that
-    // they exist.
+    // compared across machines, so --check only asserts that they exist.
     if (!existsSync(target)) {
       failures.push(`missing: ${rel}`);
       return;
     }
     if (!deterministic) return;
+
     const current = await readFile(target);
-    if (!current.equals(buffer)) failures.push(`stale: ${rel}`);
+    if (current.equals(buffer)) return;
+
+    // PNG compression is not reproducible across libvips/zlib builds: the same
+    // pixels can encode to different bytes on a different machine. Compare the
+    // decoded image instead, which still fails loudly when the artwork itself
+    // changes. Vector and ICO outputs stay a strict byte comparison.
+    if (target.endsWith('.png') && (await pixelsEqual(current, buffer))) return;
+
+    failures.push(`stale: ${rel}`);
     return;
   }
   await writeFile(target, buffer);
   written += 1;
   console.log(`  ${rel}`);
+}
+
+async function pixelsEqual(a, b) {
+  try {
+    const [left, right] = await Promise.all(
+      [a, b].map((input) =>
+        sharp(input).ensureAlpha().raw().toBuffer({ resolveWithObject: true }),
+      ),
+    );
+
+    return (
+      left.info.width === right.info.width &&
+      left.info.height === right.info.height &&
+      left.data.equals(right.data)
+    );
+  } catch {
+    return false;
+  }
 }
 
 const readMaster = (name) => readFile(path.join(SRC, name), 'utf8');

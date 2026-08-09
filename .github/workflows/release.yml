@@ -42,15 +42,15 @@ jobs:
         id: inno
         shell: pwsh
         env:
-          # Renovate keeps INNO_VERSION on the latest jrsoftware/issrc release
-          # (upstream tags use underscores, for example is-7_0_2). See the
-          # "Inno Setup compiler" custom manager in renovate.json5.
-          INNO_VERSION: "7_0_2"
-          INNO_SIGNER: Pyrsys B.V.
+          # Upstream release tags use underscores, so this pin stores 7_0_2 and
+          # the step derives the tag and the dotted asset name from it.
+          # renovate: datasource=github-releases depName=jrsoftware/issrc
+          inno_version: "7_0_2"
+          inno_signer: Pyrsys B.V.
         run: |
-          $version = $env:INNO_VERSION -replace '_', '.'
+          $version = $env:inno_version -replace '_', '.'
           $asset = "innosetup-$version-x64.exe"
-          $url = "https://github.com/jrsoftware/issrc/releases/download/is-$env:INNO_VERSION/$asset"
+          $url = "https://github.com/jrsoftware/issrc/releases/download/is-$env:inno_version/$asset"
           $installer = Join-Path $env:RUNNER_TEMP $asset
           $directory = Join-Path $env:RUNNER_TEMP 'inno-setup'
           Invoke-WebRequest $url -OutFile $installer
@@ -61,7 +61,7 @@ jobs:
             throw "Inno Setup Authenticode signature is $($signature.Status)."
           }
           $subject = $signature.SignerCertificate.Subject
-          if ($subject -notlike "*CN=$env:INNO_SIGNER*") {
+          if ($subject -notlike "*CN=$env:inno_signer*") {
             throw "Inno Setup was signed by an unexpected publisher: $subject."
           }
           $process = Start-Process $installer -Wait -PassThru -ArgumentList @(

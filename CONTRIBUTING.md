@@ -73,12 +73,14 @@ updates for every dependency in this repository:
 - Tool versions pinned in `.mise.toml`.
 - Direct and reusable GitHub Actions, including the SHA-pinned digests and the
   `# renovate: datasource=... depName=...`-annotated version inputs (for example
-  `mise-version` and `syft-version`) in `.github/workflows/*.yml`.
-- The Inno Setup compiler pinned as `INNO_VERSION` in
-  `.github/workflows/release.yml`, through the custom manager in
-  `renovate.json5`. Upstream tags are underscore-separated (`is-7_0_2`), so the
-  pin stores `7_0_2` and the workflow derives both the release tag and the
-  dotted asset name (`innosetup-7.0.2-x64.exe`) from it.
+  `mise-version`, `syft-version` and `inno_version`) in
+  `.github/workflows/*.yml`.
+
+The Inno Setup compiler uses that same annotation convention: `inno_version` in
+`.github/workflows/release.yml` is the pin, and the step derives the release tag
+and the asset name from it. Upstream tags are underscore-separated (`is-7_0_2`),
+so the pin stores `7_0_2` and `renovate.json5` only supplies the matching
+`extractVersion` and `versioning` for that dependency.
 
 Three dependencies are tracked but need manual review, so `renovate.json5`
 disables automerge for them:
@@ -91,6 +93,6 @@ disables automerge for them:
   packages, so a compiler bump should be reviewed and, ideally, smoke-tested.
   The download is not pinned by SHA-256 because Renovate cannot compute a
   checksum for a new release. Instead the workflow requires a valid Authenticode
-  signature from the pinned publisher (`INNO_SIGNER`) and logs the SHA-256 of
+  signature from the pinned publisher (`inno_signer`) and logs the SHA-256 of
   the downloaded installer. If upstream ever signs under a different name the
-  release job fails; verify the new publisher before updating `INNO_SIGNER`.
+  release job fails; verify the new publisher before updating `inno_signer`.

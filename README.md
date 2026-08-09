@@ -105,6 +105,17 @@ one that just works with stock Home Assistant.**
 - **Open Home Assistant** — one click (window or tray menu) to open your instance in
   the default browser.
 
+### The sensor catalog
+
+Every sensor is opt-in, explains what it costs to run, and shows its current value
+locally before anything is sent. Switching one off means it is not collected at all,
+not merely filtered out.
+
+<p align="center">
+  <img src="docs/images/sensors.png" width="600"
+       alt="The Sensors screen, listing Battery Level, Battery State, Active, Screen Locked and Connection Type. Each has a description, an impact note, the current value, and an individual on/off toggle." />
+</p>
+
 ## Requirements
 
 - Windows 10 (build 19041+) or Windows 11

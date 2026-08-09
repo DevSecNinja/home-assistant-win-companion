@@ -62,3 +62,30 @@ organization workflow. It does not manage the .NET or Windows SDK toolchain.
 
 No repository-wide VS Code settings are committed. Visual Studio and Rider are the
 primary full-app environments; individual editor preferences should remain local.
+
+## Dependency management
+
+[Renovate](https://docs.renovatebot.com/) (`renovate.json5`) tracks and proposes
+updates for every dependency in this repository:
+
+- NuGet packages referenced by the `.csproj` files.
+- npm packages in `brand/package.json`.
+- Tool versions pinned in `.mise.toml`.
+- Direct and reusable GitHub Actions, including the SHA-pinned digests and the
+  `# renovate: datasource=... depName=...`-annotated version inputs (for example
+  `mise-version` and `syft-version`) in `.github/workflows/*.yml`.
+
+Two categories are intentionally exempt or restricted:
+
+- `H.NotifyIcon.WinUI` and `Microsoft.WindowsAppSDK` in
+  `src/WindowsCompanion.App/WindowsCompanion.App.csproj` are still tracked by
+  Renovate, but `renovate.json5` disables automerge for them: both changes affect
+  runtime prerequisites (the installed Windows App Runtime, or the minimum .NET
+  version) and need manual verification before merging.
+- The Inno Setup installer download in `.github/workflows/release.yml` (`INNO_URL`
+  / `INNO_SHA256`) is **not** managed by Renovate. The workflow verifies the
+  downloaded installer's SHA-256 hash and Authenticode signature before running
+  it, and Renovate cannot compute or verify that hash for a new release. Bumping
+  this pin requires manually downloading the new installer, confirming its
+  Authenticode signature, recomputing the SHA-256 checksum, and updating both
+  values together.

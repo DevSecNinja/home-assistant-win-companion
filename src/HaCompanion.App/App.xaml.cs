@@ -14,6 +14,7 @@ namespace HaCompanion_App;
 /// </summary>
 public partial class App : Application
 {
+    private const string InstanceMutexName = @"Local\WindowsCompanion.Instance";
     private static readonly TimeSpan ShutdownTimeout = TimeSpan.FromSeconds(5);
     private static string ShutdownSignalName =>
         $@"Local\HaCompanion.App.Shutdown.{Environment.ProcessId}";
@@ -22,6 +23,7 @@ public partial class App : Application
     private DispatcherQueue? _dispatcher;
     private EventWaitHandle? _shutdownSignal;
     private RegisteredWaitHandle? _shutdownRegistration;
+    private Mutex? _instanceMutex;
     private bool _notificationsRegistered;
     private int _shutdownStarted;
 
@@ -34,6 +36,7 @@ public partial class App : Application
     /// </summary>
     public App()
     {
+        _instanceMutex = new Mutex(initiallyOwned: false, InstanceMutexName);
         InitializeComponent();
     }
 
@@ -117,6 +120,9 @@ public partial class App : Application
 
                 _notificationsRegistered = false;
             }
+
+            _instanceMutex?.Dispose();
+            _instanceMutex = null;
 
             // WinUI's Application.Exit can leave this unpackaged tray process
             // alive, and has produced CoreMessaging stowed exceptions during

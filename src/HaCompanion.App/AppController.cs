@@ -430,8 +430,10 @@ public sealed class AppController : IAsyncDisposable
 
     /// <summary>
     /// Forgets the server entirely: revokes the refresh token with Home Assistant
-    /// and removes all stored credentials and configuration. The user must sign in
-    /// again afterwards.
+    /// and removes all stored credentials and configuration. Home Assistant's
+    /// Mobile App API has no registration-delete endpoint, so its device entry is
+    /// deliberately left for the user to remove there. The user must sign in again
+    /// afterwards.
     /// </summary>
     public async Task RemoveServerAsync(CancellationToken ct = default)
     {

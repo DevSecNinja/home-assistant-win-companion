@@ -201,6 +201,7 @@ public sealed partial class MainWindow : Window
 
         if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
 
+        var homeAssistantUrl = _controller.BaseUrl;
         _statusTimer.Stop();
         try
         {
@@ -214,6 +215,32 @@ public sealed partial class MainWindow : Window
         DisconnectButton.Content = "Disconnect";
         UpdateNowButton.IsEnabled = true;
         ShowView(View.Connect);
+
+        var removed = new ContentDialog
+        {
+            XamlRoot = Content.XamlRoot,
+            Title = "Server removed from this PC",
+            Content = "The saved sign-in and local server settings were removed. "
+                      + "Home Assistant keeps the Mobile App device and its entities because "
+                      + "its app API does not provide a delete operation. To remove them too, "
+                      + "open Home Assistant and delete this device under Settings → Devices "
+                      + "& services → Mobile App.",
+            PrimaryButtonText = string.IsNullOrWhiteSpace(homeAssistantUrl)
+                ? string.Empty
+                : "Open Home Assistant",
+            CloseButtonText = "Done",
+            DefaultButton = ContentDialogButton.Close
+        };
+
+        if (await removed.ShowAsync() == ContentDialogResult.Primary
+            && !string.IsNullOrWhiteSpace(homeAssistantUrl))
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = homeAssistantUrl,
+                UseShellExecute = true
+            });
+        }
     }
 
     private async void OnForcePush(object sender, RoutedEventArgs e)

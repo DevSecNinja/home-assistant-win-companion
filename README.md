@@ -120,9 +120,9 @@ one that just works with stock Home Assistant.**
 See the [end-user installation guide](docs/installation.md) for release downloads,
 runtime setup, updates, Start with Windows, and uninstallation.
 
-Current downloads are unpackaged and unsigned. The installation guide explains how
-to choose x64 or ARM64, verify a Release or `main` CI artifact, extract it safely,
-and handle the expected SmartScreen warning.
+Current downloads are unsigned. Versioned Releases provide a recommended per-user
+setup executable and an advanced portable ZIP for x64 and ARM64. The installation
+guide explains verification and the expected SmartScreen warning.
 
 The optional **WinGet Updates** sensor uses Microsoft's
 `Microsoft.WinGet.Client` PowerShell module version 1.29.280 or newer. If it is

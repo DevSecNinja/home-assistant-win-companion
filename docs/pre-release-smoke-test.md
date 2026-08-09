@@ -6,9 +6,21 @@ Assistant instance.
 ## Install and first launch
 
 - [ ] Install the required Windows App Runtime.
-- [ ] Build or unpack the exact release candidate.
-- [ ] Launch the executable and confirm the Connect view appears without an apphost
-      error dialog.
+- [ ] Install the x64 or ARM64 release candidate without administrator elevation.
+- [ ] Confirm the Start Menu shortcut and Apps & Features entry use the
+      `WindowsCompanion` product name.
+- [ ] Launch from the Start Menu and confirm the Connect view appears without an
+      apphost error dialog.
+- [ ] With the companion running, start the same setup again and confirm it clearly
+      asks for the app to be closed instead of failing on locked files.
+- [ ] Run a newer setup over an existing install and confirm settings, Credential
+      Locker secrets and the Home Assistant device registration are preserved.
+- [ ] Verify `/VERYSILENT /SUPPRESSMSGBOXES /NORESTART` install and uninstall for
+      future WinGet use.
+- [ ] Uninstall and confirm application files, Start Menu shortcut, Apps & Features
+      entry and Start with Windows value are removed, while settings/logs remain.
+- [ ] Extract the portable ZIP and confirm all files are contained in one versioned
+      top-level folder.
 
 ## Sign in and registration
 

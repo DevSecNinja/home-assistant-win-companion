@@ -44,7 +44,9 @@ $targets = @(
 foreach ($target in $targets) {
     $runtime = $target.Runtime
     $publishDirectory = Join-Path $OutputDirectory "publish\$runtime"
-    $archiveName = "WindowsCompanion-$Version-$runtime.zip"
+    $portableName = "WindowsCompanion-$Version-$runtime"
+    $portableDirectory = Join-Path $OutputDirectory "portable\$portableName"
+    $archiveName = "$portableName.zip"
     $archivePath = Join-Path $OutputDirectory $archiveName
 
     Write-Host "Publishing $runtime..." -ForegroundColor Cyan
@@ -72,11 +74,15 @@ foreach ($target in $targets) {
         (Join-Path $publishDirectory 'INSTALLATION.md')
 
     Get-ChildItem $publishDirectory -Recurse -Filter '*.pdb' | Remove-Item -Force
-    Compress-Archive -Path (Join-Path $publishDirectory '*') -DestinationPath $archivePath
+    [void](New-Item $portableDirectory -ItemType Directory -Force)
+    Copy-Item (Join-Path $publishDirectory '*') $portableDirectory -Recurse
+    Compress-Archive -Path $portableDirectory -DestinationPath $archivePath
 
     $hash = (Get-FileHash $archivePath -Algorithm SHA256).Hash.ToLowerInvariant()
     Set-Content "$archivePath.sha256" "$hash  $archiveName" -Encoding utf8NoBOM
 }
+
+Remove-Item (Join-Path $OutputDirectory 'portable') -Recurse -Force
 
 Write-Host "Release assets written to $OutputDirectory" -ForegroundColor Green
 Get-ChildItem $OutputDirectory -File | Select-Object Name, Length

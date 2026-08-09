@@ -1,4 +1,4 @@
-# Phase 1 Data Model: Home Assistant Windows Companion (MVP)
+# Phase 1 Data Model: Windows Companion for Home Assistant (MVP)
 
 ## Entities
 
@@ -42,7 +42,7 @@ unregistered, register again, and leave a duplicate device in Home Assistant.
 | ------------------- | ------ | ---------------------------------------------- |
 | device_id           | string | ServerConfig.DeviceId                          |
 | app_id              | string | `io.homeassistant.windows`                     |
-| app_name            | string | `Home Assistant Windows Companion`             |
+| app_name            | string | `Windows Companion for Home Assistant`             |
 | app_version         | string | Assembly version                               |
 | device_name         | string | Machine name                                   |
 | manufacturer        | string | System manufacturer (or "PC")                  |

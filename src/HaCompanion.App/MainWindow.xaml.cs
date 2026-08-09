@@ -657,9 +657,11 @@ public sealed partial class MainWindow : Window
             healthy ? "SystemFillColorSuccessBrush" : "SystemFillColorCautionBrush"];
 
         // The tray tooltip is the at-a-glance view when the window is hidden.
+        // The short name is used because Windows truncates the tooltip at 127
+        // characters and the status summary can be long.
         TrayIcon.ToolTipText = healthy
-            ? "Home Assistant Companion — Healthy"
-            : $"Home Assistant Companion — {summary}";
+            ? $"{Branding.ShortName} — Healthy"
+            : $"{Branding.ShortName} — {summary}";
     }
 
     private void OnOpenLog(object sender, RoutedEventArgs e) => _controller.OpenLogFile();

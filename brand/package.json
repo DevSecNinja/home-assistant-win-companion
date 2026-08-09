@@ -1,0 +1,13 @@
+{
+  "name": "hacompanion-brand",
+  "private": true,
+  "type": "module",
+  "description": "Reproducible export of the Windows Companion for Home Assistant brand assets.",
+  "scripts": {
+    "build": "node build-assets.mjs",
+    "check": "node build-assets.mjs --check"
+  },
+  "dependencies": {
+    "sharp": "0.34.5"
+  }
+}

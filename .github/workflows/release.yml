@@ -62,6 +62,37 @@ jobs:
           .\scripts\build-release.ps1
           -Version $env:VERSION
           -OutputDirectory artifacts\release
+      - name: Generate x64 SPDX SBOM
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
+        env:
+          SYFT_SOURCE_NAME: HaCompanion-win-x64
+          SYFT_SOURCE_VERSION: ${{ steps.version.outputs.version }}
+        with:
+          path: artifacts/release/publish/win-x64
+          format: spdx-json
+          output-file: artifacts/release/HaCompanion-${{ steps.version.outputs.version }}-win-x64.spdx.json
+          syft-version: v1.50.0
+          upload-artifact: false
+          upload-release-assets: false
+      - name: Generate ARM64 SPDX SBOM
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
+        env:
+          SYFT_SOURCE_NAME: HaCompanion-win-arm64
+          SYFT_SOURCE_VERSION: ${{ steps.version.outputs.version }}
+        with:
+          path: artifacts/release/publish/win-arm64
+          format: spdx-json
+          output-file: artifacts/release/HaCompanion-${{ steps.version.outputs.version }}-win-arm64.spdx.json
+          syft-version: v1.50.0
+          upload-artifact: false
+          upload-release-assets: false
+      - name: Generate SBOM checksums
+        shell: pwsh
+        run: |
+          Get-ChildItem artifacts\release\*.spdx.json | ForEach-Object {
+            $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            Set-Content "$($_.FullName).sha256" "$hash  $($_.Name)" -Encoding utf8NoBOM
+          }
       - name: Upload release assets
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -71,6 +102,10 @@ jobs:
             artifacts\release\HaCompanion-${{ steps.version.outputs.version }}-win-x64.zip.sha256
             artifacts\release\HaCompanion-${{ steps.version.outputs.version }}-win-arm64.zip
             artifacts\release\HaCompanion-${{ steps.version.outputs.version }}-win-arm64.zip.sha256
+            artifacts\release\HaCompanion-${{ steps.version.outputs.version }}-win-x64.spdx.json
+            artifacts\release\HaCompanion-${{ steps.version.outputs.version }}-win-x64.spdx.json.sha256
+            artifacts\release\HaCompanion-${{ steps.version.outputs.version }}-win-arm64.spdx.json
+            artifacts\release\HaCompanion-${{ steps.version.outputs.version }}-win-arm64.spdx.json.sha256
           if-no-files-found: error
           retention-days: 14
 
@@ -107,14 +142,35 @@ jobs:
           subject-path: |
             dist/HaCompanion-${{ needs.build.outputs.version }}-win-x64.zip
             dist/HaCompanion-${{ needs.build.outputs.version }}-win-arm64.zip
-      - name: Publish immutable GitHub Release
-        # renovate: datasource=github-tags depName=DevSecNinja/.github
-        uses: DevSecNinja/.github/actions/release-publish@7d7ddabef968d8505aceb8a1f8965afd872f0a0c # v2.4.0
-        with:
-          mise-version: "2026.7.12"
-          tag: ${{ needs.build.outputs.tag }}
-          assets: |
-            dist/HaCompanion-${{ needs.build.outputs.version }}-win-x64.zip
-            dist/HaCompanion-${{ needs.build.outputs.version }}-win-x64.zip.sha256
-            dist/HaCompanion-${{ needs.build.outputs.version }}-win-arm64.zip
-            dist/HaCompanion-${{ needs.build.outputs.version }}-win-arm64.zip.sha256
+            dist/HaCompanion-${{ needs.build.outputs.version }}-win-x64.spdx.json
+            dist/HaCompanion-${{ needs.build.outputs.version }}-win-arm64.spdx.json
+      - name: Upload assets and publish draft Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ needs.build.outputs.tag }}
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          set -euo pipefail
+          for attempt in {1..12}; do
+            if gh release view "${TAG}" --repo "${REPO}" >/dev/null 2>&1; then
+              break
+            fi
+            if [ "${attempt}" -eq 12 ]; then
+              echo "release-please did not create the draft Release for ${TAG}" >&2
+              exit 1
+            fi
+            sleep 5
+          done
+          gh release upload "${TAG}" \
+            --repo "${REPO}" \
+            --clobber \
+            "dist/HaCompanion-${VERSION}-win-x64.zip" \
+            "dist/HaCompanion-${VERSION}-win-x64.zip.sha256" \
+            "dist/HaCompanion-${VERSION}-win-arm64.zip" \
+            "dist/HaCompanion-${VERSION}-win-arm64.zip.sha256" \
+            "dist/HaCompanion-${VERSION}-win-x64.spdx.json" \
+            "dist/HaCompanion-${VERSION}-win-x64.spdx.json.sha256" \
+            "dist/HaCompanion-${VERSION}-win-arm64.spdx.json" \
+            "dist/HaCompanion-${VERSION}-win-arm64.spdx.json.sha256"
+          gh release edit "${TAG}" --repo "${REPO}" --draft=false

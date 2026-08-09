@@ -315,12 +315,3 @@ repository conventions, and pull request expectations.
 
 Report vulnerabilities privately according to [SECURITY.md](SECURITY.md). Do not
 include Home Assistant credentials, URLs, configuration, or logs in a public issue.
-
-## Code signing
-
-Release binaries are intended to use free open-source Authenticode signing through
-[SignPath Foundation](https://signpath.org/) once the project meets its public
-repository and initial unsigned-release requirements. SignPath keeps the private key
-out of this repository and GitHub Actions. Until onboarding is complete, downloads
-are explicitly labelled unsigned and Windows may show SmartScreen. See the
-[code signing decision](docs/code-signing.md).

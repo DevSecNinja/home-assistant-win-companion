@@ -52,6 +52,20 @@ Do not download an artifact merely because its workflow succeeded.
    Actions test artifacts do not currently have a separately published checksum;
    verify their `main` workflow run and commit as described above instead.
 
+   Each Release also includes a matching `.spdx.json` Software Bill of Materials
+   (SBOM) and checksum. The SBOM lists the components detected in that architecture's
+   package; it is useful for dependency and vulnerability review but is not required
+   to run the app.
+
+   GitHub also records build-provenance attestations for each ZIP and SBOM. With the
+   [GitHub CLI](https://cli.github.com/) installed, verify a downloaded asset was
+   produced by this repository's workflow:
+
+   ```powershell
+   gh attestation verify .\HaCompanion-<version>-win-<architecture>.zip `
+     --repo DevSecNinja/home-assistant-win-companion
+   ```
+
 3. Right-click the downloaded ZIP, choose **Properties**, and select **Unblock** if
    Windows shows that option. Apply the change before extracting so Windows does
    not mark every extracted file separately.
@@ -83,17 +97,13 @@ for an Authenticode signature.
 
 ## Why builds are not signed yet
 
-The project intends to sign releases through
-[SignPath Foundation](https://signpath.org/), a managed service for eligible open
-source projects. This avoids buying and securely operating a private certificate or
-placing a signing key in GitHub Actions.
-
-SignPath onboarding requires an established public repository and an initial
-unsigned release in the final distribution format. The project is completing those
-prerequisites before applying. If SignPath does not accept the project, OSSign is
-the preferred fallback. Until then, builds remain explicitly labelled unsigned.
-See the [code-signing decision](code-signing.md) for the full threat model and
-release design.
+The project intends to Authenticode-sign future releases through a managed provider,
+so no private signing key has to be stored in this repository or GitHub Actions.
+The available free open-source signing programs are not currently an option for this
+project, and buying and securely operating a commercial certificate is not justified
+for this early release. Until a suitable provider becomes available, builds remain
+explicitly labelled unsigned. The longer-term decision remains tracked in
+[issue #10](https://github.com/DevSecNinja/home-assistant-win-companion/issues/10).
 
 ## Update
 

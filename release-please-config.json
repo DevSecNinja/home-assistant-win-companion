@@ -3,10 +3,11 @@
   "release-type": "simple",
   "include-component-in-tag": false,
   "include-v-in-tag": true,
-  "skip-github-release": true,
+  "skip-github-release": false,
+  "force-tag-creation": true,
   "bump-minor-pre-major": true,
   "bump-patch-for-minor-pre-major": false,
-  "draft": false,
+  "draft": true,
   "prerelease": false,
   "packages": {
     ".": {

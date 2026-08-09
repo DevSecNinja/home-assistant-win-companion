@@ -47,7 +47,8 @@ public sealed class ActiveSensorSource : ISensorSource
             SensorPrivacy.Benign,
             EnabledByDefault: true,
             ResourceUsage: "Low. Checks keyboard and mouse idle time on this PC every 5 seconds. "
-                           + "Sends an extra update only when your active state changes."),
+                           + "Sends an extra update only when your active state changes.",
+            AutomationIdea: "When the PC becomes inactive, turn off the office lights."),
         new SensorDefinition(
             ScreenLockedId,
             "Screen Locked",
@@ -55,7 +56,8 @@ public sealed class ActiveSensorSource : ISensorSource
             SensorPrivacy.Benign,
             EnabledByDefault: true,
             ResourceUsage: "Low. Uses Windows lock and unlock notices. Sends an extra update only "
-                           + "when the lock state changes.")
+                           + "when the lock state changes.",
+            AutomationIdea: "When the screen is locked, dim the office lights.")
     };
 
     public IReadOnlyList<Sensor> Read(IReadOnlySet<string> enabled, SensorReadContext context)

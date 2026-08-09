@@ -48,7 +48,8 @@ public sealed class LifecycleSensorSource : ISensorSource
             SensorPrivacy.Benign,
             EnabledByDefault: false,
             ResourceUsage: "Low. Does not check repeatedly. May try one extra update before sleep, "
-                           + "sign-out or shutdown, but delivery is not guaranteed.")
+                           + "sign-out or shutdown, but delivery is not guaranteed.",
+            AutomationIdea: "When sleeping is reported, turn off the desk lights (best effort).")
     };
 
     public IReadOnlyList<Sensor> Read(IReadOnlySet<string> enabled, SensorReadContext context)

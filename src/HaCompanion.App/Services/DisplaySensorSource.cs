@@ -38,7 +38,8 @@ public sealed class DisplaySensorSource : ISensorSource
             SensorPrivacy.Benign,
             EnabledByDefault: true,
             ResourceUsage: "Low. Does not check repeatedly. Reads display details and sends an "
-                           + "extra update only when Windows reports a display change."),
+                           + "extra update only when Windows reports a display change.",
+            AutomationIdea: "When a second display connects, activate the office work scene."),
         new(
             DisplayResolutionId,
             "Display Resolution",

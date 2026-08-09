@@ -30,7 +30,8 @@ public sealed class WifiSensorSource : ISensorSource
             SensorPrivacy.Sensitive,
             EnabledByDefault: false,
             ResourceUsage: "Usually low. Sends an extra update when Windows reports a network "
-                           + "change. Windows can report several changes close together."),
+                           + "change. Windows can report several changes close together.",
+            AutomationIdea: "When the PC joins the office Wi-Fi, activate the work scene."),
         new(
             BssidId,
             "Wi-Fi BSSID",
@@ -38,7 +39,8 @@ public sealed class WifiSensorSource : ISensorSource
             SensorPrivacy.Sensitive,
             EnabledByDefault: false,
             ResourceUsage: "Usually low. Shares the Wi-Fi check with SSID and sends an extra update "
-                           + "for each Windows network-change notice.")
+                           + "for each Windows network-change notice.",
+            AutomationIdea: "When the PC connects to a specific access point, mark that room occupied.")
     ];
 
     public IReadOnlyList<Sensor> Read(

@@ -37,7 +37,8 @@ public sealed class WindowsThemeSensorSource : ISensorSource
             SensorPrivacy.Benign,
             EnabledByDefault: true,
             ResourceUsage: "Low. Does not check repeatedly. Sends an extra update only when the "
-                           + "Windows theme changes.")
+                           + "Windows theme changes.",
+            AutomationIdea: "When dark mode turns on, change the office lights to a warmer color.")
     ];
 
     public IReadOnlyList<Sensor> Read(IReadOnlySet<string> enabled, SensorReadContext context)

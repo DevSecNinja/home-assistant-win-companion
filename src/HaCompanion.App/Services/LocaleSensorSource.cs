@@ -50,7 +50,8 @@ public sealed class LocaleSensorSource : ISensorSource
             SensorPrivacy.Benign,
             EnabledByDefault: true,
             ResourceUsage: "Low. Shares the regional-settings check above and does not use the "
-                           + "internet.")
+                           + "internet.",
+            AutomationIdea: "When the time zone changes away from home, enable travel mode.")
     ];
 
     public IReadOnlyList<Sensor> Read(IReadOnlySet<string> enabled, SensorReadContext context)

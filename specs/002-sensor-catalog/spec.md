@@ -119,6 +119,9 @@ disabled.
 
 - **FR-001**: The app MUST expose a catalog of available sensors, each with a stable
   unique id, display name, description, and privacy classification.
+- **FR-001a**: When a sensor has a clear state-driven use, the catalog MUST show a
+  local automation example as a tooltip beside its name. Pure diagnostics without
+  a meaningful automation MUST omit the tooltip.
 - **FR-002**: The app MUST let the user enable or disable each sensor individually
   from a native Settings surface.
 - **FR-003**: Sensor choices MUST persist across restarts in non-secret local config.

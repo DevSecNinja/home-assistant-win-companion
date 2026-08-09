@@ -557,7 +557,6 @@ public sealed class AppController : IAsyncDisposable
                 new WindowsThemeSensorSource(),
                 new LocaleSensorSource(),
                 new DiskUsageSensorSource(),
-                new LastUpdateSensorSource(),
                 new NotificationStateSensorSource(),
                 new CapabilityUsageSensorSource(config.Sensors),
                 new AudioDeviceSensorSource(config.Sensors),

@@ -384,15 +384,6 @@ public class LifecycleJournalTests : IDisposable
     }
 }
 
-/// <summary>
-/// Keeps the lifecycle stress tests out of each other's way. They deliberately spawn
-/// threads and queue work in bursts, and several of those at once on a two-core CI
-/// agent starve unrelated timing-sensitive tests of a worker.
-/// </summary>
-[CollectionDefinition("Lifecycle stress", DisableParallelization = true)]
-public class LifecycleStressCollection;
-
-[Collection("Lifecycle stress")]
 public class LifecycleCoordinatorTests
 {
     private static readonly DateTimeOffset At = new(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);
@@ -573,7 +564,7 @@ public class LifecycleCoordinatorTests
     {
         // Windows delivers the same fact on the message pump and on SystemEvents, so
         // two threads routinely report a suspend at the same moment.
-        const int threads = 8;
+        const int threads = 16;
         var changed = 0;
         var pushes = 0;
         var ready = new Barrier(threads);
@@ -604,7 +595,7 @@ public class LifecycleCoordinatorTests
     {
         // The cancellation source is published before the observation completes, so a
         // resume on another thread can never slip past the push it should cancel.
-        for (var attempt = 0; attempt < 10; attempt++)
+        for (var attempt = 0; attempt < 25; attempt++)
         {
             CancellationToken token = default;
             var entered = new ManualResetEventSlim();
@@ -704,7 +695,7 @@ public class LifecycleCoordinatorTests
 
         var signals = Task.Run(() =>
         {
-            for (var i = 0; i < 50; i++)
+            for (var i = 0; i < 200; i++)
             {
                 coordinator.Observe(new LifecycleSignal(LifecycleTransition.Sleeping, "Suspend"));
                 coordinator.Observe(LifecycleSignal.Running("Resume"));
@@ -712,7 +703,7 @@ public class LifecycleCoordinatorTests
         });
         var stops = Task.Run(() =>
         {
-            for (var i = 0; i < 50; i++) coordinator.Stop();
+            for (var i = 0; i < 200; i++) coordinator.Stop();
         });
 
         await Task.WhenAll(signals, stops).WaitAsync(TimeSpan.FromSeconds(30));
@@ -759,7 +750,7 @@ public class LifecycleCoordinatorTests
     [Fact]
     public async Task Each_attempt_is_replaced_rather_than_accumulated()
     {
-        const int rounds = 20;
+        const int rounds = 50;
         var tokens = new List<CancellationToken>();
         var coordinator = new LifecycleCoordinator(
             new LockingJournal(),
@@ -812,7 +803,7 @@ public class LifecycleCoordinatorTests
             });
         coordinator.Changed += () => Interlocked.Increment(ref changed);
 
-        for (var i = 0; i < 250; i++)
+        for (var i = 0; i < 1000; i++)
             coordinator.Observe(new LifecycleSignal(LifecycleTransition.Sleeping, "Suspend"));
 
         await coordinator.FinalPush!.WaitAsync(TimeSpan.FromSeconds(10));
@@ -891,7 +882,7 @@ public class LifecycleCoordinatorTests
     [Fact]
     public async Task Many_start_and_stop_generations_leave_the_coordinator_usable()
     {
-        const int generations = 25;
+        const int generations = 100;
         var journal = new CountingJournal();
         var pushes = 0;
         var tasks = new List<Task>();
@@ -982,7 +973,6 @@ public class LifecycleCoordinatorTests
     }
 }
 
-[Collection("Lifecycle stress")]
 public class LifecycleSensorSourceTests
 {
     private static readonly DateTimeOffset At = new(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);
@@ -1111,7 +1101,7 @@ public class LifecycleSensorSourceTests
         var (source, signals, _) = Build();
         var pushes = 0;
 
-        const int generations = 25;
+        const int generations = 100;
         for (var i = 0; i < generations; i++)
         {
             source.Start(() => pushes++);
@@ -1158,12 +1148,12 @@ public class LifecycleSensorSourceTests
 
         source.Start(() => pushes++);
 
-        for (var i = 0; i < 100; i++)
+        for (var i = 0; i < 500; i++)
             signals.Raise(new LifecycleSignal(LifecycleTransition.Sleeping, "Suspend"));
 
         Assert.Equal(1, pushes);
 
-        for (var i = 0; i < 100; i++)
+        for (var i = 0; i < 500; i++)
             signals.Raise(LifecycleSignal.Running("Resume"));
 
         Assert.Equal(2, pushes);
@@ -1248,7 +1238,6 @@ public class LifecycleSensorSourceTests
     }
 }
 
-[Collection("Lifecycle stress")]
 public class MessagePumpLifetimeTests
 {
     private static readonly TimeSpan Wait = TimeSpan.FromSeconds(5);
@@ -1329,7 +1318,7 @@ public class MessagePumpLifetimeTests
     {
         // Whichever order the two threads run in, the stopper either sees the handle
         // or the pump sees the request - never neither.
-        for (var attempt = 0; attempt < 20; attempt++)
+        for (var attempt = 0; attempt < 50; attempt++)
         {
             using var lifetime = new MessagePumpLifetime();
             Assert.True(lifetime.TryBeginStart());
@@ -1371,7 +1360,7 @@ public class MessagePumpLifetimeTests
         var live = 0;
         var peak = 0;
 
-        for (var generation = 0; generation < 25; generation++)
+        for (var generation = 0; generation < 100; generation++)
         {
             Assert.True(lifetime.TryBeginStart());
 
@@ -1452,7 +1441,7 @@ public class MessagePumpLifetimeTests
     {
         using var lifetime = new MessagePumpLifetime();
 
-        for (var generation = 0; generation < 10; generation++)
+        for (var generation = 0; generation < 25; generation++)
         {
             Assert.True(lifetime.TryBeginStart());
             Assert.True(lifetime.RequestStop());

@@ -3,11 +3,13 @@ using HaCompanion.Core.Lifecycle;
 using HaCompanion.Core.Models;
 using HaCompanion.Core.Sensors;
 using HaCompanion_App.Services;
+using System.Runtime.InteropServices;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Windows.ApplicationModel.DataTransfer;
+using Windows.Graphics;
 
 namespace HaCompanion_App;
 
@@ -18,6 +20,11 @@ namespace HaCompanion_App;
 /// </summary>
 public sealed partial class MainWindow : Window
 {
+    private const int InitialWindowWidth = 720;
+    private const int InitialWindowHeight = 820;
+    private const int MinimumWindowWidth = 520;
+    private const int MinimumWindowHeight = 600;
+
     private readonly AppController _controller;
     private readonly DispatcherQueue _dispatcher;
     private readonly DispatcherQueueTimer _statusTimer;
@@ -42,6 +49,15 @@ public sealed partial class MainWindow : Window
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(AppTitleBar);
         AppWindow.SetIcon("Assets/AppIcon.ico");
+        var dpi = GetDpiForWindow(WinRT.Interop.WindowNative.GetWindowHandle(this));
+        AppWindow.Resize(new SizeInt32(
+            ScaleForDpi(InitialWindowWidth, dpi),
+            ScaleForDpi(InitialWindowHeight, dpi)));
+        if (AppWindow.Presenter is Microsoft.UI.Windowing.OverlappedPresenter presenter)
+        {
+            presenter.PreferredMinimumWidth = ScaleForDpi(MinimumWindowWidth, dpi);
+            presenter.PreferredMinimumHeight = ScaleForDpi(MinimumWindowHeight, dpi);
+        }
 
         _controller = App.Controller;
         _dispatcher = DispatcherQueue.GetForCurrentThread();
@@ -55,6 +71,12 @@ public sealed partial class MainWindow : Window
         AppWindow.Closing += OnWindowClosing;
         Activated += OnFirstActivated;
     }
+
+    private static int ScaleForDpi(int logicalPixels, uint dpi) =>
+        (int)Math.Round(logicalPixels * Math.Max(96u, dpi) / 96d);
+
+    [DllImport("user32.dll")]
+    private static extern uint GetDpiForWindow(nint window);
 
     private async void OnFirstActivated(object sender, WindowActivatedEventArgs args)
     {

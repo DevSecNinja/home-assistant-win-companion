@@ -30,7 +30,8 @@ public sealed class SystemSensorSource : ISensorSource
             "Last Boot",
             "When this PC last started up.",
             SensorPrivacy.Benign,
-            EnabledByDefault: true),
+            EnabledByDefault: true,
+            AutomationIdea: "When the last boot is over 30 days ago, send a reminder to reboot."),
         new SensorDefinition(
             HostModelId,
             "Model",

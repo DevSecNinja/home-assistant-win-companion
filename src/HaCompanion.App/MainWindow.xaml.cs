@@ -741,6 +741,34 @@ public sealed partial class MainWindow : Window
             var heading = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
             heading.Children.Add(new TextBlock { Text = definition.Name, FontWeight = FontWeights.SemiBold });
 
+            if (!string.IsNullOrWhiteSpace(definition.AutomationIdea))
+            {
+                var ideaText = $"Automation idea: {definition.AutomationIdea}";
+                var idea = new Button
+                {
+                    Content = new FontIcon
+                    {
+                        Glyph = "\uE946",
+                        FontSize = 12
+                    },
+                    Padding = new Thickness(5, 1, 5, 1),
+                    MinWidth = 24,
+                    MinHeight = 24,
+                    UseSystemFocusVisuals = true,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Flyout = new Flyout
+                    {
+                        Content = AutomationIdeaText(ideaText)
+                    }
+                };
+                ToolTipService.SetToolTip(idea, new ToolTip { Content = AutomationIdeaText(ideaText) });
+                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(
+                    idea,
+                    $"Show automation idea for {definition.Name}");
+                Microsoft.UI.Xaml.Automation.AutomationProperties.SetHelpText(idea, ideaText);
+                heading.Children.Add(idea);
+            }
+
             if (definition.Privacy == SensorPrivacy.Sensitive)
             {
                 heading.Children.Add(new TextBlock
@@ -811,6 +839,13 @@ public sealed partial class MainWindow : Window
 
         return true;
     }
+
+    private static TextBlock AutomationIdeaText(string text) => new()
+    {
+        Text = text,
+        MaxWidth = 320,
+        TextWrapping = TextWrapping.Wrap
+    };
 
     private void AddFrontmostAppDetailSetting(StackPanel container, SensorCatalog catalog)
     {

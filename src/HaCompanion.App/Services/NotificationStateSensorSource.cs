@@ -41,7 +41,8 @@ public sealed class NotificationStateSensorSource : ISensorSource
             SensorPrivacy.Benign,
             EnabledByDefault: true,
             ResourceUsage: "Low. Checks Windows every 10 seconds. Sends an extra update only when "
-                           + "the notification state changes.")
+                           + "the notification state changes.",
+            AutomationIdea: "When Windows reports presenting, turn on a meeting indicator light.")
     ];
 
     public IReadOnlyList<Sensor> Read(

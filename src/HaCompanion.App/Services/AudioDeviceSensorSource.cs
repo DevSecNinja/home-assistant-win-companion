@@ -40,7 +40,8 @@ public sealed class AudioDeviceSensorSource : ISensorSource
             SensorPrivacy.Sensitive,
             EnabledByDefault: false,
             ResourceUsage: "Low. Shares the same 10-second audio check. Sends an extra update only "
-                           + "when headset availability changes.")
+                           + "when headset availability changes.",
+            AutomationIdea: "When a headset connects, activate a focus lighting scene.")
     ];
 
     public IReadOnlyList<Sensor> Read(

@@ -24,7 +24,8 @@ public sealed record SensorDefinition(
     string Description,
     SensorPrivacy Privacy,
     bool EnabledByDefault,
-    string? ResourceUsage = null)
+    string? ResourceUsage = null,
+    string? AutomationIdea = null)
 {
     /// <summary>Privacy-sensitive values must never be written to logs.</summary>
     public bool Loggable => Privacy == SensorPrivacy.Benign;

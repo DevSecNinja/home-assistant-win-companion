@@ -6,7 +6,8 @@ package is tracked in [issue #39](https://github.com/DevSecNinja/home-assistant-
 ## Requirements
 
 - Windows 10 build 19041 or later, or Windows 11.
-- x64 Windows for the initial release artifacts.
+- x64 or ARM64 Windows. Download the artifact matching **Settings → System →
+  About → System type**.
 - [.NET 9 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/9.0).
 - [Windows App Runtime 2.3](https://learn.microsoft.com/windows/apps/windows-app-sdk/downloads).
 - A Home Assistant instance with the built-in `mobile_app` integration.
@@ -16,25 +17,45 @@ with `REGDB_E_CLASSNOTREG`.
 
 ## Release artifacts
 
-Use artifacts from the repository's
+The companion is an unpackaged application distributed as a ZIP, not an installer.
+Prefer a versioned ZIP from
 [GitHub Releases](https://github.com/DevSecNinja/home-assistant-win-companion/releases)
-page once releases are published.
+once one is available.
 
-GitHub Actions pull-request artifacts are explicitly named
-`unsigned-windows-x64-<commit>`. They are test builds, not supported releases, and
-may contain unreviewed pull-request code.
+Until the first Release is published, a test build can be downloaded from GitHub
+Actions:
 
-## Install
+1. Open the repository's [CI workflow](https://github.com/DevSecNinja/home-assistant-win-companion/actions/workflows/ci.yml).
+2. Select a successful run on the `main` branch for the commit you intend to test.
+3. In **Artifacts**, download `unsigned-windows-x64-<commit>` or
+   `unsigned-windows-arm64-<commit>`.
+4. Confirm the commit in the artifact name matches the run's commit. GitHub may
+   require you to sign in before downloading an Actions artifact.
 
-1. Download the versioned x64 release ZIP and its SHA-256 checksum.
-2. Verify the checksum:
+Pull-request artifacts may contain unreviewed code and are not supported releases.
+Do not download an artifact merely because its workflow succeeded.
+
+## Install an unsigned build
+
+1. Download the ZIP for the correct architecture:
+
+   - `win-x64` for Intel and AMD Windows PCs.
+   - `win-arm64` for Windows on ARM PCs.
+
+2. For a versioned GitHub Release, also download its `.sha256` file and verify the
+   ZIP. The computed value must match the published checksum:
 
    ```powershell
-   Get-FileHash .\HaCompanion-<version>-win-x64.zip -Algorithm SHA256
+   Get-FileHash .\HaCompanion-<version>-win-<architecture>.zip -Algorithm SHA256
    ```
 
-3. When signed releases become available, open the executable's **Properties →
-   Digital Signatures** page and verify the documented publisher.
+   Actions test artifacts do not currently have a separately published checksum;
+   verify their `main` workflow run and commit as described above instead.
+
+3. Right-click the downloaded ZIP, choose **Properties**, and select **Unblock** if
+   Windows shows that option. Apply the change before extracting so Windows does
+   not mark every extracted file separately.
+
 4. Extract the ZIP to a permanent user-writable directory, recommended:
 
    ```text
@@ -49,9 +70,30 @@ Do not run permanently from inside the ZIP, a temporary extraction directory, or
 folder that will be renamed. The startup entry points to the executable's exact
 location.
 
-Unsigned builds may trigger Microsoft Defender SmartScreen. Verify that the download
-came from this repository before choosing **More info → Run anyway**. Code-signing
-plans are documented in [the signing decision](code-signing.md).
+Current builds are unsigned and may show **Windows protected your PC** from
+Microsoft Defender SmartScreen. Only after verifying the repository, workflow run,
+commit, and architecture above, choose **More info**, confirm the app is
+`HaCompanion.App.exe` with an unknown publisher, and choose **Run anyway**. A managed
+or organizational Windows policy may prohibit unsigned apps; do not weaken that
+policy to install this test build.
+
+Unsigned means Windows cannot cryptographically identify the publisher. A checksum
+or successful Actions run helps detect a changed download, but is not a substitute
+for an Authenticode signature.
+
+## Why builds are not signed yet
+
+The project intends to sign releases through
+[SignPath Foundation](https://signpath.org/), a managed service for eligible open
+source projects. This avoids buying and securely operating a private certificate or
+placing a signing key in GitHub Actions.
+
+SignPath onboarding requires an established public repository and an initial
+unsigned release in the final distribution format. The project is completing those
+prerequisites before applying. If SignPath does not accept the project, OSSign is
+the preferred fallback. Until then, builds remain explicitly labelled unsigned.
+See the [code-signing decision](code-signing.md) for the full threat model and
+release design.
 
 ## Update
 

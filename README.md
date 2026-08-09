@@ -106,6 +106,10 @@ one that just works with stock Home Assistant.**
 See the [end-user installation guide](docs/installation.md) for release downloads,
 runtime setup, updates, Start with Windows, and uninstallation.
 
+Current downloads are unpackaged and unsigned. The installation guide explains how
+to choose x64 or ARM64, verify a Release or `main` CI artifact, extract it safely,
+and handle the expected SmartScreen warning.
+
 The optional **WinGet Updates** sensor uses Microsoft's
 `Microsoft.WinGet.Client` PowerShell module version 1.29.280 or newer. If it is
 missing, the app provides a copyable current-user installation command but never
@@ -316,5 +320,7 @@ include Home Assistant credentials, URLs, configuration, or logs in a public iss
 
 Release binaries are intended to use free open-source Authenticode signing through
 [SignPath Foundation](https://signpath.org/) once the project meets its public
-repository and release-history requirements. See the
+repository and initial unsigned-release requirements. SignPath keeps the private key
+out of this repository and GitHub Actions. Until onboarding is complete, downloads
+are explicitly labelled unsigned and Windows may show SmartScreen. See the
 [code signing decision](docs/code-signing.md).

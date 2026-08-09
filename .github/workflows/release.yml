@@ -1,0 +1,120 @@
+---
+name: Release
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing v-prefixed tag to publish"
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+jobs:
+  build:
+    name: Build Windows release assets
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+    steps:
+      - name: Harden runner
+        # renovate: datasource=github-tags depName=DevSecNinja/.github
+        uses: DevSecNinja/.github/actions/harden-runner@7d7ddabef968d8505aceb8a1f8965afd872f0a0c # v2.4.0
+      - name: Checkout tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.tag || github.ref_name }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Set up .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 9.0.x
+      - name: Validate release version
+        id: version
+        shell: pwsh
+        env:
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          if ($env:TAG -notmatch '^v(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)$') {
+            throw "Release tag '$env:TAG' is not a supported semantic version."
+          }
+          $version = $Matches[1]
+          $expected = (Get-Content version.txt -Raw).Trim()
+          if ($version -ne $expected) {
+            throw "Tag version '$version' does not match version.txt '$expected'."
+          }
+          "tag=$env:TAG" >> $env:GITHUB_OUTPUT
+          "version=$version" >> $env:GITHUB_OUTPUT
+      - name: Build and package release
+        shell: pwsh
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: >-
+          .\scripts\build-release.ps1
+          -Version $env:VERSION
+          -OutputDirectory artifacts\release
+      - name: Upload release assets
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-assets-${{ steps.version.outputs.tag }}
+          path: |
+            artifacts\release\HaCompanion-${{ steps.version.outputs.version }}-win-x64.zip
+            artifacts\release\HaCompanion-${{ steps.version.outputs.version }}-win-x64.zip.sha256
+            artifacts\release\HaCompanion-${{ steps.version.outputs.version }}-win-arm64.zip
+            artifacts\release\HaCompanion-${{ steps.version.outputs.version }}-win-arm64.zip.sha256
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    name: Attest and publish GitHub Release
+    needs:
+      - build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write # Create the immutable GitHub Release and upload its assets.
+      id-token: write # Mint the OIDC identity for provenance attestations.
+      attestations: write # Store attestations for the caller repository.
+    steps:
+      - name: Harden runner
+        # renovate: datasource=github-tags depName=DevSecNinja/.github
+        uses: DevSecNinja/.github/actions/harden-runner@7d7ddabef968d8505aceb8a1f8965afd872f0a0c # v2.4.0
+      - name: Checkout tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.build.outputs.tag }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Download release assets
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-assets-${{ needs.build.outputs.tag }}
+          path: dist
+      - name: Verify checksums
+        working-directory: dist
+        run: sha256sum -c -- *.sha256
+      - name: Generate build-provenance attestations
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            dist/HaCompanion-${{ needs.build.outputs.version }}-win-x64.zip
+            dist/HaCompanion-${{ needs.build.outputs.version }}-win-arm64.zip
+      - name: Publish immutable GitHub Release
+        # renovate: datasource=github-tags depName=DevSecNinja/.github
+        uses: DevSecNinja/.github/actions/release-publish@7d7ddabef968d8505aceb8a1f8965afd872f0a0c # v2.4.0
+        with:
+          mise-version: "2026.7.12"
+          tag: ${{ needs.build.outputs.tag }}
+          assets: |
+            dist/HaCompanion-${{ needs.build.outputs.version }}-win-x64.zip
+            dist/HaCompanion-${{ needs.build.outputs.version }}-win-x64.zip.sha256
+            dist/HaCompanion-${{ needs.build.outputs.version }}-win-arm64.zip
+            dist/HaCompanion-${{ needs.build.outputs.version }}-win-arm64.zip.sha256

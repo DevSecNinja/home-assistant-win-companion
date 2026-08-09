@@ -27,18 +27,17 @@ The certificate publisher will be **SignPath Foundation**, not the repository ow
 
 An application should be submitted only after all of these are true:
 
-1. The repository is public.
-2. GitHub-hosted CI can run successfully; account billing currently blocks runner
-   startup.
+1. The repository is public. **Complete.**
+2. GitHub-hosted CI builds and tests x64 and ARM64 successfully. **Complete.**
 3. At least one unsigned release exists in the same format that will later be
    signed.
-4. Release artifacts are built entirely from this public repository.
-5. Branch protection or rulesets require review and passing CI.
+4. Release artifacts are built entirely from this public repository. **Complete.**
+5. Branch protection or rulesets require review and passing CI. **Complete.**
 6. The release workflow produces an immutable artifact before requesting signing.
 
 ## Release design
 
-The initial signed release remains an unpackaged, zipped x64 application:
+The initial signed release remains an unpackaged, zipped x64 and ARM64 application:
 
 1. Build and test on a GitHub-hosted Windows runner.
 2. Publish the self-contained release files into a versioned ZIP.
@@ -83,6 +82,12 @@ scoped according to SignPath guidance.
 Authenticode establishes publisher identity and artifact integrity. It does not
 guarantee immediate SmartScreen reputation for a new certificate, so early releases
 may still receive reputation warnings while trust accumulates.
+
+Until SignPath onboarding is complete, unsigned Actions artifacts are test builds.
+The installation guide requires users to select a successful `main` run and verify
+the commit embedded in the artifact name before accepting any SmartScreen prompt.
+That provenance check is useful, but it does not provide the publisher identity that
+Authenticode will add.
 
 ## Fallback
 

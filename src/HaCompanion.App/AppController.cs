@@ -575,7 +575,10 @@ public sealed class AppController : IAsyncDisposable
         // of the catalog that the connection will read from, so the final push is
         // resolved lazily rather than captured.
         ConnectionManager? live = null;
-        var lifecycle = new LifecycleCoordinator(
+        // Named for the machine's power lifecycle, not the connection lifecycle
+        // gate in _lifecycle. A new one is built per connection and released by
+        // the catalog's Stop, so a route switch does not leak its signal hooks.
+        var systemLifecycle = new LifecycleCoordinator(
             new FileLifecycleJournal(),
             finalPush: token => live is null
                 ? Task.FromResult(false)
@@ -601,7 +604,7 @@ public sealed class AppController : IAsyncDisposable
                 new AudioDeviceSensorSource(config.Sensors),
                 new FrontmostAppSensorSource(config.Sensors),
                 new WinGetUpdateSensorSource(_winGetUpdates, config.Sensors),
-                new LifecycleSensorSource(lifecycle, new WindowsLifecycleSignalSource())
+                new LifecycleSensorSource(systemLifecycle, new WindowsLifecycleSignalSource())
             },
             config.Sensors);
         _catalog = catalog;
@@ -620,7 +623,7 @@ public sealed class AppController : IAsyncDisposable
 
         // Only a batch Home Assistant actually accepted counts as delivery; anything
         // else leaves the transition recorded locally for the next successful sync.
-        connection.SyncSucceeded += _ => lifecycle.ReportDelivered();
+        connection.SyncSucceeded += _ => systemLifecycle.ReportDelivered();
         live = connection;
         _connection = connection;
         connection.Start();

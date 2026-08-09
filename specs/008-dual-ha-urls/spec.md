@@ -82,6 +82,12 @@ id is sent anywhere. Certificate validation is never relaxed; there is no bypass
 switch. An internal HTTPS address with a private certificate must be trusted by
 Windows.
 
+An endpoint that accepts a TCP connection without speaking HTTP fails step 3 as
+`NotHomeAssistant` rather than escaping as a transport error, and `RouteValidator`
+refuses to save it. This carries forward the protection the single-URL "change
+server URL" flow gained before it was replaced, without exposing the underlying
+socket error to the user.
+
 ## Route selection
 
 `RouteSelector` is pure: it takes the configuration and a `NetworkContext` and

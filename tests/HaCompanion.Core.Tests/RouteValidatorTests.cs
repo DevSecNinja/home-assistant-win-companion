@@ -44,11 +44,48 @@ public class RouteValidatorTests
         ConnectionMode mode = ConnectionMode.Automatic,
         bool acknowledge = false) => new()
     {
+        UseSeparateUrls = true,
         InternalUrl = internalUrl,
         ExternalUrl = externalUrl,
         Mode = mode,
         AcknowledgeUnreachable = acknowledge
     };
+
+    [Fact]
+    public async Task One_url_is_the_default_configuration()
+    {
+        var probe = new FakeProbe();
+        var draft = new ConnectionSettingsDraft { PrimaryUrl = External };
+
+        var report = await RouteValidator.ValidateAsync(Current(), draft, probe);
+
+        Assert.True(report.CanSave);
+        Assert.Single(probe.Calls);
+        Assert.Equal(External, probe.Calls[0].Url);
+        Assert.Contains("The address reaches", report.Summary);
+    }
+
+    [Fact]
+    public async Task Applying_one_url_clears_advanced_routing_settings()
+    {
+        var config = Current();
+        config.InternalUrl = Internal;
+        config.ExternalUrl = External;
+        config.UseSeparateUrls = true;
+        config.ConnectionMode = ConnectionMode.PreferInternal;
+        config.TrustedNetworks.Ssids.Add("HomeNet");
+        var draft = new ConnectionSettingsDraft { PrimaryUrl = External };
+        var report = await RouteValidator.ValidateAsync(config, draft, new FakeProbe());
+
+        RouteValidator.Apply(config, draft, report);
+
+        Assert.Equal(External, config.BaseUrl);
+        Assert.False(config.UseSeparateUrls);
+        Assert.Null(config.InternalUrl);
+        Assert.Null(config.ExternalUrl);
+        Assert.Empty(config.TrustedNetworks.Ssids);
+        Assert.Equal(ConnectionMode.Automatic, config.ConnectionMode);
+    }
 
     [Fact]
     public async Task Both_addresses_on_the_same_instance_can_be_saved()

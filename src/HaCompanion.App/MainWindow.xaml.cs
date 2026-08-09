@@ -29,6 +29,7 @@ public sealed partial class MainWindow : Window
     private bool _suppressSensorToggle;
     private List<string> _trustedSsids = [];
     private List<string> _trustedBssids = [];
+    private bool _suppressSeparateUrlsToggle;
     private bool _suppressBssidToggle;
     private bool _loadingSensorSettings;
     private bool _loadingStartupSetting;
@@ -225,6 +226,10 @@ public sealed partial class MainWindow : Window
     private void LoadConnectionSettings()
     {
         var settings = _controller.ConnectionSettings;
+        SingleUrlBox.Text = settings.PrimaryUrl ?? _controller.BaseUrl ?? string.Empty;
+        _suppressSeparateUrlsToggle = true;
+        UseSeparateUrlsBox.IsChecked = settings.UseSeparateUrls;
+        _suppressSeparateUrlsToggle = false;
         InternalUrlBox.Text = settings.InternalUrl ?? string.Empty;
         ExternalUrlBox.Text = settings.ExternalUrl ?? string.Empty;
         ConnectionModeBox.SelectedIndex = (int)settings.Mode;
@@ -243,15 +248,24 @@ public sealed partial class MainWindow : Window
         ConnectionResultText.Visibility = Visibility.Collapsed;
         SuggestionText.Text = string.Empty;
 
-        MigrationBanner.Visibility = _controller.RouteAssignmentPending
-            ? Visibility.Visible
-            : Visibility.Collapsed;
-        MigrationText.Text =
-            $"{_controller.BaseUrl} is currently the only address. Tell the companion whether it "
-            + "reaches Home Assistant on your own network or from outside it, then add the other one. "
-            + "Nothing is guessed from the hostname.";
-
+        UpdateSeparateUrlsVisibility();
         RefreshTrustedNetworkList();
+    }
+
+    private void OnUseSeparateUrlsChanged(object sender, RoutedEventArgs e)
+    {
+        if (_suppressSeparateUrlsToggle) return;
+        UpdateSeparateUrlsVisibility();
+        ConnectionResultText.Visibility = Visibility.Collapsed;
+        AcknowledgeUnreachableBox.Visibility = Visibility.Collapsed;
+    }
+
+    private void UpdateSeparateUrlsVisibility()
+    {
+        var separate = UseSeparateUrlsBox.IsChecked == true;
+        SingleUrlBox.Visibility = separate ? Visibility.Collapsed : Visibility.Visible;
+        SeparateUrlsPanel.Visibility = separate ? Visibility.Visible : Visibility.Collapsed;
+        TestRoutesButton.Content = separate ? "Test both URLs" : "Test URL";
     }
 
     private void RefreshTrustedNetworkList()
@@ -337,8 +351,10 @@ public sealed partial class MainWindow : Window
 
     private ConnectionSettingsDraft BuildDraft() => new()
     {
-        InternalUrl = InternalUrlBox.Text?.Trim(),
-        ExternalUrl = ExternalUrlBox.Text?.Trim(),
+        PrimaryUrl = SingleUrlBox.Text?.Trim(),
+        UseSeparateUrls = UseSeparateUrlsBox.IsChecked == true,
+        InternalUrl = UseSeparateUrlsBox.IsChecked == true ? InternalUrlBox.Text?.Trim() : null,
+        ExternalUrl = UseSeparateUrlsBox.IsChecked == true ? ExternalUrlBox.Text?.Trim() : null,
         Mode = (ConnectionMode)Math.Max(0, ConnectionModeBox.SelectedIndex),
         AcknowledgeUnreachable = AcknowledgeUnreachableBox.IsChecked == true,
         TrustedNetworks = new TrustedNetworkSettings
@@ -377,7 +393,6 @@ public sealed partial class MainWindow : Window
             ShowValidationReport(report);
             if (report.CanSave)
             {
-                MigrationBanner.Visibility = Visibility.Collapsed;
                 AcknowledgeUnreachableBox.Visibility = Visibility.Collapsed;
                 RefreshStatusFields();
                 return;
@@ -401,7 +416,9 @@ public sealed partial class MainWindow : Window
     /// </summary>
     private async Task OfferReplaceServerAsync()
     {
-        var url = ExternalUrlBox.Text?.Trim() is { Length: > 0 } external
+        var url = UseSeparateUrlsBox.IsChecked != true
+            ? SingleUrlBox.Text?.Trim()
+            : ExternalUrlBox.Text?.Trim() is { Length: > 0 } external
             ? external
             : InternalUrlBox.Text?.Trim();
         if (string.IsNullOrWhiteSpace(url)) return;
@@ -444,7 +461,9 @@ public sealed partial class MainWindow : Window
         var lines = new List<string> { report.Summary };
         foreach (var entry in report.Entries)
         {
-            var label = entry.Route == RouteKind.Internal ? "Internal" : "External";
+            var label = UseSeparateUrlsBox.IsChecked != true
+                ? "Address"
+                : entry.Route == RouteKind.Internal ? "Internal" : "External";
             lines.Add($"{label}: {entry.Describe()}");
         }
 
@@ -490,26 +509,6 @@ public sealed partial class MainWindow : Window
         SuggestionText.Text = found.Count == 0
             ? "Home Assistant did not offer an address to fill in."
             : $"Filled in the {string.Join(" and ", found)} address; check it before saving.";
-    }
-
-    private async void OnAssignInternal(object sender, RoutedEventArgs e) =>
-        await AssignMigratedRouteAsync(RouteKind.Internal);
-
-    private async void OnAssignExternal(object sender, RoutedEventArgs e) =>
-        await AssignMigratedRouteAsync(RouteKind.External);
-
-    private async Task AssignMigratedRouteAsync(RouteKind route)
-    {
-        try
-        {
-            await _controller.AssignMigratedRouteAsync(route);
-            LoadConnectionSettings();
-            RefreshStatusFields();
-        }
-        catch (Exception ex)
-        {
-            ShowConnectionResult(ex.Message, false);
-        }
     }
 
     private void OnShowWindow(object sender, RoutedEventArgs e) => Show();

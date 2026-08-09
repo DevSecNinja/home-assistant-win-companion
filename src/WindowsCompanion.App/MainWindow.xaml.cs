@@ -8,6 +8,7 @@ using Microsoft.UI.Dispatching;
 using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.Graphics;
 
@@ -129,6 +130,25 @@ public sealed partial class MainWindow : Window
 
             UpdateHealth();
         });
+
+    /// <summary>
+    /// Enter in the URL box signs in. Signing in is the only action on this
+    /// panel, and typing an address then pressing Enter is the reflex users
+    /// bring from every browser address bar.
+    /// </summary>
+    private void OnUrlBoxKeyDown(object sender, KeyRoutedEventArgs e)
+    {
+        // Windows.System is not imported: it would make DispatcherQueue ambiguous
+        // with Microsoft.UI.Dispatching.
+        if (e.Key != Windows.System.VirtualKey.Enter) return;
+
+        // Handle it even while busy, so a second Enter cannot queue a duplicate
+        // sign-in while the browser round-trip is still running.
+        e.Handled = true;
+        if (!SignInButton.IsEnabled) return;
+
+        OnSignIn(SignInButton, new RoutedEventArgs());
+    }
 
     private async void OnSignIn(object sender, RoutedEventArgs e)
     {

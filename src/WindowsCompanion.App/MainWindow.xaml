@@ -57,7 +57,8 @@
             <TextBox
                 x:Name="UrlBox"
                 Header="Home Assistant URL"
-                PlaceholderText="http://homeassistant.local:8123" />
+                PlaceholderText="http://homeassistant.local:8123"
+                KeyDown="OnUrlBoxKeyDown" />
             <Button
                 x:Name="SignInButton"
                 Content="Sign in"

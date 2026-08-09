@@ -110,7 +110,17 @@
   <PropertyGroup>
     <PublishReadyToRun Condition="'$(Configuration)' == 'Debug'">False</PublishReadyToRun>
     <PublishReadyToRun Condition="'$(Configuration)' != 'Debug'">True</PublishReadyToRun>
-    <PublishTrimmed Condition="'$(Configuration)' == 'Debug'">False</PublishTrimmed>
-    <PublishTrimmed Condition="'$(Configuration)' != 'Debug'">True</PublishTrimmed>
+    <!--
+      Trimming is deliberately off. It sets the
+      System.Text.Json.JsonSerializer.IsReflectionEnabledByDefault feature switch
+      to false, and the app serialises settings, the lifecycle journal and every
+      Home Assistant REST/WebSocket payload through reflection-based
+      JsonSerializer. With trimming on, a Release build fails at runtime the
+      moment the user signs in:
+        "Reflection-based serialization has been disabled for this application."
+      Re-enabling it requires a source-generated JsonSerializerContext for every
+      serialised type first; WinUI 3 also does not officially support trimming.
+    -->
+    <PublishTrimmed>false</PublishTrimmed>
   </PropertyGroup>
 </Project>

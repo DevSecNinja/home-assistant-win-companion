@@ -143,16 +143,10 @@ public class WinGetUpdateTests
             if (!BlockUntilCancelled) return Result;
 
             Started.TrySetResult();
-            try
-            {
-                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
-                return Result;
-            }
-            catch (OperationCanceledException)
-            {
-                Cancelled.TrySetResult();
-                throw;
-            }
+            using var registration = cancellationToken.Register(
+                () => Cancelled.TrySetResult());
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            return Result;
         }
     }
 }

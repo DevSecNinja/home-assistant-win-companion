@@ -1,7 +1,7 @@
 #!/usr/bin/env pwsh
 <#
 .SYNOPSIS
-    Builds per-user x64 and ARM64 setup executables from published app files.
+    Builds per-user x64 and ARM64 setup packages from published app files.
 #>
 [CmdletBinding()]
 param(

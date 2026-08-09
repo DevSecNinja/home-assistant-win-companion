@@ -2,34 +2,34 @@
 
 ## Phase 1: Setup
 
-- [x] T001 Add WinGet result and source tests in `tests/HaCompanion.Core.Tests/WinGetUpdateTests.cs`
+- [x] T001 Add WinGet result and source tests in `tests/WindowsCompanion.Core.Tests/WinGetUpdateTests.cs`
 
 ## Phase 2: Foundational
 
-- [x] T002 Add refreshable-source contract in `src/HaCompanion.Core/Sensors/IRefreshableSensorSource.cs`
-- [x] T003 Add enabled-source refresh orchestration in `src/HaCompanion.Core/Sensors/SensorCatalog.cs`
-- [x] T004 Refresh enabled expensive sources before manual push in `src/HaCompanion.App/AppController.cs`
+- [x] T002 Add refreshable-source contract in `src/WindowsCompanion.Core/Sensors/IRefreshableSensorSource.cs`
+- [x] T003 Add enabled-source refresh orchestration in `src/WindowsCompanion.Core/Sensors/SensorCatalog.cs`
+- [x] T004 Refresh enabled expensive sources before manual push in `src/WindowsCompanion.App/AppController.cs`
 
 ## Phase 3: User Story 1 - Update count
 
-- [x] T005 [P] [US1] Add provider contract in `src/HaCompanion.Core/Abstractions/IWinGetUpdateProvider.cs`
-- [x] T006 [P] [US1] Add update result models and JSON parsing in `src/HaCompanion.Core/Models/WinGetUpdateResult.cs`
-- [x] T007 [P] [US1] Test success, zero and unavailable mappings in `tests/HaCompanion.Core.Tests/WinGetUpdateTests.cs`
-- [x] T008 [US1] Implement cached six-hour sensor source in `src/HaCompanion.Core/Sensors/WinGetUpdateSensorSource.cs`
-- [x] T009 [US1] Implement structured PowerShell provider in `src/HaCompanion.App/Services/PowerShellWinGetUpdateProvider.cs`
-- [x] T010 [US1] Register the provider and source in `src/HaCompanion.App/AppController.cs`
+- [x] T005 [P] [US1] Add provider contract in `src/WindowsCompanion.Core/Abstractions/IWinGetUpdateProvider.cs`
+- [x] T006 [P] [US1] Add update result models and JSON parsing in `src/WindowsCompanion.Core/Models/WinGetUpdateResult.cs`
+- [x] T007 [P] [US1] Test success, zero and unavailable mappings in `tests/WindowsCompanion.Core.Tests/WinGetUpdateTests.cs`
+- [x] T008 [US1] Implement cached six-hour sensor source in `src/WindowsCompanion.Core/Sensors/WinGetUpdateSensorSource.cs`
+- [x] T009 [US1] Implement structured PowerShell provider in `src/WindowsCompanion.App/Services/PowerShellWinGetUpdateProvider.cs`
+- [x] T010 [US1] Register the provider and source in `src/WindowsCompanion.App/AppController.cs`
 
 ## Phase 4: User Story 2 - Privacy and setup
 
-- [x] T011 [P] [US2] Test local-only package preview and disabled no-query behavior in `tests/HaCompanion.Core.Tests/WinGetUpdateTests.cs`
-- [x] T012 [US2] Add supported-version and Microsoft-signature detection to `src/HaCompanion.App/Services/PowerShellWinGetUpdateProvider.cs`
-- [x] T013 [US2] Add copyable setup instructions in `src/HaCompanion.App/MainWindow.xaml.cs`
+- [x] T011 [P] [US2] Test local-only package preview and disabled no-query behavior in `tests/WindowsCompanion.Core.Tests/WinGetUpdateTests.cs`
+- [x] T012 [US2] Add supported-version and Microsoft-signature detection to `src/WindowsCompanion.App/Services/PowerShellWinGetUpdateProvider.cs`
+- [x] T013 [US2] Add copyable setup instructions in `src/WindowsCompanion.App/MainWindow.xaml.cs`
 - [x] T014 [US2] Keep the sensor disabled until explicit setup completes
 
 ## Phase 5: User Story 3 - Controlled checks
 
-- [x] T015 [P] [US3] Test refresh, cache and cancellation lifecycle in `tests/HaCompanion.Core.Tests/WinGetUpdateTests.cs`
-- [x] T016 [US3] Complete source cancellation and six-hour scheduling in `src/HaCompanion.Core/Sensors/WinGetUpdateSensorSource.cs`
+- [x] T015 [P] [US3] Test refresh, cache and cancellation lifecycle in `tests/WindowsCompanion.Core.Tests/WinGetUpdateTests.cs`
+- [x] T016 [US3] Complete source cancellation and six-hour scheduling in `src/WindowsCompanion.Core/Sensors/WinGetUpdateSensorSource.cs`
 
 ## Phase 6: Polish
 

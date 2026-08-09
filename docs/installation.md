@@ -4,7 +4,8 @@ The companion ships as a per-user Windows installer, with a portable ZIP as an
 alternative. A future WinGet package is tracked in
 [issue #39](https://github.com/DevSecNinja/home-assistant-win-companion/issues/39).
 
-The product and executable are named **WindowsCompanion** and
+The product's display name is **Windows Companion for Home Assistant**. Its
+distribution identity and executable are **WindowsCompanion** and
 `WindowsCompanion.exe`.
 
 It is an independent project and is not affiliated with, endorsed by, or sponsored by
@@ -26,7 +27,7 @@ with `REGDB_E_CLASSNOTREG`.
 
 ## Release artifacts
 
-Prefer a versioned setup executable from
+Prefer a versioned setup package from
 [GitHub Releases](https://github.com/DevSecNinja/home-assistant-win-companion/releases)
 matching your architecture. Portable ZIPs are provided for users who deliberately
 want a manual, no-installer deployment.
@@ -111,13 +112,35 @@ executable's exact location.
 Current builds are unsigned and may show **Windows protected your PC** from
 Microsoft Defender SmartScreen. Only after verifying the repository, workflow run,
 commit, and architecture above, choose **More info**, confirm the app is
-`HaCompanion.App.exe` with an unknown publisher, and choose **Run anyway**. A managed
+`WindowsCompanion.exe` with an unknown publisher, and choose **Run anyway**. A managed
 or organizational Windows policy may prohibit unsigned apps; do not weaken that
 policy to install this test build.
 
 Unsigned means Windows cannot cryptographically identify the publisher. A checksum
 or successful Actions run helps detect a changed download, but is not a substitute
 for an Authenticode signature.
+
+### If Defender ASR blocks the app
+
+Microsoft Defender's **Use advanced protection against ransomware** ASR rule
+(`C1DB55AB-C21A-4637-BB3F-A12568109D35`) can block a new unsigned
+`WindowsCompanion.exe` until Microsoft cloud reputation or publisher trust exists.
+This is different from the normal SmartScreen prompt and may appear as **This
+operation is blocked by your administrator**.
+
+First verify the release checksum and GitHub attestation exactly as described above.
+Only for that verified asset:
+
+- On a personally managed PC, open **Windows Security → Protection history** and
+  use **Allow on device** if Windows offers that action.
+- On an organization-managed PC, contact the administrator. Microsoft documents a
+  per-ASR-rule exclusion or a file-hash allow indicator for reviewed applications.
+  The user might not have permission to allow it.
+
+Do not disable Defender, turn off the ransomware rule, or add a broad exclusion for
+the user-writable install directory. The loader-free setup package avoids a separate
+temporary-executable ASR block, but it cannot give the unsigned application publisher
+trust. A future Authenticode-signed release is the long-term fix.
 
 ## Why builds are not signed yet
 
@@ -133,19 +156,43 @@ explicitly labelled unsigned. The longer-term decision remains tracked in
 
 1. Use the tray menu to select **Exit**.
 2. Download and verify the new release.
-3. For an installed copy, run the newer setup executable; it upgrades in place.
+3. For an installed copy, extract and run the newer setup package; it upgrades in
+   place.
 4. For a portable copy, replace the old extracted application folder.
 5. Launch the companion again.
 
 The following user data is outside the application directory and is preserved:
 
-- `%LOCALAPPDATA%\HaCompanion\settings.json`
-- `%LOCALAPPDATA%\HaCompanion\logs\`
+- `%LOCALAPPDATA%\WindowsCompanion\settings.json`
+- `%LOCALAPPDATA%\WindowsCompanion\logs\`
 - OAuth and webhook credentials in Windows Credential Locker
 
 Start with Windows continues to work when the executable path stays the same. If the
 directory moves, launch the app manually once; an existing startup entry is repaired
 to the current executable path.
+
+### Updating from a build older than the rename
+
+Earlier builds shipped as `HaCompanion.App.exe` and stored data under
+`%LOCALAPPDATA%\HaCompanion\`. The first launch of a renamed build migrates what it
+can:
+
+- the data directory is moved to `%LOCALAPPDATA%\WindowsCompanion\`, keeping
+  settings, logs and the lifecycle journal
+- Credential Locker entries found under the old `HaCompanion` resource are re-saved
+  under `WindowsCompanion`
+- a `HaCompanion` startup registry value is replaced by a `WindowsCompanion` one the
+  next time **Start with Windows** is toggled
+
+**Expect to sign in once after upgrading.** The Credential Locker scopes entries to
+the calling application, so a renamed executable may not be able to read credentials
+written by the old one; the fallback above only helps when it can. Signing in again
+is harmless: the device id is kept in `settings.json`, which does migrate, so Home
+Assistant updates the existing device rather than adding a second one.
+
+The old executable is not removed for you. Delete the previous
+`HaCompanion.App.exe` and its directory after confirming the new build starts and
+reconnects.
 
 ## Uninstall
 
@@ -157,7 +204,7 @@ to the current executable path.
 4. For an installed copy, use **Settings → Apps → Installed apps →
    WindowsCompanion → Uninstall**. For a portable copy, delete its
    extracted application folder.
-5. Optionally delete `%LOCALAPPDATA%\HaCompanion\` to remove settings and logs;
+5. Optionally delete `%LOCALAPPDATA%\WindowsCompanion\` to remove settings and logs;
    normal uninstall deliberately preserves these for upgrades/reinstallation.
 
 If the application was deleted before **Remove server…** was used, reinstall or

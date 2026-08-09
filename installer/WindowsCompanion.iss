@@ -45,7 +45,7 @@ ArchitecturesInstallIn64BitMode={#InstallArchitecture}
 MinVersion=10.0.17763
 OutputDir={#OutputDir}
 OutputBaseFilename=WindowsCompanion-{#MyAppVersion}-win-{#Architecture}-setup
-SetupIconFile=..\src\HaCompanion.App\Assets\AppIcon.ico
+SetupIconFile=..\src\WindowsCompanion.App\Assets\AppIcon.ico
 UninstallDisplayIcon={app}\{#MyAppExeName}
 LicenseFile=..\LICENSE
 Compression=lzma2/ultra64
@@ -68,6 +68,7 @@ Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs 
 Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
 
 [Registry]
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: none; ValueName: "WindowsCompanion"; Flags: uninsdeletevalue dontcreatekey
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: none; ValueName: "HaCompanion"; Flags: uninsdeletevalue dontcreatekey
 
 [Run]

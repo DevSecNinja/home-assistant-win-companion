@@ -25,13 +25,13 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
-$project = Join-Path $repoRoot 'src\HaCompanion.App\HaCompanion.App.csproj'
+$project = Join-Path $repoRoot 'src\WindowsCompanion.App\WindowsCompanion.App.csproj'
 $sourceRoot = [System.IO.Path]::TrimEndingDirectorySeparator(
     [System.IO.Path]::GetFullPath($repoRoot)
 ) + [System.IO.Path]::DirectorySeparatorChar
 
 function Get-RunningSourceInstances {
-    @(Get-Process -Name 'HaCompanion.App' -ErrorAction SilentlyContinue | Where-Object {
+    @(Get-Process -Name 'WindowsCompanion' -ErrorAction SilentlyContinue | Where-Object {
         try {
             [System.IO.Path]::GetFullPath($_.Path).StartsWith(
                 $sourceRoot,
@@ -51,7 +51,7 @@ function Confirm-Choice([string]$Prompt, [bool]$DefaultYes) {
 
 function Request-GracefulExit([System.Diagnostics.Process[]]$Processes) {
     foreach ($process in $Processes) {
-        $signalName = "Local\HaCompanion.App.Shutdown.$($process.Id)"
+        $signalName = "Local\WindowsCompanion.Shutdown.$($process.Id)"
         try {
             $signal = [System.Threading.EventWaitHandle]::OpenExisting($signalName)
         } catch [System.Threading.WaitHandleCannotBeOpenedException] {
@@ -115,8 +115,8 @@ Write-Host "Building ($Configuration|$platform)..." -ForegroundColor Cyan
 & $dotnet build $project -c $Configuration -p:Platform=$platform --nologo
 if ($LASTEXITCODE -ne 0) { throw 'Build failed.' }
 
-$outputRoot = Join-Path $repoRoot "src\HaCompanion.App\bin\$platform\$Configuration"
-$exe = Get-ChildItem $outputRoot -Recurse -Filter 'HaCompanion.App.exe' -ErrorAction SilentlyContinue |
+$outputRoot = Join-Path $repoRoot "src\WindowsCompanion.App\bin\$platform\$Configuration"
+$exe = Get-ChildItem $outputRoot -Recurse -Filter 'WindowsCompanion.exe' -ErrorAction SilentlyContinue |
     Sort-Object LastWriteTime -Descending |
     Select-Object -First 1
 
@@ -145,7 +145,7 @@ if ($process.HasExited) {
     throw "The app exited immediately (exit code $($process.ExitCode))."
 }
 
-if ($process.MainWindowTitle -eq 'HaCompanion.App.exe') {
+if ($process.MainWindowTitle -eq 'WindowsCompanion.exe') {
     Stop-Process -Id $process.Id -Force
     throw 'The app failed to start: the .NET apphost showed an error dialog. ' +
           'This usually means the runtime could not be resolved, not that it is missing.'

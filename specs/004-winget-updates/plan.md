@@ -61,13 +61,13 @@ specs/004-winget-updates/
 └── tasks.md
 
 src/
-├── HaCompanion.Core/
+├── WindowsCompanion.Core/
 │   ├── Abstractions/IWinGetUpdateProvider.cs
 │   ├── Models/WinGetUpdateResult.cs
 │   └── Sensors/WinGetUpdateSensorSource.cs
-└── HaCompanion.App/Services/PowerShellWinGetUpdateProvider.cs
+└── WindowsCompanion.App/Services/PowerShellWinGetUpdateProvider.cs
 
-tests/HaCompanion.Core.Tests/WinGetUpdateTests.cs
+tests/WindowsCompanion.Core.Tests/WinGetUpdateTests.cs
 ```
 
 Existing integration points:

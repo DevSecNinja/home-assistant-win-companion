@@ -7,10 +7,10 @@
 ## Summary
 
 Build a native Windows desktop companion for Home Assistant using WinUI 3 (Windows
-App SDK). A platform-agnostic core library (`HaCompanion.Core`) implements the Home
+App SDK). A platform-agnostic core library (`WindowsCompanion.Core`) implements the Home
 Assistant client (REST registration + webhook sensor updates + WebSocket events),
 secure credential storage abstraction, and a battery/status sensor provider. The
-WinUI app (`HaCompanion.App`) is a lean, tray-resident companion: it does **not**
+WinUI app (`WindowsCompanion.App`) is a lean, tray-resident companion: it does **not**
 embed the Home Assistant frontend, but offers an "Open Home Assistant" button that
 launches the instance in the user's default browser. It adds a system tray icon,
 shows native toast notifications, and wires OS power events. Authentication uses
@@ -30,7 +30,7 @@ via Windows App SDK `AppNotification` API. Tests via `xUnit`.
 
 **Storage**: Windows Credential Locker (`Windows.Security.Credentials.PasswordVault`)
 for the OAuth refresh token, webhook id, and cloudhook URL; a small JSON app-settings
-file (`%LOCALAPPDATA%\HaCompanion\settings.json`) for non-secret config (base URL,
+file (`%LOCALAPPDATA%\WindowsCompanion\settings.json`) for non-secret config (base URL,
 device id, sensor preferences, and registered-sensor metadata).
 
 **Testing**: xUnit unit tests for the core library (client request building, sensor
@@ -63,7 +63,7 @@ machine profile.
   Locker; no secrets in logs; TLS validated for non-local hosts. Storage sits
   behind `ISecretStore` so it is testable and swappable.
 - **III. Spec-Driven Development**: PASS — spec + plan + tasks precede code.
-- **IV. Testable, Layered Architecture**: PASS — `HaCompanion.Core` has no UI
+- **IV. Testable, Layered Architecture**: PASS — `WindowsCompanion.Core` has no UI
   dependency; HTTP/WebSocket/OS behind interfaces (`IHomeAssistantClient`,
   `ISecretStore`, `ISystemStatusProvider`, `IClock`).
 - **V. Resilience & Observability**: PASS — reconnect-with-backoff, connection
@@ -92,10 +92,10 @@ specs/001-ha-companion-mvp/
 ### Source Code (repository root)
 
 ```text
-HaCompanion.sln
+WindowsCompanion.sln
 
 src/
-├── HaCompanion.Core/            # Platform-agnostic library (unit-testable)
+├── WindowsCompanion.Core/            # Platform-agnostic library (unit-testable)
 │   ├── Models/                  # Registration, Sensor, ServerConfig, Notification DTOs
 │   ├── Abstractions/            # IHomeAssistantClient, ISecretStore, ISystemStatusProvider, IClock
 │   ├── HomeAssistant/           # HomeAssistantClient (REST + webhook), HaWebSocketClient
@@ -103,7 +103,7 @@ src/
 │   ├── Security/                # Secret redaction helpers
 │   └── App/                     # ConnectionManager (orchestration + reconnect/backoff)
 │
-└── HaCompanion.App/             # WinUI 3 (Windows App SDK) desktop app
+└── WindowsCompanion.App/             # WinUI 3 (Windows App SDK) desktop app
     ├── App.xaml(.cs)            # App bootstrap, tray lifecycle, toast registration
     ├── AppController.cs         # Coordinator: OAuth session, registration, connection
     ├── MainWindow.xaml(.cs)     # Connect view + lean Status view; tray icon
@@ -113,12 +113,12 @@ src/
     └── Assets/
 
 tests/
-└── HaCompanion.Core.Tests/      # xUnit tests for core library
+└── WindowsCompanion.Core.Tests/      # xUnit tests for core library
 ```
 
-**Structure Decision**: Two-project solution. `HaCompanion.Core` holds all logic
+**Structure Decision**: Two-project solution. `WindowsCompanion.Core` holds all logic
 behind interfaces so it is unit-testable with no Windows UI dependency (satisfies
-Principle IV). `HaCompanion.App` is the thin WinUI 3 presentation + OS-integration
+Principle IV). `WindowsCompanion.App` is the thin WinUI 3 presentation + OS-integration
 layer and provides the concrete Windows implementations of the core abstractions.
 
 ## Architecture & Key Decisions

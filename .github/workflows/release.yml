@@ -96,7 +96,7 @@ jobs:
           .\scripts\build-release.ps1
           -Version $env:VERSION
           -OutputDirectory artifacts\release
-      - name: Build per-user setup executables
+      - name: Build per-user setup packages
         shell: pwsh
         env:
           INNO_COMPILER: ${{ steps.inno.outputs.compiler }}
@@ -222,7 +222,7 @@ jobs:
 
           ## Installation
 
-          Download the setup executable matching your PC:
+          Download the setup package matching your PC:
 
           - **x64** (Intel/AMD): \`WindowsCompanion-${VERSION}-win-x64-setup.zip\`
           - **ARM64**: \`WindowsCompanion-${VERSION}-win-arm64-setup.zip\`

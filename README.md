@@ -140,7 +140,7 @@ Assistant; package names and versions remain in the local preview.
 .\scripts\test.ps1 -Coverage
 ```
 
-Coverage is measured for `HaCompanion.Core` only. The current gates are 85% line
+Coverage is measured for `WindowsCompanion.Core` only. The current gates are 85% line
 and 70% branch coverage; the WinUI/P/Invoke shell remains intentionally thin and
 outside the unit-test project.
 
@@ -157,7 +157,7 @@ Two things worth knowing if you build by hand:
   app's own output folder and fails with a misleading *"You must install or update
   .NET"* dialog even when the runtime is installed.
 - A failed launch does not exit. The .NET apphost stays alive showing an error
-  dialog whose window title is `HaCompanion.App.exe`, so "a process is running" is
+  dialog whose window title is `WindowsCompanion.exe`, so "a process is running" is
   not evidence that the app started.
 
 On first launch, enter your Home Assistant URL and click **Sign in** — your browser
@@ -224,17 +224,17 @@ Full behaviour, including the deliberate limitations, is recorded in
 
 | Project | Purpose |
 | --- | --- |
-| `src/HaCompanion.Core` | Platform-agnostic logic: HA REST/webhook client, OAuth, WebSocket protocol, sensors, reconnect. No UI dependency and covered by unit tests. |
-| `src/HaCompanion.App` | WinUI 3 (Windows App SDK) shell: OAuth loopback listener, tray icon, toasts, Credential Locker, battery via `GetSystemPowerStatus`. |
-| `tests/HaCompanion.Core.Tests` | xUnit tests for the core library. |
+| `src/WindowsCompanion.Core` | Platform-agnostic logic: HA REST/webhook client, OAuth, WebSocket protocol, sensors, reconnect. No UI dependency and covered by unit tests. |
+| `src/WindowsCompanion.App` | WinUI 3 (Windows App SDK) shell: OAuth loopback listener, tray icon, toasts, Credential Locker, battery via `GetSystemPowerStatus`. |
+| `tests/WindowsCompanion.Core.Tests` | xUnit tests for the core library. |
 | `brand/` | Vector masters for the logo and the script that generates every shipped icon and image from them. See [`docs/branding.md`](docs/branding.md). |
 
 Secrets live only in the Windows Credential Locker, including the refresh token,
 `webhook_id`, and any cloudhook URL. Non-secret config (the primary URL, optional
 internal/external URLs, connection mode, trusted network names, device id, sensor
 choices, and registered-sensor metadata) goes to
-`%LOCALAPPDATA%\HaCompanion\settings.json`. The last observed lifecycle transition
-is journalled separately in `%LOCALAPPDATA%\HaCompanion\lifecycle.json`, so a write
+`%LOCALAPPDATA%\WindowsCompanion\settings.json`. The last observed lifecycle transition
+is journalled separately in `%LOCALAPPDATA%\WindowsCompanion\lifecycle.json`, so a write
 interrupted by a shutdown cannot damage the configuration. Existing installs migrate
 a previously stored plaintext webhook id into the Credential Locker automatically.
 

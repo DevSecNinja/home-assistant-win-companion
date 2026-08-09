@@ -1,0 +1,12 @@
+ .github/workflows/release.yml              | 128 +++++++++++++++++++++++------
+ README.md                                  |   6 +-
+ docs/installation.md                       |  96 ++++++++++++++--------
+ docs/pre-release-smoke-test.md             |  18 +++-
+ installer/WindowsCompanion.iss             |  74 +++++++++++++++++
+ scripts/build-installer.ps1                |  91 ++++++++++++++++++++
+ scripts/build-release.ps1                  |  14 +++-
+ src/HaCompanion.App/App.xaml.cs            |   6 ++
+ src/HaCompanion.App/AppController.cs       |   6 +-
+ src/HaCompanion.App/HaCompanion.App.csproj |   4 +-
+ src/HaCompanion.App/MainWindow.xaml.cs     |  27 ++++++
+ 11 files changed, 395 insertions(+), 75 deletions(-)

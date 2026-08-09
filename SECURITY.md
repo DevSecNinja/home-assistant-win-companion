@@ -36,6 +36,6 @@ If any of them may have been exposed:
    have been disclosed.
 3. Sign in again to create fresh credentials.
 
-The non-secret `%LOCALAPPDATA%\HaCompanion\settings.json` file may identify the
+The non-secret `%LOCALAPPDATA%\WindowsCompanion\settings.json` file may identify the
 Home Assistant server and device. Review it before sharing it privately with a
 report.

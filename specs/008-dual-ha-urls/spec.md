@@ -24,7 +24,7 @@ re-registering the device or losing the refresh token, webhook, entities or hist
 
 ## Configuration model
 
-`settings.json` (`%LOCALAPPDATA%\HaCompanion\settings.json`):
+`settings.json` (`%LOCALAPPDATA%\WindowsCompanion\settings.json`):
 
 | Field | Purpose |
 | --- | --- |

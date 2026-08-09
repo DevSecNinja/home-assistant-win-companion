@@ -15,8 +15,8 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
-$project = Join-Path $repoRoot 'src\HaCompanion.App\HaCompanion.App.csproj'
-$tests = Join-Path $repoRoot 'tests\HaCompanion.Core.Tests\HaCompanion.Core.Tests.csproj'
+$project = Join-Path $repoRoot 'src\WindowsCompanion.App\WindowsCompanion.App.csproj'
+$tests = Join-Path $repoRoot 'tests\WindowsCompanion.Core.Tests\WindowsCompanion.Core.Tests.csproj'
 if (-not $OutputDirectory) {
     $OutputDirectory = Join-Path $repoRoot "artifacts\release\$Version"
 } elseif (-not [System.IO.Path]::IsPathRooted($OutputDirectory)) {

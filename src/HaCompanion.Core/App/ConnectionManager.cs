@@ -60,6 +60,12 @@ public sealed class ConnectionManager : IAsyncDisposable
     public event Action<ConnectionState>? StateChanged;
     public event Action<NotificationMessage>? NotificationReceived;
 
+    /// <summary>
+    /// Raised after Home Assistant accepted a sensor batch. Lets a caller treat a
+    /// push as delivered only when it actually was, rather than when it was sent.
+    /// </summary>
+    public event Action<SensorReadContext>? SyncSucceeded;
+
     public ConnectionManager(
         HaWebSocketClient ws,
         SensorSyncService sensors,
@@ -135,13 +141,30 @@ public sealed class ConnectionManager : IAsyncDisposable
         }
     }
 
-    /// <summary>Runs a single sensor sync now (e.g. on power-state change).</summary>
-    public Task SyncNowAsync(SensorReadContext? context = null) =>
-        SyncOnceAsync(context ?? SensorReadContext.StateChange, _cts?.Token ?? CancellationToken.None);
-
-    private async Task SyncOnceAsync(SensorReadContext context, CancellationToken ct)
+    /// <summary>
+    /// Runs a single sensor sync now (e.g. on power-state change) and reports
+    /// whether Home Assistant accepted it. <paramref name="ct"/> lets a caller put
+    /// its own deadline on the attempt, which the lifecycle final push depends on.
+    /// </summary>
+    public Task<bool> SyncNowAsync(SensorReadContext? context = null, CancellationToken ct = default)
     {
-        if (State == ConnectionState.AuthError) return;
+        var own = _cts?.Token ?? CancellationToken.None;
+        if (!ct.CanBeCanceled)
+            return SyncOnceAsync(context ?? SensorReadContext.StateChange, own);
+
+        return SyncWithDeadlineAsync(context ?? SensorReadContext.StateChange, own, ct);
+    }
+
+    private async Task<bool> SyncWithDeadlineAsync(
+        SensorReadContext context, CancellationToken own, CancellationToken ct)
+    {
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(own, ct);
+        return await SyncOnceAsync(context, linked.Token).ConfigureAwait(false);
+    }
+
+    private async Task<bool> SyncOnceAsync(SensorReadContext context, CancellationToken ct)
+    {
+        if (State == ConnectionState.AuthError) return false;
         try
         {
             await _sensors.SyncAsync(_webhookId, context, ct).ConfigureAwait(false);
@@ -151,6 +174,8 @@ public sealed class ConnectionManager : IAsyncDisposable
             _log.LogDebug("Sensor sync succeeded ({Reason}).", context.Reason);
             if (State is ConnectionState.Connecting or ConnectionState.Reconnecting)
                 SetState(ConnectionState.Connected);
+            SyncSucceeded?.Invoke(context);
+            return true;
         }
         catch (OperationCanceledException) { }
         catch (Exception ex)
@@ -161,6 +186,8 @@ public sealed class ConnectionManager : IAsyncDisposable
             _log.LogWarning(ex, "Sensor sync failed ({Reason}), failure #{Count}.",
                 context.Reason, ConsecutiveFailures);
         }
+
+        return false;
     }
 
     internal TimeSpan NextBackoff(int attempt)

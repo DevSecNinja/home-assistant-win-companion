@@ -69,12 +69,20 @@ one that just works with stock Home Assistant.**
   IPv4/IPv6 address, LAN MAC address, Wi-Fi SSID/BSSID, OS version, PC model, last
   boot, display count and resolution, dark mode, locale and time zone, system-drive
   usage, notification/presentation state, microphone and camera use, audio output,
-  headset presence, WinGet update count, and an optional frontmost-app/last-update
-  value. Each sensor can be switched on or off individually, shows a local preview,
-  and privacy-sensitive ones are off by default. Network identifiers are only read
-  once you enable their own sensor — the preview shows nothing beforehand — and the
-  IPv4, IPv6 and MAC readings all describe the adapter carrying the active route
-  rather than a VPN or Hyper-V adapter.
+  headset presence, WinGet update count, system lifecycle state, and an optional
+  frontmost-app/last-update value. Each sensor can be switched on or off
+  individually, shows a local preview, and privacy-sensitive ones are off by
+  default. Network identifiers are only read once you enable their own sensor —
+  the preview shows nothing beforehand — and the IPv4, IPv6 and MAC readings all
+  describe the adapter carrying the active route rather than a VPN or Hyper-V
+  adapter.
+- **Lifecycle signals** — sleep, sign-out and shutdown are detected without polling
+  and pushed as an opt-in `system_state` sensor with a short, strictly bounded final
+  attempt. Windows may terminate the app first, so anything undelivered is recorded
+  locally and reported after the next successful connection. The companion never
+  blocks or delays a shutdown. The sensor is off by default and asks you to confirm
+  its limits before it starts, because they cannot be engineered away — see
+  [docs/windows-lifecycle-signals.md](docs/windows-lifecycle-signals.md).
 - **Health and logs** — a health verdict based on whether the app is actually
   reporting on schedule, plus a rolling local log you can open from the UI.
 - **Open Home Assistant** — one click (window or tray menu) to open your instance in
@@ -143,8 +151,10 @@ opens for login, then the app registers this PC and connects.
 Secrets live only in the Windows Credential Locker, including the refresh token,
 `webhook_id`, and any cloudhook URL. Non-secret config (base URL, device id, sensor
 choices, and registered-sensor metadata) goes to
-`%LOCALAPPDATA%\HaCompanion\settings.json`. Existing installs migrate a previously
-stored plaintext webhook id into the Credential Locker automatically.
+`%LOCALAPPDATA%\HaCompanion\settings.json`. The last observed lifecycle transition
+is journalled separately in `%LOCALAPPDATA%\HaCompanion\lifecycle.json`, so a write
+interrupted by a shutdown cannot damage the configuration. Existing installs migrate
+a previously stored plaintext webhook id into the Credential Locker automatically.
 
 ## Notes on the Home Assistant APIs used
 

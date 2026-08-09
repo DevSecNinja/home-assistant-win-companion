@@ -50,6 +50,22 @@ Assistant instance.
 - [ ] Remove server, confirm the destructive prompt, and verify local credentials
       and configuration are deleted.
 
+## System lifecycle
+
+- [ ] Enable **System State** in the sensor list: the best-effort dialog appears,
+      **Cancel** leaves the toggle off and nothing is saved, and **Enable anyway**
+      turns it on. The `best effort` badge shows next to the sensor.
+- [ ] Sleep and resume; confirm `system_state` returns to `running` and that any
+      undelivered `sleeping` transition appears in the `Last Unreported *`
+      attributes and then stops being reported.
+- [ ] Hibernate and resume (reported as `sleeping`).
+- [ ] Sign out and back in; restart; shut down and start; a Windows Update restart
+      where feasible.
+- [ ] Confirm shutdown and sleep are never visibly delayed by the companion and no
+      dialog appears.
+- [ ] Lock and unlock, and switch users, and confirm `system_state` does not change.
+- [ ] Confirm no duplicate or flapping history entries from overlapping signals.
+
 ## Logs and cleanup
 
 - [ ] Open the log from the UI and inspect it for secrets or sensitive sensor

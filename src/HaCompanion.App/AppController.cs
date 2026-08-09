@@ -1,5 +1,6 @@
 using HaCompanion.Core.App;
 using HaCompanion.Core.HomeAssistant;
+using HaCompanion.Core.Lifecycle;
 using HaCompanion.Core.Models;
 using HaCompanion.Core.Sensors;
 using HaCompanion_App.Services;
@@ -14,6 +15,14 @@ namespace HaCompanion_App;
 /// </summary>
 public sealed class AppController : IAsyncDisposable
 {
+    /// <summary>
+    /// How long the companion may spend telling Home Assistant that the machine is
+    /// going away. Short by design: Windows terminates applications a few seconds
+    /// into a shutdown, and waiting longer risks holding up the very thing we are
+    /// reporting.
+    /// </summary>
+    private static readonly TimeSpan FinalLifecyclePushTimeout = TimeSpan.FromSeconds(2);
+
     private readonly HttpClient _http = new();
     private readonly WindowsSecretStore _secrets = new();
     private readonly SessionStore _settings;
@@ -388,6 +397,18 @@ public sealed class AppController : IAsyncDisposable
             () => new ClientWebSocketAdapter(), config.BaseUrl, tokenManager, config.WebhookId!,
             _loggerFactory.CreateLogger<HaWebSocketClient>());
 
+        // The connection does not exist yet, and the lifecycle source has to be part
+        // of the catalog that the connection will read from, so the final push is
+        // resolved lazily rather than captured.
+        ConnectionManager? live = null;
+        var lifecycle = new LifecycleCoordinator(
+            new FileLifecycleJournal(),
+            finalPush: token => live is null
+                ? Task.FromResult(false)
+                : live.SyncNowAsync(SensorReadContext.LifecycleTransition, token),
+            finalPushTimeout: FinalLifecyclePushTimeout,
+            log: _loggerFactory.CreateLogger<LifecycleCoordinator>());
+
         var catalog = new SensorCatalog(
             new ISensorSource[]
             {
@@ -405,7 +426,8 @@ public sealed class AppController : IAsyncDisposable
                 new CapabilityUsageSensorSource(config.Sensors),
                 new AudioDeviceSensorSource(config.Sensors),
                 new FrontmostAppSensorSource(config.Sensors),
-                new WinGetUpdateSensorSource(_winGetUpdates, config.Sensors)
+                new WinGetUpdateSensorSource(_winGetUpdates, config.Sensors),
+                new LifecycleSensorSource(lifecycle, new WindowsLifecycleSignalSource())
             },
             config.Sensors);
         _catalog = catalog;
@@ -419,6 +441,11 @@ public sealed class AppController : IAsyncDisposable
             log: _loggerFactory.CreateLogger<ConnectionManager>());
         connection.StateChanged += s => StateChanged?.Invoke(s);
         connection.NotificationReceived += n => _toasts.Show(n);
+
+        // Only a batch Home Assistant actually accepted counts as delivery; anything
+        // else leaves the transition recorded locally for the next successful sync.
+        connection.SyncSucceeded += _ => lifecycle.ReportDelivered();
+        live = connection;
         _connection = connection;
         connection.Start();
 

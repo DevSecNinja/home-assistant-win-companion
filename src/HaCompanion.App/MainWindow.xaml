@@ -167,6 +167,21 @@
                     Content="Open Windows Location settings"
                     Click="OnOpenLocationSettings"
                     HorizontalAlignment="Stretch" />
+                <StackPanel Spacing="4">
+                    <TextBlock Text="Frontmost app detail" />
+                    <ComboBox
+                        x:Name="FrontmostAppModeBox"
+                        HorizontalAlignment="Stretch"
+                        SelectionChanged="OnFrontmostAppModeChanged">
+                        <ComboBoxItem Content="Application name only" Tag="ApplicationName" />
+                        <ComboBoxItem Content="Full window title" Tag="FullWindowTitle" />
+                    </ComboBox>
+                    <TextBlock
+                        Text="Full titles may reveal document names, messages, customer names and websites."
+                        TextWrapping="Wrap"
+                        FontSize="12"
+                        Foreground="{ThemeResource SystemFillColorCautionBrush}" />
+                </StackPanel>
                 <Button Content="Back" Click="OnCloseSettings" HorizontalAlignment="Stretch" />
             </StackPanel>
         </Grid>

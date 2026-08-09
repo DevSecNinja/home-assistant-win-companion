@@ -69,7 +69,7 @@ one that just works with stock Home Assistant.**
   IPv4/IPv6 address, LAN MAC address, Wi-Fi SSID/BSSID, OS version, last boot,
   notification/presentation state, microphone
   and camera use, audio output, headset presence, WinGet update count, and an
-  optional last-update timestamp. Each sensor can be switched on or off
+  optional frontmost-app/last-update value. Each sensor can be switched on or off
   individually, shows a local preview, and privacy-sensitive ones are off by
   default. Network identifiers are only read once you enable their own sensor —
   the preview shows nothing beforehand — and the IPv4, IPv6 and MAC readings all

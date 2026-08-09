@@ -20,7 +20,16 @@ Assistant instance.
 
 ## Sensors
 
-- [ ] Open Sensors and confirm every sensor shows a local preview.
+- [ ] Open Sensors and confirm every sensor shows a local preview, and that IP
+      address, IPv6 address, MAC address and the Wi-Fi identifiers instead show an
+      opt-in placeholder while they are switched off.
+- [ ] Enable IPv6 address and MAC address and confirm each reports the active
+      adapter's values, that enabling one does not reveal the other, and that both
+      report `Not Connected` when the network is unplugged.
+- [ ] With a VPN or Hyper-V/WSL adapter up, confirm IPv4, IPv6 and MAC still
+      describe the physical Ethernet/Wi-Fi adapter.
+- [ ] Move between Ethernet and Wi-Fi and confirm the readings follow the active
+      adapter without a restart.
 - [ ] Toggle one sensor off and confirm its Home Assistant entity becomes disabled.
 - [ ] Toggle it on and confirm it reports again.
 - [ ] Select Update now and confirm Last update advances.
@@ -56,6 +65,7 @@ Assistant instance.
 
 ## Logs and cleanup
 
-- [ ] Open the log from the UI and inspect it for secrets or sensitive sensor values.
+- [ ] Open the log from the UI and inspect it for secrets or sensitive sensor
+      values, including IP, IPv6 and MAC addresses.
 - [ ] Delete the test Mobile App device and any test notifications from Home
       Assistant.

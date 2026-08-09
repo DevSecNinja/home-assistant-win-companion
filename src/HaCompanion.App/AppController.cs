@@ -109,6 +109,11 @@ public sealed class AppController : IAsyncDisposable
             await _connection.SyncNowAsync(SensorReadContext.SettingsChanged).ConfigureAwait(false);
     }
 
+    public void SaveSensorPreferences()
+    {
+        if (_config is not null) _settings.Save(_config);
+    }
+
     public Task<bool> IsWinGetModuleInstalledAsync(CancellationToken ct = default) =>
         _winGetUpdates.IsModuleInstalledAsync(ct);
 
@@ -175,7 +180,11 @@ public sealed class AppController : IAsyncDisposable
             return ServerUrlChangeResult.RequiresSignIn;
 
         var candidate = ServerUrlNormalizer.Normalize(baseUrl);
-        candidate = await ResolveBaseUrlAsync(candidate, ct).ConfigureAwait(false);
+        candidate = await ResolveBaseUrlAsync(
+                candidate,
+                ct,
+                requireReachableHttp: true)
+            .ConfigureAwait(false);
         if (Uri.Compare(
                 new Uri(candidate),
                 new Uri(config.BaseUrl),
@@ -405,13 +414,14 @@ public sealed class AppController : IAsyncDisposable
             {
                 new BatterySensorSource(_status),
                 new ActiveSensorSource(config.Sensors),
-                new NetworkSensorSource(),
+                new NetworkSensorSource(config.Sensors),
                 new WifiSensorSource(config.Sensors),
                 new SystemSensorSource(),
                 new LastUpdateSensorSource(),
                 new NotificationStateSensorSource(),
                 new CapabilityUsageSensorSource(config.Sensors),
                 new AudioDeviceSensorSource(config.Sensors),
+                new FrontmostAppSensorSource(config.Sensors),
                 new WinGetUpdateSensorSource(_winGetUpdates, config.Sensors),
                 new LifecycleSensorSource(lifecycle, new WindowsLifecycleSignalSource())
             },
@@ -445,21 +455,48 @@ public sealed class AppController : IAsyncDisposable
     /// because redirects rewrite POSTs into GETs, which would make the
     /// <c>/auth/token</c> exchange fail with 405 Method Not Allowed.
     /// </summary>
-    private async Task<string> ResolveBaseUrlAsync(string baseUrl, CancellationToken ct)
+    private async Task<string> ResolveBaseUrlAsync(
+        string baseUrl,
+        CancellationToken ct,
+        bool requireReachableHttp = false)
     {
+        using var timeout = requireReachableHttp
+            ? new CancellationTokenSource(TimeSpan.FromSeconds(10))
+            : null;
+        using var linked = timeout is null
+            ? null
+            : CancellationTokenSource.CreateLinkedTokenSource(ct, timeout.Token);
+        var requestToken = linked?.Token ?? ct;
+
         try
         {
             using var request = new HttpRequestMessage(HttpMethod.Get, baseUrl);
             using var response = await _http
-                .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct)
+                .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, requestToken)
                 .ConfigureAwait(false);
 
             var finalUri = response.RequestMessage?.RequestUri;
             if (finalUri is not null)
                 return finalUri.GetLeftPart(UriPartial.Authority) + "/";
         }
+        catch (OperationCanceledException) when (timeout?.IsCancellationRequested == true)
+        {
+            throw new InvalidOperationException(
+                "The new URL did not respond as an HTTP or HTTPS server within 10 seconds.");
+        }
+        catch (HttpRequestException ex) when (requireReachableHttp)
+        {
+            throw new InvalidOperationException(
+                "The new URL is not a reachable HTTP or HTTPS Home Assistant endpoint.", ex);
+        }
+        catch (IOException ex) when (requireReachableHttp)
+        {
+            throw new InvalidOperationException(
+                "The new URL did not speak the HTTP protocol expected by Home Assistant.", ex);
+        }
         catch
         {
+            if (requireReachableHttp) throw;
             // Unreachable or non-HTTP failure: keep the user's URL and let the
             // OAuth step surface a meaningful error.
         }

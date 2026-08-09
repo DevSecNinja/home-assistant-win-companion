@@ -13,28 +13,16 @@
     "github>DevSecNinja/.github//.renovate/packageRules.json5",
     "github>DevSecNinja/.github//.renovate/semanticCommits.json5",
   ],
-  customManagers: [
-    {
-      // The release workflow installs the Inno Setup compiler from the upstream
-      // GitHub release. Upstream tags are underscore-separated (is-7_0_2), so
-      // INNO_VERSION stores the underscore form and the workflow derives both
-      // the tag and the dotted asset name from it.
-      customType: "regex",
-      description: "Update the Inno Setup compiler pinned by the release workflow",
-      managerFilePatterns: ["/^\\.github/workflows/release\\.yml$/"],
-      matchStrings: [
-        "INNO_VERSION: \"(?<currentValue>\\d+_\\d+(?:_\\d+)?)\"",
-      ],
-      depNameTemplate: "jrsoftware/issrc",
-      datasourceTemplate: "github-releases",
-      extractVersionTemplate: "^is-(?<version>[\\d_]+)$",
-      versioningTemplate: "regex:^(?<major>\\d+)_(?<minor>\\d+)(?:_(?<patch>\\d+))?$",
-    },
-  ],
   packageRules: [
     {
+      // The shared customManagers preset already picks up the annotated
+      // `inno_version` pin in .github/workflows/release.yml. Only the version
+      // shape is repository-specific: upstream tags are underscore-separated
+      // (is-7_0_2), so strip the prefix and compare the underscore form.
       description: "Require manual review for Inno Setup compiler changes",
       matchDepNames: ["jrsoftware/issrc"],
+      extractVersion: "^is-(?<version>[\\d_]+)$",
+      versioning: "regex:^(?<major>\\d+)_(?<minor>\\d+)(?:_(?<patch>\\d+))?$",
       automerge: false,
     },
     {

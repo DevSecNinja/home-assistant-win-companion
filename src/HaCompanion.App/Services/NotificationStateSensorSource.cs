@@ -40,8 +40,8 @@ public sealed class NotificationStateSensorSource : ISensorSource
             + "included: Windows exposes no supported way to read it.",
             SensorPrivacy.Benign,
             EnabledByDefault: true,
-            ResourceUsage: "Runs one lightweight local Windows query every 10 seconds and requests "
-                           + "an immediate batch only when the state changes.")
+            ResourceUsage: "Low. Checks Windows every 10 seconds. Sends an extra update only when "
+                           + "the notification state changes.")
     ];
 
     public IReadOnlyList<Sensor> Read(

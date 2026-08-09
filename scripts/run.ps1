@@ -26,6 +26,79 @@ $ErrorActionPreference = 'Stop'
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $project = Join-Path $repoRoot 'src\HaCompanion.App\HaCompanion.App.csproj'
+$sourceRoot = [System.IO.Path]::TrimEndingDirectorySeparator(
+    [System.IO.Path]::GetFullPath($repoRoot)
+) + [System.IO.Path]::DirectorySeparatorChar
+
+function Get-RunningSourceInstances {
+    @(Get-Process -Name 'HaCompanion.App' -ErrorAction SilentlyContinue | Where-Object {
+        try {
+            [System.IO.Path]::GetFullPath($_.Path).StartsWith(
+                $sourceRoot,
+                [System.StringComparison]::OrdinalIgnoreCase)
+        } catch {
+            $false
+        }
+    })
+}
+
+function Confirm-Choice([string]$Prompt, [bool]$DefaultYes) {
+    $suffix = if ($DefaultYes) { '[Y/n]' } else { '[y/N]' }
+    $answer = (Read-Host "$Prompt $suffix").Trim()
+    if (-not $answer) { return $DefaultYes }
+    return $answer -in @('y', 'yes')
+}
+
+function Request-GracefulExit([System.Diagnostics.Process[]]$Processes) {
+    foreach ($process in $Processes) {
+        $signalName = "Local\HaCompanion.App.Shutdown.$($process.Id)"
+        try {
+            $signal = [System.Threading.EventWaitHandle]::OpenExisting($signalName)
+        } catch [System.Threading.WaitHandleCannotBeOpenedException] {
+            return $false
+        }
+
+        try {
+            [void]$signal.Set()
+        } finally {
+            $signal.Dispose()
+        }
+    }
+
+    $deadline = [DateTime]::UtcNow.AddSeconds(10)
+    foreach ($process in $Processes) {
+        $remaining = [Math]::Max(0, [int]($deadline - [DateTime]::UtcNow).TotalMilliseconds)
+        if (-not $process.WaitForExit($remaining)) { return $false }
+    }
+    return $true
+}
+
+$running = Get-RunningSourceInstances
+if ($running.Count -gt 0) {
+    $details = ($running | ForEach-Object {
+        $path = try { $_.Path } catch { '<unknown path>' }
+        "pid $($_.Id): $path"
+    }) -join [Environment]::NewLine
+    Write-Host "A source-built companion is already running:`n$details" -ForegroundColor Yellow
+
+    if (-not (Confirm-Choice 'Close it before building?' $true)) {
+        Write-Host 'Build cancelled; the running app may lock the output files.' -ForegroundColor Yellow
+        return
+    }
+
+    Write-Host 'Requesting graceful shutdown...' -ForegroundColor DarkGray
+    if (-not (Request-GracefulExit $running)) {
+        if (-not (Confirm-Choice 'Graceful shutdown was unavailable or timed out. Force close it?' $false)) {
+            Write-Host 'Build cancelled; the running app may lock the output files.' -ForegroundColor Yellow
+            return
+        }
+
+        $running | Where-Object { -not $_.HasExited } | ForEach-Object {
+            Stop-Process -Id $_.Id -Force
+            $_.WaitForExit(5000)
+        }
+    }
+}
 
 # Build for one explicit platform. Left to itself, a solution build and a project
 # build choose different platforms and therefore different output folders, which is
@@ -54,12 +127,10 @@ if ($NoLaunch) {
     return
 }
 
-# Only ever one instance, so the tray icon and the running session stay coherent.
-Get-Process -Name 'HaCompanion.App' -ErrorAction SilentlyContinue | ForEach-Object {
-    Write-Host "Stopping running instance (pid $($_.Id))..." -ForegroundColor DarkGray
-    Stop-Process -Id $_.Id -Force
+# Do not silently terminate an instance that appeared while the build was running.
+if ((Get-RunningSourceInstances).Count -gt 0) {
+    throw 'A companion instance started during the build. Exit it and run the script again.'
 }
-Start-Sleep -Milliseconds 500
 
 Write-Host "Launching $($exe.FullName)" -ForegroundColor Green
 $process = Start-Process $exe.FullName -PassThru

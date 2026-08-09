@@ -16,6 +16,9 @@ Build and launch through:
 .\scripts\run.ps1
 ```
 
+If the source-built app is already running, the script asks permission to close it
+gracefully before building and offers an explicit force-close fallback if needed.
+
 Run the Core tests through:
 
 ```powershell

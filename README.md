@@ -129,7 +129,9 @@ outside the unit-test project.
 `scripts/run.ps1` builds and then launches exactly what it just built. That matters:
 a solution build and a project build otherwise select different platforms and write
 to different folders, which makes it easy to build one binary and silently run an
-older one. The script pins the platform and verifies the app actually started.
+older one. The script pins the platform and verifies the app actually started. If a
+source-built instance is already running, it asks before closing it so the executable
+does not remain locked during the build.
 
 Two things worth knowing if you build by hand:
 

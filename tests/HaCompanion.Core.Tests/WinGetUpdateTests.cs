@@ -113,7 +113,7 @@ public class WinGetUpdateTests
         await provider.Started.Task.WaitAsync(TimeSpan.FromSeconds(2));
         source.Stop();
 
-        await provider.Cancelled.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        Assert.True(provider.Cancelled.Task.IsCompletedSuccessfully);
     }
 
     private static SensorPreferences EnabledPreferences()

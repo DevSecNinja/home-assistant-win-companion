@@ -1,4 +1,12 @@
+using System.Text.Json.Serialization;
+
 namespace HaCompanion.Core.Sensors;
+
+public enum FrontmostAppMode
+{
+    ApplicationName,
+    FullWindowTitle
+}
 
 /// <summary>
 /// The user's per-sensor choices. Absent entries fall back to the sensor's
@@ -12,6 +20,9 @@ public sealed class SensorPreferences
 
     /// <summary>Seconds without input before the machine counts as idle.</summary>
     public int IdleThresholdSeconds { get; set; } = 300;
+
+    [JsonConverter(typeof(JsonStringEnumConverter))]
+    public FrontmostAppMode FrontmostAppMode { get; set; } = FrontmostAppMode.ApplicationName;
 
     public bool IsEnabled(SensorDefinition definition) =>
         Enabled.TryGetValue(definition.UniqueId, out var value) ? value : definition.EnabledByDefault;

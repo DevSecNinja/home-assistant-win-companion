@@ -298,36 +298,20 @@ public class SensorLifecycleTests
     }
 
     // ------------------------------------------------------------------ catalog
+    // Catalog start/stop/read behavior is covered by SensorCatalogLifecycleTests;
+    // what follows is the refresh path and the catalog's own callback guard.
 
     [Fact]
-    public async Task A_disabled_source_is_never_started_read_or_refreshed()
+    public async Task A_disabled_source_is_never_refreshed()
     {
         var source = new RecordingSource();
         var catalog = new SensorCatalog([source], new SensorPreferences());
 
         catalog.Start(() => { });
-        _ = catalog.Read(SensorReadContext.Periodic);
         await catalog.RefreshAsync();
 
         Assert.Equal(0, source.StartCount);
-        Assert.Equal(0, source.ReadCount);
         Assert.Equal(0, source.RefreshCount);
-    }
-
-    [Fact]
-    public void Enabling_a_second_sensor_does_not_restart_a_running_source()
-    {
-        var source = new RecordingSource();
-        var catalog = new SensorCatalog([source], new SensorPreferences());
-        catalog.Start(() => { });
-
-        catalog.SetEnabled(RecordingSource.First, true);
-        catalog.SetEnabled(RecordingSource.Second, true);
-        catalog.SetEnabled(RecordingSource.Second, true);
-        catalog.SetEnabled(RecordingSource.Third, true);
-
-        Assert.Equal(1, source.StartCount);
-        Assert.Equal(0, source.StopCount);
     }
 
     [Fact]
@@ -352,23 +336,6 @@ public class SensorLifecycleTests
     }
 
     [Fact]
-    public void A_source_stops_only_when_its_last_sensor_is_disabled()
-    {
-        var source = new RecordingSource();
-        var catalog = new SensorCatalog([source], new SensorPreferences());
-        catalog.Start(() => { });
-
-        catalog.SetEnabled(RecordingSource.First, true);
-        catalog.SetEnabled(RecordingSource.Second, true);
-        catalog.SetEnabled(RecordingSource.First, false);
-        Assert.Equal(0, source.StopCount);
-
-        catalog.SetEnabled(RecordingSource.Second, false);
-        Assert.Equal(1, source.StopCount);
-        Assert.Equal(0, source.ReadCount);
-    }
-
-    [Fact]
     public void A_late_callback_after_stop_is_not_forwarded()
     {
         var source = new RecordingSource();
@@ -383,7 +350,8 @@ public class SensorLifecycleTests
         catalog.Stop();
 
         // An OS hook or timer can deliver one more callback while it is being
-        // released; acting on it would push over a connection being torn down.
+        // released. The catalog drops it rather than trusting every source to
+        // forget its callback the instant it is stopped.
         source.Notify();
         Assert.Equal(1, pushes);
     }

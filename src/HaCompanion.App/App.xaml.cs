@@ -1,5 +1,6 @@
 ﻿using Microsoft.UI.Xaml;
 using Microsoft.Windows.AppNotifications;
+using HaCompanion.Core.App;
 
 // To learn more about WinUI, the WinUI project structure,
 // and more about our project templates, see: http://aka.ms/winui-project-info.
@@ -34,7 +35,9 @@ public partial class App : Application
         // Register for Windows toast notifications (works unpackaged).
         AppNotificationManager.Default.Register();
 
-        _window = new MainWindow();
+        var startupLaunch = StartupCommand.IsStartupLaunch(Environment.GetCommandLineArgs());
+        var startHidden = startupLaunch && Controller.HasSavedSession;
+        _window = new MainWindow(startHidden);
         _window.Activate();
     }
 }

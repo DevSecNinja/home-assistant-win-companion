@@ -39,22 +39,28 @@ Golden tests deliberately compare full JSON structures, not selected fields. Thi
 protects against adding metadata to `update_sensor_states`, omitting required
 registration fields, or moving `disabled` to the wrong request type.
 
-## Lifecycle and resource-usage tests
+## Reliability and resource-usage tests
 
-Sensor sources are judged on what they cost as much as on what they report, so
-`tests/HaCompanion.Core.Tests/SensorLifecycleTests.cs` covers behavior over time:
-repeated start/stop/restart cycles leave nothing running, a stopped or disabled
-source performs no collection and its late callbacks are dropped, refreshes never
-overlap a poll, a transient collection failure does not retire a sensor, and an
-unchanged reading produces no push.
+Sensor sources hold OS hooks and read privileged state, so their lifecycle is
+covered by deterministic Core tests rather than wall-clock benchmarks. They assert
+behavior that would otherwise regress silently: repeated start/stop/restart holds
+exactly one subscription, a stopped source is never called back, a disabled sensor
+performs zero enumeration and zero route probes, one grouped refresh takes one
+snapshot, concurrent change notifications are serialised and coalesced, a burst of
+identical changes publishes once, and probe handles are released on success,
+failure and cancellation alike.
 
-These tests use handshakes and invariants (maximum observed concurrency, balanced
-start/stop counts, stable counters after a settle) rather than timing benchmarks.
-A benchmark that asserts "under N milliseconds" fails on a loaded CI runner and
-teaches everyone to re-run the job; an invariant fails only when the behavior is
-actually wrong. Shared lifetime logic lives in Core (`SensorPollLoop`,
-`ChangeGate<T>`) precisely so the Windows-only sources inherit tested behavior
-instead of each re-implementing it untested.
+Keeping this testable is why platform sources delegate their lifecycle to a Core
+coordinator and their OS hook to a small watcher interface. Stress tests use fakes
+and counters and never sleep for a threshold, so they stay deterministic in CI.
+
+Polled sources follow the same rule through `SensorPollLoop` and `ChangeGate<T>`:
+start/stop/restart, single-flight collection, quiet cancellation and change
+detection live in Core, so the Windows-only sources inherit tested behavior
+instead of each re-implementing it untested. A scheduled collection that fails
+leaves the poller alive rather than silently retiring the sensor until the next
+app start, and that too is a test rather than a comment.
+
 
 ## UI automation
 

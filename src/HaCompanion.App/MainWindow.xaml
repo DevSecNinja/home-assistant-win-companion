@@ -86,6 +86,11 @@
                 <TextBlock Text="Server:" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                 <TextBlock x:Name="ServerText" Text="—" TextTrimming="CharacterEllipsis" />
             </StackPanel>
+            <TextBlock
+                x:Name="ServerChangeError"
+                Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+                TextWrapping="Wrap"
+                Visibility="Collapsed" />
             <StackPanel Orientation="Horizontal" Spacing="8">
                 <TextBlock Text="Status:" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                 <TextBlock x:Name="StatusText" Text="Connecting…" FontWeight="SemiBold" />
@@ -102,6 +107,16 @@
                 <TextBlock Text="Last update:" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                 <TextBlock x:Name="LastUpdateText" Text="—" />
             </StackPanel>
+            <ToggleSwitch
+                x:Name="StartWithWindowsToggle"
+                Header="Start with Windows"
+                OnContent="On"
+                OffContent="Off"
+                Toggled="OnStartWithWindowsToggled" />
+            <TextBlock
+                x:Name="StartupStatusText"
+                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                TextWrapping="Wrap" />
             <Button Content="Open Home Assistant" Click="OnOpenHomeAssistant" HorizontalAlignment="Stretch" />
             <Button Content="Change server URL…" Click="OnChangeServerUrl" HorizontalAlignment="Stretch" />
             <Button x:Name="UpdateNowButton" Content="Update now" Click="OnForcePush" HorizontalAlignment="Stretch" />
@@ -152,6 +167,21 @@
                     Content="Open Windows Location settings"
                     Click="OnOpenLocationSettings"
                     HorizontalAlignment="Stretch" />
+                <StackPanel Spacing="4">
+                    <TextBlock Text="Frontmost app detail" />
+                    <ComboBox
+                        x:Name="FrontmostAppModeBox"
+                        HorizontalAlignment="Stretch"
+                        SelectionChanged="OnFrontmostAppModeChanged">
+                        <ComboBoxItem Content="Application name only" Tag="ApplicationName" />
+                        <ComboBoxItem Content="Full window title" Tag="FullWindowTitle" />
+                    </ComboBox>
+                    <TextBlock
+                        Text="Full titles may reveal document names, messages, customer names and websites."
+                        TextWrapping="Wrap"
+                        FontSize="12"
+                        Foreground="{ThemeResource SystemFillColorCautionBrush}" />
+                </StackPanel>
                 <Button Content="Back" Click="OnCloseSettings" HorizontalAlignment="Stretch" />
             </StackPanel>
         </Grid>

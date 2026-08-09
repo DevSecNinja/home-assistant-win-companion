@@ -22,20 +22,25 @@ namespace HaCompanion_App.Services;
 /// </remarks>
 public sealed class NetworkSensorSource : ISensorSource
 {
-    public const string ConnectionTypeId = "connectivity_connection_type";
-    public const string IpAddressId = "ip_address";
-    public const string Ipv6AddressId = "ipv6_address";
-    public const string MacAddressId = "mac_address";
+    public const string ConnectionTypeId = NetworkSensors.ConnectionTypeId;
+    public const string IpAddressId = NetworkSensors.IpAddressId;
+    public const string Ipv6AddressId = NetworkSensors.Ipv6AddressId;
+    public const string MacAddressId = NetworkSensors.MacAddressId;
 
     private const string OptInPlaceholder = "Enable to read network identifiers";
 
     private readonly SensorPreferences _preferences;
-    private Action? _onChanged;
-    private bool _observing;
+    private readonly NetworkIdentityMonitor _monitor;
 
     public NetworkSensorSource(SensorPreferences preferences)
+        : this(preferences, new SystemNetworkChangeWatcher())
+    {
+    }
+
+    public NetworkSensorSource(SensorPreferences preferences, INetworkChangeWatcher watcher)
     {
         _preferences = preferences ?? throw new ArgumentNullException(nameof(preferences));
+        _monitor = new NetworkIdentityMonitor(watcher, Capture, CurrentScope);
     }
 
     public IReadOnlyList<SensorDefinition> Definitions { get; } =
@@ -70,17 +75,13 @@ public sealed class NetworkSensorSource : ISensorSource
 
     public IReadOnlyList<Sensor> Read(IReadOnlySet<string> enabled, SensorReadContext context)
     {
-        var wantsIdentity = enabled.Contains(IpAddressId)
-                            || enabled.Contains(Ipv6AddressId)
-                            || enabled.Contains(MacAddressId);
-        var wantsConnectionType = enabled.Contains(ConnectionTypeId);
+        var scope = NetworkSensors.ScopeFor(enabled);
+        if (scope == NetworkCaptureScope.None) return [];
 
-        if (!wantsIdentity && !wantsConnectionType) return [];
-
-        var identity = Capture(wantsIdentity);
+        var identity = _monitor.Read(scope);
         var readings = new List<Sensor>();
 
-        if (wantsConnectionType)
+        if (enabled.Contains(ConnectionTypeId))
         {
             readings.Add(new Sensor
             {
@@ -163,34 +164,28 @@ public sealed class NetworkSensorSource : ISensorSource
         return ValueTask.FromResult<IReadOnlyList<Sensor>>(readings);
     }
 
-    public void Start(Action onChanged)
-    {
-        _onChanged = onChanged;
-        if (_observing) return;
+    public void Start(Action onChanged) => _monitor.Start(onChanged);
 
-        NetworkChange.NetworkAddressChanged += OnNetworkChanged;
-        NetworkChange.NetworkAvailabilityChanged += OnNetworkChanged;
-        _observing = true;
-    }
+    public void Stop() => _monitor.Stop();
 
-    public void Stop()
-    {
-        if (!_observing) return;
-
-        NetworkChange.NetworkAddressChanged -= OnNetworkChanged;
-        NetworkChange.NetworkAvailabilityChanged -= OnNetworkChanged;
-        _observing = false;
-    }
-
-    private void OnNetworkChanged(object? sender, EventArgs e) => _onChanged?.Invoke();
+    /// <summary>What the user's current choices allow this source to collect.</summary>
+    private NetworkCaptureScope CurrentScope() =>
+        NetworkSensors.ScopeFor(
+            Definitions.Where(_preferences.IsEnabled)
+                .Select(definition => definition.UniqueId)
+                .ToHashSet(StringComparer.Ordinal));
 
     /// <summary>
     /// Takes one snapshot of the machine's adapters and reduces it to sensor states.
-    /// When <paramref name="includeIdentifiers"/> is false, no address or hardware
-    /// address is read at all, so a disabled sensor collects nothing.
+    /// Outside <see cref="NetworkCaptureScope.Full"/> no address, hardware address or
+    /// route is read at all, so a disabled sensor collects nothing.
     /// </summary>
-    private static NetworkIdentity Capture(bool includeIdentifiers)
+    private static NetworkIdentity Capture(NetworkCaptureScope scope)
     {
+        if (scope == NetworkCaptureScope.None) return NetworkIdentity.NotConnected;
+
+        var includeIdentifiers = scope == NetworkCaptureScope.Full;
+
         try
         {
             var adapters = NetworkInterface.GetAllNetworkInterfaces()
@@ -331,31 +326,21 @@ public sealed class NetworkSensorSource : ISensorSource
     /// <summary>
     /// Asks Windows which local endpoint would carry traffic for the given family.
     /// Connecting a UDP socket only resolves the route: no packet is ever sent and
-    /// the destination addresses are never contacted.
+    /// the destination addresses are never contacted. The socket is released whether
+    /// or not the lookup succeeds.
     /// </summary>
     private static string? ResolveRoute(AddressFamily family)
     {
-        try
-        {
-            var destination = family == AddressFamily.InterNetwork
-                ? "8.8.8.8"
-                : "2001:4860:4860::8888";
+        var destination = family == AddressFamily.InterNetwork
+            ? "8.8.8.8"
+            : "2001:4860:4860::8888";
 
-            using var socket = new Socket(family, SocketType.Dgram, ProtocolType.Udp);
-            socket.Connect(destination, 65530);
-            return (socket.LocalEndPoint as IPEndPoint)?.Address.ToString();
-        }
-        catch (SocketException)
-        {
-            return null;
-        }
-        catch (NotSupportedException)
-        {
-            return null;
-        }
-        catch (ObjectDisposedException)
-        {
-            return null;
-        }
+        return NetworkRouteProbe.Resolve(
+            () => new Socket(family, SocketType.Dgram, ProtocolType.Udp),
+            socket =>
+            {
+                socket.Connect(destination, 65530);
+                return (socket.LocalEndPoint as IPEndPoint)?.Address.ToString();
+            });
     }
 }

@@ -7,6 +7,7 @@ using HaCompanion.Core.Sensors;
 
 namespace HaCompanion.Core.Tests;
 
+[Collection(AsyncLifecycleCollection.Name)]
 public class ConnectionManagerTests
 {
     [Fact]
@@ -16,9 +17,14 @@ public class ConnectionManagerTests
             """{"type":"auth_required"}""",
             """{"type":"auth_invalid"}""");
         var client = CreateManager(() => socket, new FakeClient(), new MutableClock());
+        var authError = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        client.StateChanged += state =>
+        {
+            if (state == ConnectionState.AuthError) authError.TrySetResult();
+        };
 
         client.Start();
-        await WaitUntilAsync(() => client.State == ConnectionState.AuthError);
+        await authError.Task.WaitAsync(TimeSpan.FromSeconds(10));
         var connectCount = socket.ConnectCount;
         await Task.Delay(100);
 
@@ -32,10 +38,12 @@ public class ConnectionManagerTests
     {
         var attempts = 0;
         var states = new List<ConnectionState>();
+        var retried = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var client = CreateManager(
             () =>
             {
                 attempts++;
+                if (attempts >= 2) retried.TrySetResult();
                 return attempts == 1
                     ? new ThrowingSocket()
                     : new BlockingSocket();
@@ -45,7 +53,7 @@ public class ConnectionManagerTests
         client.StateChanged += states.Add;
 
         client.Start();
-        await WaitUntilAsync(() => attempts >= 2);
+        await retried.Task.WaitAsync(TimeSpan.FromSeconds(10));
 
         Assert.Contains(ConnectionState.Reconnecting, states);
         Assert.True(attempts >= 2);

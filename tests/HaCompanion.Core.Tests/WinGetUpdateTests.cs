@@ -4,6 +4,7 @@ using HaCompanion.Core.Sensors;
 
 namespace HaCompanion.Core.Tests;
 
+[Collection(AsyncLifecycleCollection.Name)]
 public class WinGetUpdateTests
 {
     [Fact]
@@ -112,7 +113,7 @@ public class WinGetUpdateTests
         await provider.Started.Task.WaitAsync(TimeSpan.FromSeconds(2));
         source.Stop();
 
-        await provider.Cancelled.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        Assert.True(provider.Cancelled.Task.IsCompletedSuccessfully);
     }
 
     private static SensorPreferences EnabledPreferences()
@@ -142,9 +143,9 @@ public class WinGetUpdateTests
             CheckCount++;
             if (!BlockUntilCancelled) return Result;
 
-            Started.TrySetResult();
             using var registration = cancellationToken.Register(
                 () => Cancelled.TrySetResult());
+            Started.TrySetResult();
             await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
             return Result;
         }

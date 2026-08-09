@@ -703,8 +703,6 @@ public sealed partial class MainWindow : Window
         SensorList.Children.Clear();
         _loadingSensorSettings = true;
         IdleMinutesBox.Value = Math.Max(1, catalog.Preferences.IdleThresholdSeconds / 60);
-        FrontmostAppModeBox.SelectedIndex =
-            catalog.Preferences.FrontmostAppMode == FrontmostAppMode.FullWindowTitle ? 1 : 0;
         _loadingSensorSettings = false;
         foreach (var definition in catalog.Definitions)
         {
@@ -764,6 +762,9 @@ public sealed partial class MainWindow : Window
                 Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"]
             });
 
+            if (definition.UniqueId == FrontmostAppSensorSource.FrontmostAppId)
+                AddFrontmostAppDetailSetting(text, catalog);
+
             var row = new Grid { Padding = new Thickness(0, 10, 0, 10) };
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -776,6 +777,39 @@ public sealed partial class MainWindow : Window
         }
 
         return true;
+    }
+
+    private void AddFrontmostAppDetailSetting(StackPanel container, SensorCatalog catalog)
+    {
+        var mode = new ComboBox
+        {
+            Header = "Reported detail",
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            Margin = new Thickness(0, 6, 0, 0)
+        };
+        mode.Items.Add(new ComboBoxItem
+        {
+            Content = "Application name only",
+            Tag = FrontmostAppMode.ApplicationName
+        });
+        mode.Items.Add(new ComboBoxItem
+        {
+            Content = "Full window title",
+            Tag = FrontmostAppMode.FullWindowTitle
+        });
+        mode.SelectedIndex =
+            catalog.Preferences.FrontmostAppMode == FrontmostAppMode.FullWindowTitle ? 1 : 0;
+        mode.SelectionChanged += OnFrontmostAppModeChanged;
+
+        container.Children.Add(mode);
+        container.Children.Add(new TextBlock
+        {
+            Text = "Full titles may reveal document names, messages, customer names and websites.",
+            TextWrapping = TextWrapping.Wrap,
+            FontSize = 12,
+            Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources[
+                "SystemFillColorCautionBrush"]
+        });
     }
 
     private async void OnSensorToggled(object sender, RoutedEventArgs e)
@@ -900,11 +934,12 @@ public sealed partial class MainWindow : Window
     private async void OnFrontmostAppModeChanged(object sender, SelectionChangedEventArgs e)
     {
         if (_loadingSensorSettings) return;
+        if (sender is not ComboBox modeBox) return;
 
         var catalog = _controller.Catalog;
         if (catalog is null) return;
 
-        var selected = FrontmostAppModeBox.SelectedIndex == 1
+        var selected = modeBox.SelectedIndex == 1
             ? FrontmostAppMode.FullWindowTitle
             : FrontmostAppMode.ApplicationName;
 
@@ -926,7 +961,7 @@ public sealed partial class MainWindow : Window
             if (await dialog.ShowAsync() != ContentDialogResult.Primary)
             {
                 _loadingSensorSettings = true;
-                FrontmostAppModeBox.SelectedIndex = 0;
+                modeBox.SelectedIndex = 0;
                 _loadingSensorSettings = false;
                 return;
             }

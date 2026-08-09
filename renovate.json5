@@ -13,7 +13,30 @@
     "github>DevSecNinja/.github//.renovate/packageRules.json5",
     "github>DevSecNinja/.github//.renovate/semanticCommits.json5",
   ],
+  customManagers: [
+    {
+      // The release workflow installs the Inno Setup compiler from the upstream
+      // GitHub release. Upstream tags are underscore-separated (is-7_0_2), so
+      // INNO_VERSION stores the underscore form and the workflow derives both
+      // the tag and the dotted asset name from it.
+      customType: "regex",
+      description: "Update the Inno Setup compiler pinned by the release workflow",
+      managerFilePatterns: ["/^\\.github/workflows/release\\.yml$/"],
+      matchStrings: [
+        "INNO_VERSION: \"(?<currentValue>\\d+_\\d+(?:_\\d+)?)\"",
+      ],
+      depNameTemplate: "jrsoftware/issrc",
+      datasourceTemplate: "github-releases",
+      extractVersionTemplate: "^is-(?<version>[\\d_]+)$",
+      versioningTemplate: "regex:^(?<major>\\d+)_(?<minor>\\d+)(?:_(?<patch>\\d+))?$",
+    },
+  ],
   packageRules: [
+    {
+      description: "Require manual review for Inno Setup compiler changes",
+      matchDepNames: ["jrsoftware/issrc"],
+      automerge: false,
+    },
     {
       description: "Require manual review for H.NotifyIcon.WinUI runtime changes",
       matchManagers: ["nuget"],

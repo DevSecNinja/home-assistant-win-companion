@@ -98,18 +98,24 @@ public class ConnectionLifecycleTests
         using var lifecycle = new ConnectionLifecycle();
         var running = await lifecycle.AcquireAsync(LifecycleIntent.Start);
 
-        var stop = Task.Run(async () =>
-        {
-            using var _ = await lifecycle.AcquireAsync(LifecycleIntent.Stop);
-        });
+        // Not started on the thread pool: the pre-emption happens synchronously
+        // before the gate is awaited, so the effect is observable the moment this
+        // call returns its still-pending task. A pool hop would make the test
+        // depend on worker availability instead.
+        var stop = AcquireStopAsync(lifecycle);
 
         // The pre-emption is what lets the running transition notice and bail out
         // rather than making the user wait for its network calls.
-        await WaitFor(() => running.Token.IsCancellationRequested);
+        Assert.True(running.Token.IsCancellationRequested);
         Assert.False(running.IsCurrent);
 
         running.Dispose();
         await stop.WaitAsync(Timeout);
+    }
+
+    private static async Task AcquireStopAsync(ConnectionLifecycle lifecycle)
+    {
+        using var _ = await lifecycle.AcquireAsync(LifecycleIntent.Stop);
     }
 
     [Fact]
@@ -220,16 +226,6 @@ public class ConnectionLifecycleTests
         Assert.Equal(host.Builds, host.Teardowns + host.LiveManagers);
     }
 
-    private static async Task WaitFor(Func<bool> condition)
-    {
-        var deadline = DateTime.UtcNow + Timeout;
-        while (!condition())
-        {
-            if (DateTime.UtcNow > deadline) throw new TimeoutException("Condition was never met.");
-            await Task.Yield();
-        }
-    }
-
     /// <summary>
     /// Stands in for AppController: the same transitions over the same lifecycle,
     /// with the network calls replaced by a build step the test can pause inside.
@@ -297,12 +293,19 @@ public class ConnectionLifecycleTests
         /// and is blocked inside the rebuild - the exact window a user action used
         /// to slip through.
         /// </summary>
+        /// <remarks>
+        /// Deliberately not started on the thread pool. The route switch runs
+        /// synchronously up to the paused rebuild, because the gate is free and
+        /// grants without yielding, so the window is open the moment this returns.
+        /// Handing it to the pool instead made the test wait on worker
+        /// availability, which a loaded CI machine does not guarantee.
+        /// </remarks>
         public async Task<Task> BeginPausedRouteSwitchAsync()
         {
             _pause = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             _buildReached = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
-            var switching = Task.Run(RouteSwitchAsync);
+            var switching = RouteSwitchAsync();
             await _buildReached.Task.WaitAsync(Timeout);
             return switching;
         }

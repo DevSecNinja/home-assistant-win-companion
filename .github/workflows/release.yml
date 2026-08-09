@@ -115,6 +115,7 @@ jobs:
           path: artifacts/release/publish/win-x64
           format: spdx-json
           output-file: artifacts/release/WindowsCompanion-${{ steps.version.outputs.version }}-win-x64.spdx.json
+          # renovate: datasource=github-releases depName=anchore/syft
           syft-version: v1.50.0
           upload-artifact: false
           upload-release-assets: false
@@ -127,6 +128,7 @@ jobs:
           path: artifacts/release/publish/win-arm64
           format: spdx-json
           output-file: artifacts/release/WindowsCompanion-${{ steps.version.outputs.version }}-win-arm64.spdx.json
+          # renovate: datasource=github-releases depName=anchore/syft
           syft-version: v1.50.0
           upload-artifact: false
           upload-release-assets: false

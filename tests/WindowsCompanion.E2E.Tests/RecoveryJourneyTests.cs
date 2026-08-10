@@ -82,6 +82,7 @@ public sealed class RecoveryJourneyTests
             "recover interrupted push channel",
             async fixture =>
             {
+                fixture.Network.Set(new NetworkContext(NetworkKind.Unknown));
                 var controller = await fixture.ResumePreauthorizedAsync();
                 var boundary = fixture.LastInteractionSequence;
 

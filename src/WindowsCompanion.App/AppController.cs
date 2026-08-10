@@ -32,7 +32,7 @@ public sealed class AppController : IAsyncDisposable
     private readonly SessionStore _settings;
     private readonly WindowsSystemStatusProvider _status = new();
     private readonly ToastNotifier _toasts = new();
-    private readonly PowerShellWinGetUpdateProvider _winGetUpdates = new();
+    private readonly PowerShellWinGetUpdateProvider _winGetUpdates;
     private readonly OAuthLoginService _login;
     private readonly WindowsNetworkContextProvider _network = new();
     private readonly ConnectionLifecycle _lifecycle;
@@ -60,6 +60,8 @@ public sealed class AppController : IAsyncDisposable
 
     public AppController()
     {
+        _winGetUpdates = new PowerShellWinGetUpdateProvider(
+            _loggerFactory.CreateLogger<PowerShellWinGetUpdateProvider>());
         var installedBuild = InstalledBuildResolver.Current();
         _updateHttp = GitHubReleaseClient.CreateHttpClient();
         _startupUpdates = new StartupUpdateService(
@@ -242,8 +244,9 @@ public sealed class AppController : IAsyncDisposable
         demo.End();
     }
 
-    public Task<bool> IsWinGetModuleInstalledAsync(CancellationToken ct = default) =>
-        _winGetUpdates.IsModuleInstalledAsync(ct);
+    public Task<WinGetCapabilityResult> ProbeWinGetCapabilityAsync(
+        CancellationToken ct = default) =>
+        _winGetUpdates.ProbeCapabilityAsync(ct);
 
     public bool HasSavedSession
     {

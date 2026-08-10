@@ -31,11 +31,11 @@
             IconSource="Assets/AppIcon.ico">
             <tb:TaskbarIcon.ContextFlyout>
                 <MenuFlyout>
-                    <MenuFlyoutItem Text="Open Home Assistant" Click="OnOpenHomeAssistant" />
-                    <MenuFlyoutItem Text="Show Companion" Click="OnShowWindow" />
+                    <MenuFlyoutItem Text="Open Home Assistant" Command="{x:Bind TrayOpenHomeAssistantCommand}" />
+                    <MenuFlyoutItem Text="Show Companion" Command="{x:Bind TrayShowWindowCommand}" />
                     <MenuFlyoutSeparator />
-                    <MenuFlyoutItem Text="Disconnect" Click="OnDisconnect" />
-                    <MenuFlyoutItem Text="Exit" Click="OnExit" />
+                    <MenuFlyoutItem Text="Disconnect" Command="{x:Bind TrayDisconnectCommand}" />
+                    <MenuFlyoutItem Text="Exit" Command="{x:Bind TrayExitCommand}" />
                 </MenuFlyout>
             </tb:TaskbarIcon.ContextFlyout>
         </tb:TaskbarIcon>

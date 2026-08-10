@@ -335,6 +335,33 @@ public class LifecycleJournalTests : IDisposable
         Assert.Null(journal.Read());
     }
 
+    [Fact]
+    public void Repeated_recovery_cycles_release_the_journal_file_every_time()
+    {
+        var journal = new FileLifecycleJournal(JournalPath);
+
+        for (var cycle = 0; cycle < 100; cycle++)
+        {
+            var record = new LifecycleRecord
+            {
+                Transition = cycle % 2 == 0
+                    ? LifecycleTransition.Sleeping
+                    : LifecycleTransition.Running,
+                ObservedAt = DateTimeOffset.UnixEpoch.AddSeconds(cycle),
+                Reason = $"cycle-{cycle}"
+            };
+
+            journal.Write(record);
+            Assert.Equal(record, journal.Read());
+
+            using var exclusive = new FileStream(
+                JournalPath,
+                FileMode.Open,
+                FileAccess.ReadWrite,
+                FileShare.None);
+        }
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_directory)) Directory.Delete(_directory, recursive: true);
@@ -997,6 +1024,27 @@ public class MessagePumpLifetimeTests
 
         Assert.False(lifetime.WaitUntilReady(TimeSpan.FromMilliseconds(50)));
         lifetime.Dispose();
+    }
+
+    [Fact]
+    public void Repeated_start_stop_generations_leave_no_running_pump()
+    {
+        using var lifetime = new MessagePumpLifetime();
+
+        for (var generation = 0; generation < 100; generation++)
+        {
+            Assert.True(lifetime.TryBeginStart());
+            lifetime.MarkReady();
+            Assert.True(lifetime.WaitUntilReady(Wait));
+            Assert.True(lifetime.RequestStop());
+            lifetime.MarkStopped();
+
+            Assert.False(lifetime.IsRunning);
+            Assert.False(lifetime.StopRequested);
+        }
+
+        Assert.True(lifetime.TryBeginStart());
+        lifetime.MarkStopped();
     }
 }
 

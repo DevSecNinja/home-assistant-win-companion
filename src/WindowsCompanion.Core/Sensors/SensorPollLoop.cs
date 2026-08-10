@@ -30,7 +30,9 @@ public sealed class SensorPollLoop
     private readonly TimeSpan _interval;
     private readonly SemaphoreSlim _single = new(1, 1);
     private readonly object _gate = new();
+    private readonly object _flightGate = new();
     private CancellationTokenSource? _lifetime;
+    private PollFlight? _inFlight;
 
     public SensorPollLoop(Func<SensorPollReason, CancellationToken, Task> tick, TimeSpan interval)
     {
@@ -82,6 +84,18 @@ public sealed class SensorPollLoop
         // The loop owns disposal: cancelling here and disposing there is what
         // keeps a concurrent refresh from touching a disposed source.
         lifetime?.Cancel();
+
+        CancellationTokenSource? flightCancellation = null;
+        lock (_flightGate)
+        {
+            if (_inFlight is { } flight)
+            {
+                _inFlight = null;
+                flightCancellation = flight.Cancellation;
+            }
+        }
+
+        Cancel(flightCancellation);
     }
 
     /// <summary>
@@ -177,6 +191,54 @@ public sealed class SensorPollLoop
 
     private async Task ExecuteAsync(SensorPollReason reason, CancellationToken cancellationToken)
     {
+        PollFlight flight;
+        lock (_flightGate)
+        {
+            if (_inFlight is { Execution.IsCompleted: false } current)
+            {
+                flight = current;
+            }
+            else
+            {
+                var executionCancellation = new CancellationTokenSource();
+                var execution = ExecuteCoreAsync(reason, executionCancellation.Token);
+                flight = new PollFlight(execution, executionCancellation);
+                _inFlight = flight;
+                _ = execution.ContinueWith(
+                    completed => CompleteFlight(flight, completed),
+                    CancellationToken.None,
+                    TaskContinuationOptions.ExecuteSynchronously,
+                    TaskScheduler.Default);
+            }
+
+            flight.Waiters++;
+        }
+
+        try
+        {
+            await flight.Execution.WaitAsync(cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            CancellationTokenSource? abandoned = null;
+            lock (_flightGate)
+            {
+                flight.Waiters--;
+                if (flight.Waiters == 0 && !flight.Execution.IsCompleted)
+                {
+                    if (ReferenceEquals(_inFlight, flight)) _inFlight = null;
+                    abandoned = flight.Cancellation;
+                }
+            }
+
+            Cancel(abandoned);
+        }
+    }
+
+    private async Task ExecuteCoreAsync(
+        SensorPollReason reason,
+        CancellationToken cancellationToken)
+    {
         await _single.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
@@ -186,5 +248,39 @@ public sealed class SensorPollLoop
         {
             _single.Release();
         }
+    }
+
+    private void CompleteFlight(PollFlight flight, Task completed)
+    {
+        _ = completed.Exception;
+        lock (_flightGate)
+        {
+            if (ReferenceEquals(_inFlight, flight)) _inFlight = null;
+        }
+
+        flight.Cancellation.Dispose();
+    }
+
+    private static void Cancel(CancellationTokenSource? cancellation)
+    {
+        if (cancellation is null) return;
+
+        try
+        {
+            cancellation.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
+            // The flight completed between detaching it and requesting cancellation.
+        }
+    }
+
+    private sealed class PollFlight(Task execution, CancellationTokenSource cancellation)
+    {
+        public Task Execution { get; } = execution;
+
+        public CancellationTokenSource Cancellation { get; } = cancellation;
+
+        public int Waiters { get; set; }
     }
 }

@@ -31,12 +31,27 @@ public class NetworkCaptureScopeTests
     }
 
     [Theory]
-    [InlineData(NetworkSensors.IpAddressId)]
-    [InlineData(NetworkSensors.Ipv6AddressId)]
-    [InlineData(NetworkSensors.MacAddressId)]
-    public void Any_enabled_identifier_permits_a_full_capture(string identifier)
+    [InlineData(NetworkSensors.IpAddressId, NetworkCaptureScope.Ipv4Address)]
+    [InlineData(NetworkSensors.Ipv6AddressId, NetworkCaptureScope.Ipv6Address)]
+    [InlineData(
+        NetworkSensors.MacAddressId,
+        NetworkCaptureScope.ActiveAdapter
+        | NetworkCaptureScope.CurrentPhysicalAddress)]
+    [InlineData(NetworkSensors.LanMacAddressId, NetworkCaptureScope.LanPermanentAddress)]
+    [InlineData(NetworkSensors.WlanMacAddressId, NetworkCaptureScope.WlanPermanentAddress)]
+    [InlineData(
+        NetworkSensors.GatewayAddressId,
+        NetworkCaptureScope.ActiveAdapter
+        | NetworkCaptureScope.GatewayAddress)]
+    [InlineData(
+        NetworkSensors.DnsServersId,
+        NetworkCaptureScope.ActiveAdapter
+        | NetworkCaptureScope.DnsServers)]
+    public void Each_identifier_permits_only_the_fields_it_needs(
+        string identifier,
+        NetworkCaptureScope expected)
     {
-        Assert.Equal(NetworkCaptureScope.Full, NetworkSensors.ScopeFor(Set(identifier)));
+        Assert.Equal(expected, NetworkSensors.ScopeFor(Set(identifier)));
     }
 
     [Fact]
@@ -49,7 +64,12 @@ public class NetworkCaptureScopeTests
             NetworkSensors.MacAddressId
         };
 
-        Assert.Equal(NetworkCaptureScope.Full, NetworkSensors.ScopeFor(enabled));
+        Assert.Equal(
+            NetworkCaptureScope.ConnectionTypeOnly
+            | NetworkCaptureScope.Ipv6Address
+            | NetworkCaptureScope.ActiveAdapter
+            | NetworkCaptureScope.CurrentPhysicalAddress,
+            NetworkSensors.ScopeFor(enabled));
 
         enabled.Remove(NetworkSensors.Ipv6AddressId);
         enabled.Remove(NetworkSensors.MacAddressId);

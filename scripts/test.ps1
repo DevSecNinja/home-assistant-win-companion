@@ -1,7 +1,7 @@
 #!/usr/bin/env pwsh
 <#
 .SYNOPSIS
-    Runs Core tests and optional end-to-end or interactive UI suites.
+    Runs Core, App-boundary, and optional end-to-end or interactive UI suites.
 #>
 [CmdletBinding()]
 param(
@@ -32,6 +32,7 @@ $coreProject = Join-Path $repoRoot 'tests\WindowsCompanion.Core.Tests\WindowsCom
 $e2eProject = Join-Path $repoRoot 'tests\WindowsCompanion.E2E.Tests\WindowsCompanion.E2E.Tests.csproj'
 $uiProject = Join-Path $repoRoot 'tests\WindowsCompanion.UI.Tests\WindowsCompanion.UI.Tests.csproj'
 $appProject = Join-Path $repoRoot 'src\WindowsCompanion.App\WindowsCompanion.App.csproj'
+$appBoundaryProject = Join-Path $repoRoot 'tests\WindowsCompanion.App.Tests\WindowsCompanion.App.Tests.csproj'
 $dotnet = (Get-Command dotnet -ErrorAction SilentlyContinue)?.Source
 if (-not $dotnet) { $dotnet = 'C:\Program Files\dotnet\dotnet.exe' }
 if (-not (Test-Path $dotnet)) { throw 'Could not find dotnet. Install the .NET 10 SDK.' }
@@ -123,6 +124,8 @@ if ($Coverage) {
 else {
     Invoke-TestProject -Project $coreProject -Name 'core'
 }
+
+Invoke-TestProject -Project $appBoundaryProject -Name 'app-boundary'
 
 if ($EndToEnd) {
     Invoke-TestProject `

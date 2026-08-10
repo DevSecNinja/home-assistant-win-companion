@@ -67,7 +67,9 @@ public static class NetworkAdapterSelector
 
         if (usable.Count == 0) return null;
 
-        var routeMatch = usable.FirstOrDefault(a => MatchesRoute(a, routeLocalIpv4, routeLocalIpv6));
+        var routeMatch = usable.FirstOrDefault(a => a.MatchesActiveRoute)
+                         ?? usable.FirstOrDefault(a =>
+                             MatchesRoute(a, routeLocalIpv4, routeLocalIpv6));
         if (routeMatch is { IsPhysicalLan: true }) return routeMatch;
 
         var physical = usable.Where(a => a.IsPhysicalLan).OrderBy(Preference).FirstOrDefault();

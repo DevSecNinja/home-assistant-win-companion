@@ -126,6 +126,7 @@ editing exported images.
 | --- | --- | --- |
 | Window | `#2DD4BF` | The window body and title bar; the primary brand colour |
 | Companion | `#F59E0B` | The companion sphere; accents that need to draw the eye |
+| Update alert | `#E5484D` | The numbered update badge, always paired with text |
 | Ink | `#0F2E2A` | Headings on light surfaces |
 | Surface | `#FFFFFF` | Light backgrounds |
 
@@ -150,6 +151,7 @@ colours with text, and any new surface must do the same.
 | `brand/dist/mark-mono-light.svg` | Single colour, for dark backgrounds |
 | `brand/dist/mark-{16..512}.png` | Raster exports |
 | `brand/dist/social-preview.png` | GitHub social preview, 1280×640 |
+| `src/WindowsCompanion.App/Assets/UpdateIcon.ico` | Update-available tray icon |
 
 The mark carries its meaning with all colour removed, so the monochrome variants are
 straight substitutions rather than redraws. The 16 px variant is the exception: it is
@@ -157,9 +159,11 @@ hand-hinted to whole pixels and is intentionally not proportional to the 256 mas
 
 ## Regenerating assets
 
-The masters are `brand/src/mark.svg` and `brand/src/mark-16.svg`. **Everything else is
-generated.** Never edit an exported PNG, ICO or SVG by hand — the next regeneration
-will silently discard the change.
+The standard masters are `brand/src/mark.svg` and `brand/src/mark-16.svg`. The
+update-state masters are `brand/src/mark-update.svg` and
+`brand/src/mark-update-16.svg`. **Everything else is generated.** Never edit an
+exported PNG, ICO or SVG by hand — the next regeneration will silently discard the
+change.
 
 ```powershell
 .\scripts\build-brand-assets.ps1
@@ -171,6 +175,9 @@ This rewrites:
   256 px. Entries up to 64 px are uncompressed 32-bit DIBs, which every Windows icon
   consumer understands; 128 and 256 px are PNG. The 16 px entry comes from the hinted
   master, so the notification-area icon is crisp at 100%, 125%, 150% and 200% scaling.
+- `src/WindowsCompanion.App/Assets/UpdateIcon.ico` — the same size matrix, using a
+  larger red companion sphere and a white `1`. It is an application state, not a new
+  product mark, and is used only while a newer release is available.
 - the packaging PNGs under `src/WindowsCompanion.App/Assets/`
 - the distributable artwork and social preview under `brand/dist/`
 

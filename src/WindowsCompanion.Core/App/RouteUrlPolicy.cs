@@ -55,8 +55,8 @@ public static class RouteUrlPolicy
 {
     /// <summary>
     /// Normalizes an address for a route and applies the transport rule for it:
-    /// the external address must be HTTPS, the internal address may be HTTP with
-    /// a warning (unchanged from the single-URL behaviour).
+    /// the external address must be HTTPS, while internal HTTP is accepted only
+    /// with a warning about the transport risk the user is choosing.
     /// </summary>
     public static RouteUrlResult Normalize(string? url, RouteKind route)
     {
@@ -81,15 +81,16 @@ public static class RouteUrlPolicy
                 null,
                 RouteUrlProblem.ExternalMustUseHttps,
                 "The external address must use HTTPS. Sending your Home Assistant "
-                + "credentials over plain HTTP outside your own network would expose them.");
+                + "credentials over plain HTTP would expose them.");
         }
 
         return new RouteUrlResult(
             normalized,
             RouteUrlProblem.None,
             isHttp
-                ? "This internal address uses plain HTTP. Anyone on the same network can "
-                  + "read the traffic; use HTTPS if your Home Assistant offers it."
+                ? "This internal address uses plain HTTP. Use it only if you deliberately "
+                  + "accept that anyone on the matched local network could read or alter "
+                  + "the traffic; HTTPS is recommended."
                 : null,
             isHttp);
     }

@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.4.0](https://github.com/DevSecNinja/home-assistant-win-companion/compare/v0.3.0...v0.4.0) (2026-08-10)
+
+
+### Features
+
+* add network identity and Wi-Fi security sensors ([#106](https://github.com/DevSecNinja/home-assistant-win-companion/issues/106)) ([40e4c1a](https://github.com/DevSecNinja/home-assistant-win-companion/commit/40e4c1acc9f348b911267f1e03e441ec91bb3695))
+* add serverless sensor catalog demo mode ([#108](https://github.com/DevSecNinja/home-assistant-win-companion/issues/108)) ([9e0cf01](https://github.com/DevSecNinja/home-assistant-win-companion/commit/9e0cf01e0c15d1a58f46fe5ac5b04b44e69627c6))
+* add startup update checks ([#118](https://github.com/DevSecNinja/home-assistant-win-companion/issues/118)) ([2fb9964](https://github.com/DevSecNinja/home-assistant-win-companion/commit/2fb99646187379fbfc3d3748ab1c626ade576561))
+* add trusted internal network CIDRs ([#117](https://github.com/DevSecNinja/home-assistant-win-companion/issues/117)) ([3a29ee4](https://github.com/DevSecNinja/home-assistant-win-companion/commit/3a29ee4a82069ebed05ab3544da2b6346db87aeb))
+
+
+### Bug Fixes
+
+* make tray and installer shutdown graceful ([#113](https://github.com/DevSecNinja/home-assistant-win-companion/issues/113)) ([b2f3ce7](https://github.com/DevSecNinja/home-assistant-win-companion/commit/b2f3ce73ae124461db9fd156e6d3e53abdc25034))
+* refresh sensor preview after enabling ([#115](https://github.com/DevSecNinja/home-assistant-win-companion/issues/115)) ([5a0c098](https://github.com/DevSecNinja/home-assistant-win-companion/commit/5a0c098bc2c2424e25ca485295419eab7fe716eb))
+* **release:** link setup installers in notes ([#111](https://github.com/DevSecNinja/home-assistant-win-companion/issues/111)) ([e310cdc](https://github.com/DevSecNinja/home-assistant-win-companion/commit/e310cdcbc201117789b3d0ea684f199de2212e76))
+
 ## [0.3.0](https://github.com/DevSecNinja/home-assistant-win-companion/compare/v0.2.0...v0.3.0) (2026-08-10)
 
 

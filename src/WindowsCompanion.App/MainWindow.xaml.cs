@@ -2,14 +2,19 @@ using WindowsCompanion.Core.App;
 using WindowsCompanion.Core.Lifecycle;
 using WindowsCompanion.Core.Models;
 using WindowsCompanion.Core.Sensors;
+using WindowsCompanion.Core.Updates;
 using WindowsCompanion_App.Services;
 using System.Runtime.InteropServices;
+using System.Windows.Input;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
+using Microsoft.UI.Xaml.Automation.Peers;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media.Imaging;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.Graphics;
 
@@ -31,27 +36,55 @@ public sealed partial class MainWindow : Window
     private readonly DispatcherQueue _dispatcher;
     private readonly DispatcherQueueTimer _statusTimer;
     private readonly WindowsStartupRegistration _startup = new();
+    private readonly RestartManagerShutdownMonitor _restartManagerShutdown;
     private readonly bool _startHidden;
     private bool _exiting;
     private bool _connected;
     private int _sensorListBuildVersion;
     private bool _suppressSensorToggle;
+    private readonly object _sensorPreviewCancellationGate = new();
+    private CancellationTokenSource? _sensorListPreviewCancellation;
+    private readonly Dictionary<string, CancellationTokenSource> _sensorPreviewCancellations =
+        new(StringComparer.Ordinal);
+    private readonly Dictionary<string, TextBlock> _sensorPreviewTexts =
+        new(StringComparer.Ordinal);
     private List<string> _trustedSsids = [];
     private List<string> _trustedBssids = [];
     private bool _suppressSeparateUrlsToggle;
     private bool _suppressBssidToggle;
     private bool _loadingSensorSettings;
     private bool _loadingStartupSetting;
+    private int _connectionActionRunning;
+    private AvailableUpdate? _availableUpdate;
+
+    public ICommand TrayOpenHomeAssistantCommand { get; }
+    public ICommand TrayViewReleaseCommand { get; }
+    public ICommand TrayShowWindowCommand { get; }
+    public ICommand TrayDisconnectCommand { get; }
+    public ICommand TrayExitCommand { get; }
 
     public MainWindow(bool startHidden = false)
     {
+        _controller = App.Controller;
+        TrayOpenHomeAssistantCommand = new ActionCommand(
+            () => DispatchTrayAction(_controller.OpenHomeAssistant));
+        TrayViewReleaseCommand = new ActionCommand(
+            () => DispatchTrayAction(OpenAvailableRelease));
+        TrayShowWindowCommand = new ActionCommand(
+            () => DispatchTrayAction(Show));
+        TrayDisconnectCommand = new ActionCommand(
+            () => DispatchTrayAction(() => OnDisconnect(this, new RoutedEventArgs())));
+        TrayExitCommand = new ActionCommand(
+            () => ((App)Application.Current).RequestShutdown(AppShutdownReason.TrayMenu));
+
         InitializeComponent();
         _startHidden = startHidden;
 
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(AppTitleBar);
         AppWindow.SetIcon("Assets/AppIcon.ico");
-        var dpi = GetDpiForWindow(WinRT.Interop.WindowNative.GetWindowHandle(this));
+        var windowHandle = WinRT.Interop.WindowNative.GetWindowHandle(this);
+        var dpi = GetDpiForWindow(windowHandle);
         AppWindow.Resize(new SizeInt32(
             ScaleForDpi(InitialWindowWidth, dpi),
             ScaleForDpi(InitialWindowHeight, dpi)));
@@ -61,7 +94,6 @@ public sealed partial class MainWindow : Window
             presenter.PreferredMinimumHeight = ScaleForDpi(MinimumWindowHeight, dpi);
         }
 
-        _controller = App.Controller;
         var showWindowCommand = new XamlUICommand();
         showWindowCommand.ExecuteRequested += (_, _) => Show();
         TrayIcon.LeftClickCommand = showWindowCommand;
@@ -72,6 +104,12 @@ public sealed partial class MainWindow : Window
         _dispatcher = DispatcherQueue.GetForCurrentThread();
         _controller.StateChanged += OnStateChanged;
         _controller.RouteChanged += OnRouteChanged;
+        _controller.UpdateAvailable += OnUpdateAvailable;
+        if (_controller.AvailableUpdate is { } update) ApplyUpdateAvailable(update);
+
+        // Kept in Core so the demo warning reads the same wherever it is shown.
+        DemoBanner.Title = DemoSession.Title;
+        DemoBanner.Message = DemoSession.Message;
 
         _statusTimer = _dispatcher.CreateTimer();
         _statusTimer.Interval = TimeSpan.FromSeconds(5);
@@ -79,6 +117,9 @@ public sealed partial class MainWindow : Window
 
         AppWindow.Closing += OnWindowClosing;
         Activated += OnFirstActivated;
+        _restartManagerShutdown = new RestartManagerShutdownMonitor(
+            windowHandle,
+            () => ((App)Application.Current).RequestShutdown(AppShutdownReason.RestartManager));
     }
 
     private static int ScaleForDpi(int logicalPixels, uint dpi) =>
@@ -96,6 +137,10 @@ public sealed partial class MainWindow : Window
             var resumed = await _controller.TryResumeAsync();
             _connected = resumed;
             ShowPanel(resumed);
+            // Only offered once it is settled that there is no session to resume:
+            // starting a demo alongside a connection in flight would make the app
+            // claim it sends nothing while it is connecting.
+            DemoModeButton.IsEnabled = !resumed;
             if (!resumed && _startHidden) Show();
             RefreshStartupSetting();
             if (resumed)
@@ -107,6 +152,7 @@ public sealed partial class MainWindow : Window
         catch
         {
             ShowPanel(false);
+            DemoModeButton.IsEnabled = true;
             if (_startHidden) Show();
         }
     }
@@ -115,9 +161,44 @@ public sealed partial class MainWindow : Window
         _dispatcher.TryEnqueue(() =>
         {
             RouteText.Text = _controller.RouteSummary;
-            ServerText.Text = _controller.BaseUrl ?? "—";
+            ServerText.Text = _controller.IsDemoMode
+                ? DemoSession.ServerLabel
+                : _controller.BaseUrl ?? "—";
             UpdateHealth();
         });
+
+    private void OnUpdateAvailable(AvailableUpdate update) =>
+        _dispatcher.TryEnqueue(() => ApplyUpdateAvailable(update));
+
+    private void ApplyUpdateAvailable(AvailableUpdate update)
+    {
+        if (_exiting) return;
+
+        _availableUpdate = update;
+        TrayIcon.IconSource = new BitmapImage(
+            new Uri("ms-appx:///Assets/UpdateIcon.ico"));
+        TrayViewReleaseItem.Text = $"View update v{update.AvailableVersion}";
+        TrayViewReleaseItem.Visibility = Visibility.Visible;
+        UpdateBanner.Message =
+            $"Version {update.AvailableVersion} is available. "
+            + $"Installed version: {update.InstalledVersion}.";
+        UpdateBanner.IsOpen = true;
+        UpdateHealth();
+    }
+
+    private void OnViewRelease(object sender, RoutedEventArgs e)
+        => OpenAvailableRelease();
+
+    private void OpenAvailableRelease()
+    {
+        if (_availableUpdate is not { } update) return;
+
+        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+        {
+            FileName = update.ReleasePage.AbsoluteUri,
+            UseShellExecute = true
+        });
+    }
 
     private void OnStateChanged(ConnectionState state) =>
         _dispatcher.TryEnqueue(() =>
@@ -173,6 +254,7 @@ public sealed partial class MainWindow : Window
         {
             await _controller.SignInAsync(url);
             _connected = true;
+            ApplyDemoChrome();
             ShowPanel(true);
             RefreshBattery();
             _statusTimer.Start();
@@ -187,32 +269,106 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    private async void OnEnterDemoMode(object sender, RoutedEventArgs e)
+    {
+        // A sign-in already in flight must win: entering the demo here would
+        // let the OAuth round-trip finish underneath it and register with
+        // Home Assistant while the demo banner still promises nothing is sent.
+        if (!SignInButton.IsEnabled) return;
+
+        DemoModeButton.IsEnabled = false;
+        try
+        {
+            _controller.EnterDemoMode();
+        }
+        catch (Exception ex)
+        {
+            ShowConnectError(ex.Message);
+            return;
+        }
+        finally
+        {
+            DemoModeButton.IsEnabled = true;
+        }
+
+        ApplyDemoChrome();
+        RefreshStatusFields();
+        ShowView(View.Status);
+        _statusTimer.Start();
+
+        // Seeing the sensors is the whole point of the demo, so it opens on them.
+        if (await BuildSensorListAsync()) ShowView(View.Settings);
+    }
+
+    private void OnLeaveDemoMode(object sender, RoutedEventArgs e)
+    {
+        _statusTimer.Stop();
+        _controller.ExitDemoMode();
+        ApplyDemoChrome();
+        ShowView(View.Connect);
+    }
+
+    /// <summary>
+    /// Shows the demo warning on every screen and hides the actions that need a
+    /// Home Assistant server, so nothing in the demo looks like it talks to one.
+    /// </summary>
+    private void ApplyDemoChrome()
+    {
+        var demo = _controller.IsDemoMode;
+        DemoBanner.IsOpen = demo;
+
+        var serverActions = demo ? Visibility.Collapsed : Visibility.Visible;
+        OpenHomeAssistantButton.Visibility = serverActions;
+        ConnectionButton.Visibility = serverActions;
+        UpdateNowButton.Visibility = serverActions;
+        DisconnectButton.Visibility = serverActions;
+        RemoveServerButton.Visibility = serverActions;
+        TrayOpenHomeAssistantItem.Visibility = serverActions;
+        TrayDisconnectItem.Visibility = serverActions;
+    }
+
     private async void OnDisconnect(object sender, RoutedEventArgs e)
     {
-        if (_connected)
+        // Reachable from the tray menu, where the demo has nothing to disconnect.
+        if (_controller.IsDemoMode) return;
+
+        if (Interlocked.Exchange(ref _connectionActionRunning, 1) != 0) return;
+
+        try
         {
-            _statusTimer.Stop();
-            await _controller.DisconnectAsync();
-            _connected = false;
-            DisconnectButton.Content = "Reconnect";
-            UpdateNowButton.IsEnabled = false;
-            StatusText.Text = "Disconnected";
+            if (_connected)
+            {
+                _statusTimer.Stop();
+                await _controller.DisconnectAsync();
+                _connected = false;
+                DisconnectButton.Content = "Reconnect";
+                UpdateNowButton.IsEnabled = false;
+                StatusText.Text = "Disconnected";
+            }
+            else
+            {
+                DisconnectButton.IsEnabled = false;
+                try
+                {
+                    await _controller.ReconnectAsync();
+                    _connected = true;
+                    DisconnectButton.Content = "Disconnect";
+                    UpdateNowButton.IsEnabled = true;
+                    _statusTimer.Start();
+                }
+                finally
+                {
+                    DisconnectButton.IsEnabled = true;
+                }
+            }
         }
-        else
+        catch (OperationCanceledException) when (_exiting)
         {
-            DisconnectButton.IsEnabled = false;
-            try
-            {
-                await _controller.ReconnectAsync();
-                _connected = true;
-                DisconnectButton.Content = "Disconnect";
-                UpdateNowButton.IsEnabled = true;
-                _statusTimer.Start();
-            }
-            finally
-            {
-                DisconnectButton.IsEnabled = true;
-            }
+            // Application shutdown superseded this user action.
+        }
+        finally
+        {
+            Interlocked.Exchange(ref _connectionActionRunning, 0);
         }
     }
 
@@ -245,6 +401,8 @@ public sealed partial class MainWindow : Window
         _connected = false;
         DisconnectButton.Content = "Disconnect";
         UpdateNowButton.IsEnabled = true;
+        // Nothing is connected any more, so the demo becomes available again.
+        DemoModeButton.IsEnabled = true;
         ShowView(View.Connect);
 
 #if DEBUG
@@ -319,6 +477,7 @@ public sealed partial class MainWindow : Window
         ConnectionModeBox.SelectedIndex = (int)settings.Mode;
         _trustedSsids = [.. settings.TrustedNetworks.Ssids];
         _trustedBssids = [.. settings.TrustedNetworks.Bssids];
+        TrustedCidrsBox.Text = string.Join(Environment.NewLine, settings.TrustedNetworks.Cidrs);
 
         _suppressBssidToggle = true;
         RequireBssidBox.IsChecked = settings.TrustedNetworks.RequireBssidMatch;
@@ -334,6 +493,7 @@ public sealed partial class MainWindow : Window
 
         UpdateSeparateUrlsVisibility();
         RefreshTrustedNetworkList();
+        UpdateTrustedCidrValidation();
     }
 
     private void OnUseSeparateUrlsChanged(object sender, RoutedEventArgs e)
@@ -433,6 +593,53 @@ public sealed partial class MainWindow : Window
         RefreshTrustedNetworkList();
     }
 
+    private void OnTrustedCidrsChanged(object sender, TextChangedEventArgs e) =>
+        UpdateTrustedCidrValidation();
+
+    private TrustedNetworkCidrValidation UpdateTrustedCidrValidation()
+    {
+        var validation = TrustedNetworkCidr.Validate(TrustedCidrEntries());
+        var errorMessage = string.Join(
+            Environment.NewLine,
+            validation.Errors.Select(error =>
+                $"Line {error.EntryNumber}: {error.Message}"));
+        var errorChanged = !string.Equals(
+            TrustedCidrsErrorText.Text,
+            errorMessage,
+            StringComparison.Ordinal);
+
+        TrustedCidrsErrorText.Text = errorMessage;
+        TrustedCidrsErrorText.Visibility = validation.IsValid
+            ? Visibility.Collapsed
+            : Visibility.Visible;
+        AutomationProperties.SetHelpText(TrustedCidrsBox, errorMessage);
+
+        if (!validation.IsValid && errorChanged)
+        {
+            var peer = FrameworkElementAutomationPeer.FromElement(TrustedCidrsErrorText)
+                       ?? FrameworkElementAutomationPeer.CreatePeerForElement(TrustedCidrsErrorText);
+            peer?.RaiseAutomationEvent(AutomationEvents.LiveRegionChanged);
+        }
+        else if (validation.IsValid && errorChanged)
+        {
+            var peer = FrameworkElementAutomationPeer.FromElement(TrustedCidrsBox)
+                       ?? FrameworkElementAutomationPeer.CreatePeerForElement(TrustedCidrsBox);
+            peer?.RaiseNotificationEvent(
+                AutomationNotificationKind.ActionCompleted,
+                AutomationNotificationProcessing.MostRecent,
+                "Network CIDRs are valid.",
+                "TrustedCidrsValidation");
+        }
+
+        return validation;
+    }
+
+    private IReadOnlyList<string> TrustedCidrEntries() =>
+        (TrustedCidrsBox.Text ?? string.Empty)
+        .Replace("\r\n", "\n", StringComparison.Ordinal)
+        .Replace('\r', '\n')
+        .Split('\n', StringSplitOptions.TrimEntries);
+
     private ConnectionSettingsDraft BuildDraft() => new()
     {
         PrimaryUrl = SingleUrlBox.Text?.Trim(),
@@ -443,6 +650,7 @@ public sealed partial class MainWindow : Window
         AcknowledgeUnreachable = AcknowledgeUnreachableBox.IsChecked == true,
         TrustedNetworks = new TrustedNetworkSettings
         {
+            Cidrs = [.. TrustedCidrEntries()],
             Ssids = [.. _trustedSsids],
             Bssids = [.. _trustedBssids],
             RequireBssidMatch = RequireBssidBox.IsChecked == true,
@@ -543,6 +751,9 @@ public sealed partial class MainWindow : Window
 
     private void ShowValidationReport(RouteValidationReport report)
     {
+        if (report.TrustedNetworkErrors is not null)
+            UpdateTrustedCidrValidation();
+
         var lines = new List<string> { report.Summary };
         foreach (var entry in report.Entries)
         {
@@ -596,32 +807,29 @@ public sealed partial class MainWindow : Window
             : $"Filled in the {string.Join(" and ", found)} address; check it before saving.";
     }
 
-    private void OnShowWindow(object sender, RoutedEventArgs e) => Show();
-
-    private void OnExit(object sender, RoutedEventArgs e)
+    private void DispatchTrayAction(Action action)
     {
-        if (_exiting) return;
-        _exiting = true;
-
-        // Let the tray flyout finish dispatching its click before disposing the
-        // icon and its WinUI objects. Tearing them down inside their own callback
-        // can raise a CoreMessaging stowed exception.
-        if (!_dispatcher.TryEnqueue(async () => await CompleteExitAsync()))
-            _exiting = false;
+        _dispatcher.TryEnqueue(() => action());
     }
 
-    internal async Task RequestExitAsync()
+    internal void BeginShutdown()
     {
         if (_exiting) return;
 
         _exiting = true;
-        await CompleteExitAsync();
-    }
-
-    private async Task CompleteExitAsync()
-    {
+        AppWindow.Hide();
+        _statusTimer.Stop();
+        _controller.StateChanged -= OnStateChanged;
+        _controller.RouteChanged -= OnRouteChanged;
+        _controller.UpdateAvailable -= OnUpdateAvailable;
+        _restartManagerShutdown.Dispose();
         TrayIcon.Dispose();
-        await ((App)Application.Current).ShutdownAsync();
+    }
+
+    internal void CloseForShutdown()
+    {
+        AppWindow.Closing -= OnWindowClosing;
+        Close();
     }
 
     private void OnWindowClosing(Microsoft.UI.Windowing.AppWindow sender,
@@ -700,13 +908,17 @@ public sealed partial class MainWindow : Window
             ? $"{status.BatteryPercent}% ({status.BatteryStateString})"
             : "No battery (desktop)";
 
-        ServerText.Text = _controller.BaseUrl ?? "—";
+        var demo = _controller.IsDemoMode;
+        ServerText.Text = demo ? DemoSession.ServerLabel : _controller.BaseUrl ?? "—";
         RouteText.Text = _controller.RouteSummary;
+        if (demo) StatusText.Text = DemoSession.Title;
 
         var last = _controller.LastSyncedAt;
-        LastUpdateText.Text = last is null
-            ? "—"
-            : $"{last.Value.ToLocalTime():HH:mm:ss} ({Ago(DateTimeOffset.UtcNow - last.Value)})";
+        LastUpdateText.Text = demo
+            ? "Never (demo mode)"
+            : last is null
+                ? "—"
+                : $"{last.Value.ToLocalTime():HH:mm:ss} ({Ago(DateTimeOffset.UtcNow - last.Value)})";
 
         UpdateHealth();
     }
@@ -722,15 +934,33 @@ public sealed partial class MainWindow : Window
         // The tray tooltip is the at-a-glance view when the window is hidden.
         // The short name is used because Windows truncates the tooltip at 127
         // characters and the status summary can be long.
-        TrayIcon.ToolTipText = healthy
-            ? $"{Branding.ShortName} — Healthy"
-            : $"{Branding.ShortName} — {summary}";
+        TrayIcon.ToolTipText = TrayTooltipFormatter.Format(
+            healthy,
+            summary,
+            _availableUpdate?.AvailableVersion);
     }
 
     private void OnOpenLog(object sender, RoutedEventArgs e) => _controller.OpenLogFile();
 
     private void OnOpenLocationSettings(object sender, RoutedEventArgs e) =>
         _controller.OpenLocationSettings();
+
+    private sealed class ActionCommand : ICommand
+    {
+        private readonly Action _execute;
+
+        public ActionCommand(Action execute) => _execute = execute;
+
+        public event EventHandler? CanExecuteChanged
+        {
+            add { }
+            remove { }
+        }
+
+        public bool CanExecute(object? parameter) => true;
+
+        public void Execute(object? parameter) => _execute();
+    }
 
     private static string Ago(TimeSpan span) => span.TotalSeconds switch
     {
@@ -767,7 +997,11 @@ public sealed partial class MainWindow : Window
             ShowView(View.Settings);
     }
 
-    private void OnCloseSettings(object sender, RoutedEventArgs e) => ShowView(View.Status);
+    private void OnCloseSettings(object sender, RoutedEventArgs e)
+    {
+        CancelSensorPreviews();
+        ShowView(View.Status);
+    }
 
     /// <summary>
     /// Renders one toggle per catalog sensor. Built in code rather than bound so the
@@ -779,15 +1013,31 @@ public sealed partial class MainWindow : Window
         if (catalog is null) return false;
 
         var buildVersion = ++_sensorListBuildVersion;
-        var previews = await catalog.PreviewAsync();
+        using var previewCancellation = BeginSensorListPreview();
+        IReadOnlyDictionary<string, string> previews;
+        try
+        {
+            previews = await _controller.PreviewSensorsAsync(previewCancellation.Token);
+        }
+        catch (OperationCanceledException) when (previewCancellation.IsCancellationRequested)
+        {
+            return false;
+        }
+        finally
+        {
+            EndSensorListPreview(previewCancellation);
+        }
+
         if (buildVersion != _sensorListBuildVersion
             || !ReferenceEquals(catalog, _controller.Catalog)
-            || _controller.State is ConnectionState.Disconnected or ConnectionState.AuthError)
+            || (!_controller.IsDemoMode
+                && _controller.State is ConnectionState.Disconnected or ConnectionState.AuthError))
         {
             return false;
         }
 
         SensorList.Children.Clear();
+        _sensorPreviewTexts.Clear();
         _loadingSensorSettings = true;
         IdleMinutesBox.Value = Math.Max(1, catalog.Preferences.IdleThresholdSeconds / 60);
         _loadingSensorSettings = false;
@@ -884,15 +1134,20 @@ public sealed partial class MainWindow : Window
                         "TextFillColorSecondaryBrush"]
                 });
             }
-            text.Children.Add(new TextBlock
+            var previewText = new TextBlock
             {
                 Text = previews.TryGetValue(definition.UniqueId, out var value)
                     ? $"Current value: {value}"
-                    : "Current value: Unavailable",
+                    : definition.Privacy == SensorPrivacy.Sensitive
+                      && !catalog.IsEnabled(definition.UniqueId)
+                        ? "Current value: read only once you enable this sensor"
+                        : "Current value: Unavailable",
                 TextWrapping = TextWrapping.Wrap,
                 FontSize = 12,
                 Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"]
-            });
+            };
+            text.Children.Add(previewText);
+            _sensorPreviewTexts[definition.UniqueId] = previewText;
 
             if (definition.UniqueId == FrontmostAppSensorSource.FrontmostAppId)
                 AddFrontmostAppDetailSetting(text, catalog);
@@ -1052,8 +1307,172 @@ public sealed partial class MainWindow : Window
             toggle.IsEnabled = true;
         }
 
-        catalog.SetEnabled(uniqueId, toggle.IsOn);
-        await _controller.ApplySensorChangesAsync();
+        var wasEnabled = catalog.IsEnabled(uniqueId);
+        toggle.IsEnabled = false;
+        using var previewCancellation = BeginSensorPreview(uniqueId);
+        Exception? refreshFailure = null;
+        string? refreshedPreview = null;
+        try
+        {
+            try
+            {
+                refreshedPreview = await catalog.SetEnabledAndRefreshAsync(
+                    uniqueId,
+                    toggle.IsOn,
+                    previewCancellation.Token);
+            }
+            catch (OperationCanceledException) when (previewCancellation.IsCancellationRequested)
+            {
+            }
+            catch (Exception ex)
+            {
+                if (catalog.IsEnabled(uniqueId) == toggle.IsOn)
+                {
+                    refreshFailure = ex;
+                }
+                else
+                {
+                    SetToggleState(toggle, wasEnabled);
+                    ShowSensorPreviewError(uniqueId, "Could not update sensor: " + ex.Message);
+                    return;
+                }
+            }
+
+            if (!toggle.IsOn
+                && _sensorPreviewTexts.TryGetValue(uniqueId, out var disabledPreview))
+            {
+                var definition = catalog.Definitions.First(candidate =>
+                    string.Equals(candidate.UniqueId, uniqueId, StringComparison.Ordinal));
+                disabledPreview.Text = "Current value: " + definition.DisabledPreview;
+                disabledPreview.Foreground =
+                    (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources[
+                        "TextFillColorSecondaryBrush"];
+            }
+
+            try
+            {
+                await _controller.ApplySensorChangesAsync();
+            }
+            catch (Exception ex)
+            {
+                catalog.SetEnabled(uniqueId, wasEnabled);
+                SetToggleState(toggle, wasEnabled);
+                ShowSensorPreviewError(uniqueId, "Could not update sensor: " + ex.Message);
+                return;
+            }
+
+            if (!ReferenceEquals(catalog, _controller.Catalog)
+                || previewCancellation.IsCancellationRequested)
+            {
+                return;
+            }
+
+            if (refreshFailure is not null)
+            {
+                ShowSensorPreviewError(uniqueId, "Refresh failed: " + refreshFailure.Message);
+                return;
+            }
+
+            if (!ReferenceEquals(catalog, _controller.Catalog)
+                || catalog.IsEnabled(uniqueId) != toggle.IsOn)
+            {
+                return;
+            }
+
+            if (_sensorPreviewTexts.TryGetValue(uniqueId, out var previewText))
+            {
+                previewText.Text = $"Current value: {refreshedPreview ?? "Unavailable"}";
+                previewText.Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources[
+                    "TextFillColorSecondaryBrush"];
+            }
+        }
+        catch (OperationCanceledException) when (previewCancellation.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            ShowSensorPreviewError(uniqueId, "Refresh failed: " + ex.Message);
+        }
+        finally
+        {
+            EndSensorPreview(uniqueId, previewCancellation);
+            if (ReferenceEquals(catalog, _controller.Catalog)) toggle.IsEnabled = true;
+        }
+    }
+
+    private CancellationTokenSource BeginSensorListPreview()
+    {
+        var next = new CancellationTokenSource();
+        CancellationTokenSource? previous;
+        lock (_sensorPreviewCancellationGate)
+        {
+            previous = _sensorListPreviewCancellation;
+            _sensorListPreviewCancellation = next;
+        }
+
+        previous?.Cancel();
+        return next;
+    }
+
+    private void EndSensorListPreview(CancellationTokenSource completed)
+    {
+        lock (_sensorPreviewCancellationGate)
+        {
+            if (ReferenceEquals(_sensorListPreviewCancellation, completed))
+                _sensorListPreviewCancellation = null;
+        }
+    }
+
+    private CancellationTokenSource BeginSensorPreview(string uniqueId)
+    {
+        var next = new CancellationTokenSource();
+        CancellationTokenSource? previous = null;
+        lock (_sensorPreviewCancellationGate)
+        {
+            _sensorPreviewCancellations.Remove(uniqueId, out previous);
+            _sensorPreviewCancellations[uniqueId] = next;
+        }
+
+        previous?.Cancel();
+        return next;
+    }
+
+    private void EndSensorPreview(string uniqueId, CancellationTokenSource completed)
+    {
+        lock (_sensorPreviewCancellationGate)
+        {
+            if (_sensorPreviewCancellations.TryGetValue(uniqueId, out var current)
+                && ReferenceEquals(current, completed))
+            {
+                _sensorPreviewCancellations.Remove(uniqueId);
+            }
+        }
+    }
+
+    private void CancelSensorPreviews()
+    {
+        CancellationTokenSource? listPreview;
+        List<CancellationTokenSource> rowPreviews;
+        lock (_sensorPreviewCancellationGate)
+        {
+            listPreview = _sensorListPreviewCancellation;
+            _sensorListPreviewCancellation = null;
+            rowPreviews = [.. _sensorPreviewCancellations.Values];
+            _sensorPreviewCancellations.Clear();
+        }
+
+        listPreview?.Cancel();
+        foreach (var cancellation in rowPreviews)
+            cancellation.Cancel();
+    }
+
+    private void ShowSensorPreviewError(string uniqueId, string message)
+    {
+        if (!_sensorPreviewTexts.TryGetValue(uniqueId, out var previewText)) return;
+
+        previewText.Text = "Current value: " + message;
+        previewText.Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources[
+            "SystemFillColorCautionBrush"];
     }
 
     private void SetToggleState(ToggleSwitch toggle, bool isOn)
@@ -1090,10 +1509,15 @@ public sealed partial class MainWindow : Window
             var dialog = new ContentDialog
             {
                 XamlRoot = Content.XamlRoot,
-                Title = "Share full window titles?",
+                Title = _controller.IsDemoMode
+                    ? "Show full window titles locally?"
+                    : "Share full window titles?",
                 Content = "Window titles can contain document names, messages, customer names "
-                          + "and complete website titles. This value will be sent to your Home "
-                          + "Assistant server whenever the sensor reports.",
+                          + (_controller.IsDemoMode
+                              ? "and complete website titles. In demo mode, this value is shown "
+                                + "only on this device and is not saved or sent."
+                              : "and complete website titles. This value will be sent to your Home "
+                                + "Assistant server whenever the sensor reports."),
                 PrimaryButtonText = "Use full titles",
                 CloseButtonText = "Keep application names",
                 DefaultButton = ContentDialogButton.Close
@@ -1118,6 +1542,10 @@ public sealed partial class MainWindow : Window
     {
         SignInButton.IsEnabled = !busy;
         UrlBox.IsEnabled = !busy;
+        // A demo started while a sign-in is in flight would let the OAuth
+        // round-trip finish underneath it and register with Home Assistant
+        // while the demo banner still promises nothing is sent.
+        DemoModeButton.IsEnabled = !busy;
         SignInProgress.IsActive = busy;
         if (busy) ConnectError.Visibility = Visibility.Collapsed;
     }

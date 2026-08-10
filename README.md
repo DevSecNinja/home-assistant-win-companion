@@ -79,6 +79,9 @@ one that just works with stock Home Assistant.**
 - **Tray-resident** — closing the window hides it to the notification area. The tray
   tooltip shows current health. The status overview can register the app to start
   in the tray when the current Windows user signs in.
+- **Release notifications** — official builds check once in the background at
+  startup and show a Windows toast plus a numbered tray badge when a newer stable
+  GitHub Release exists. The app never downloads, installs, or restarts itself.
 - **Windows toasts** — notifications sent to this PC from Home Assistant appear as
   native toasts, delivered over the `mobile_app` local push channel (Windows has no
   APNS/FCM equivalent).
@@ -91,7 +94,7 @@ one that just works with stock Home Assistant.**
   lifecycle state, and an optional
   frontmost-app/last-update value. Each sensor can be switched on or off
   individually, shows a local preview, and privacy-sensitive ones are off by
-  default. Network identifiers are only read once you enable their own sensor —
+  default. A privacy-sensitive value is only read once you enable that sensor —
   the preview shows nothing beforehand — and the IPv4, IPv6 and MAC readings all
   describe the adapter carrying the active route rather than a VPN or Hyper-V
   adapter.
@@ -102,6 +105,10 @@ one that just works with stock Home Assistant.**
   blocks or delays a shutdown. The sensor is off by default and asks you to confirm
   its limits before it starts, because they cannot be engineered away — see
   [docs/windows-lifecycle-signals.md](docs/windows-lifecycle-signals.md).
+- **Demo mode** — try the app without a server. From the sign-in screen, "Explore in
+  demo mode" opens the sensor catalog with each sensor's current value read on this
+  PC. Nothing is registered, saved or sent to Home Assistant, no sensor source is
+  started, and a warning banner stays on every screen until you leave the demo.
 - **Health and logs** — a health verdict based on whether the app is actually
   reporting on schedule, plus a rolling local log you can open from the UI.
 - **Open Home Assistant** — one click (window or tray menu) to open your instance in

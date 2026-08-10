@@ -1,4 +1,6 @@
+using System.Net;
 using System.Net.NetworkInformation;
+using System.Net.Sockets;
 using WindowsCompanion.Core.Models;
 using WindowsCompanion.Core.Sensors;
 
@@ -32,46 +34,104 @@ public sealed class WindowsNetworkContextProvider : INetworkContextProvider
 
         var usable = adapters
             .Where(n => n.NetworkInterfaceType is not (NetworkInterfaceType.Loopback
-                or NetworkInterfaceType.Tunnel))
+                or NetworkInterfaceType.Tunnel or NetworkInterfaceType.Ppp))
             .ToList();
 
         if (usable.Count == 0) return NetworkContext.Offline;
 
-        var wireless = usable.Any(n => n.NetworkInterfaceType == NetworkInterfaceType.Wireless80211);
+        var lanAdapters = usable.Where(IsPhysicalLan).ToList();
+        var localAddresses = LocalAddresses(lanAdapters);
+        var wireless = lanAdapters.Any(n =>
+            n.NetworkInterfaceType == NetworkInterfaceType.Wireless80211);
         if (!wireless)
         {
-            var wired = usable.Any(n => n.NetworkInterfaceType
+            var wired = lanAdapters.Any(n => n.NetworkInterfaceType
                 is NetworkInterfaceType.Ethernet or NetworkInterfaceType.GigabitEthernet
                 or NetworkInterfaceType.FastEthernetT or NetworkInterfaceType.FastEthernetFx);
 
             return new NetworkContext(
                 wired ? NetworkKind.Wired : NetworkKind.Unknown,
-                VpnActive: vpnActive);
+                VpnActive: vpnActive,
+                LocalAddresses: localAddresses);
         }
 
-        var wifi = WifiSensorSource.ReadConnection();
+        var wifi = WifiSensorSource.ReadConnection(
+            WifiSensorSource.WifiCaptureScope.StatusOnly
+            | WifiSensorSource.WifiCaptureScope.Ssid
+            | WifiSensorSource.WifiCaptureScope.Bssid);
         return wifi.Status switch
         {
             WifiConnectionStatus.Connected => new NetworkContext(
                 NetworkKind.Wireless,
                 wifi.Ssid,
                 Bssid(wifi),
-                VpnActive: vpnActive),
+                VpnActive: vpnActive,
+                LocalAddresses: localAddresses),
             _ => new NetworkContext(
                 NetworkKind.Wireless,
                 WirelessIdentityUnavailable: true,
-                VpnActive: vpnActive)
+                VpnActive: vpnActive,
+                LocalAddresses: localAddresses)
         };
     }
 
     /// <summary>True when Windows is withholding Wi-Fi identifiers from this app.</summary>
     public static bool WirelessIdentifiersBlocked() =>
-        WifiSensorSource.ReadConnection().Status == WifiConnectionStatus.PermissionRequired;
+        WifiSensorSource.ReadConnection(WifiSensorSource.WifiCaptureScope.StatusOnly).Status
+        == WifiConnectionStatus.PermissionRequired;
 
     private static string? Bssid(WifiConnectionInfo info) =>
         info.Bssid is { Length: 6 }
             ? string.Join(":", info.Bssid.Select(value => value.ToString("X2")))
             : null;
+
+    private static IReadOnlyList<string> LocalAddresses(IEnumerable<NetworkInterface> adapters)
+    {
+        var addresses = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var adapter in adapters)
+        {
+            try
+            {
+                foreach (var unicast in adapter.GetIPProperties().UnicastAddresses)
+                {
+                    var address = unicast.Address;
+                    if (address.AddressFamily is not (AddressFamily.InterNetwork
+                            or AddressFamily.InterNetworkV6)
+                        || IPAddress.IsLoopback(address)
+                        || address.Equals(IPAddress.Any)
+                        || address.Equals(IPAddress.IPv6Any))
+                    {
+                        continue;
+                    }
+
+                    addresses.Add(address.ToString());
+                }
+            }
+            catch (NetworkInformationException)
+            {
+                // An interface can disappear while Windows is enumerating it.
+            }
+            catch (PlatformNotSupportedException)
+            {
+            }
+        }
+
+        return addresses.Order(StringComparer.Ordinal).ToList();
+    }
+
+    private static bool IsPhysicalLan(NetworkInterface adapter)
+    {
+        var isLanType = adapter.NetworkInterfaceType
+            is NetworkInterfaceType.Wireless80211
+            or NetworkInterfaceType.Ethernet
+            or NetworkInterfaceType.GigabitEthernet
+            or NetworkInterfaceType.FastEthernetT
+            or NetworkInterfaceType.FastEthernetFx;
+        return isLanType
+               && !NetworkAdapterSelector.LooksVirtual(adapter.Name)
+               && !NetworkAdapterSelector.LooksVirtual(adapter.Description);
+    }
 
     public void Start()
     {

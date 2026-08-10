@@ -25,8 +25,12 @@ public sealed record SensorDefinition(
     SensorPrivacy Privacy,
     bool EnabledByDefault,
     string? ResourceUsage = null,
-    string? AutomationIdea = null)
+    string? AutomationIdea = null,
+    string? OptInPlaceholder = null)
 {
     /// <summary>Privacy-sensitive values must never be written to logs.</summary>
     public bool Loggable => Privacy == SensorPrivacy.Benign;
+
+    /// <summary>Local preview shown without collecting a sensitive disabled value.</summary>
+    public string DisabledPreview => OptInPlaceholder ?? "Enable to read this value";
 }

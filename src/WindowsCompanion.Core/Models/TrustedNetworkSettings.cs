@@ -7,6 +7,12 @@ namespace WindowsCompanion.Core.Models;
 /// </summary>
 public sealed class TrustedNetworkSettings
 {
+    /// <summary>
+    /// IPv4 and IPv6 network blocks whose connected interface addresses make the
+    /// internal route eligible. Entries are canonical address/prefix strings.
+    /// </summary>
+    public List<string> Cidrs { get; set; } = new();
+
     /// <summary>Wi-Fi network names the user marked as their own network.</summary>
     public List<string> Ssids { get; set; } = new();
 
@@ -37,7 +43,16 @@ public sealed class TrustedNetworkSettings
     /// </summary>
     public bool ProbeInternalOnUnknownNetworks { get; set; }
 
-    public bool IsConfigured => Ssids.Count > 0 || TrustWiredNetworks;
+    public bool IsConfigured => Cidrs.Count > 0 || Ssids.Count > 0 || TrustWiredNetworks;
+
+    public bool HasValidCidrs
+    {
+        get
+        {
+            var validation = TrustedNetworkCidr.Validate(Cidrs);
+            return validation.IsValid && validation.CanonicalCidrs.Count > 0;
+        }
+    }
 
     /// <summary>
     /// Decides whether the internal address belongs on this network.
@@ -50,6 +65,8 @@ public sealed class TrustedNetworkSettings
     public bool Trusts(NetworkContext network)
     {
         ArgumentNullException.ThrowIfNull(network);
+
+        if (TrustedNetworkCidr.Matches(Cidrs, network.Addresses)) return true;
 
         return network.Kind switch
         {
@@ -67,5 +84,26 @@ public sealed class TrustedNetworkSettings
 
         return network.Bssid is { Length: > 0 }
                && Bssids.Contains(network.Bssid, StringComparer.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Creates a detached copy whose CIDRs have passed validation and use
+    /// canonical text. Invalid drafts must never reach persistence.
+    /// </summary>
+    public TrustedNetworkSettings ValidatedCopy()
+    {
+        var validation = TrustedNetworkCidr.Validate(Cidrs);
+        if (!validation.IsValid)
+            throw new InvalidOperationException(validation.Errors[0].Message);
+
+        return new TrustedNetworkSettings
+        {
+            Cidrs = [.. validation.CanonicalCidrs],
+            Ssids = [.. Ssids],
+            Bssids = [.. Bssids],
+            RequireBssidMatch = RequireBssidMatch,
+            TrustWiredNetworks = TrustWiredNetworks,
+            ProbeInternalOnUnknownNetworks = ProbeInternalOnUnknownNetworks
+        };
     }
 }

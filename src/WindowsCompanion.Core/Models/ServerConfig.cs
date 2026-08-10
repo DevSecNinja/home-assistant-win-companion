@@ -16,7 +16,7 @@ public sealed class ServerConfig
     /// </summary>
     public string BaseUrl { get; set; } = string.Empty;
 
-    /// <summary>Address used on the user's own network. May be plain HTTP.</summary>
+    /// <summary>Address reachable on networks the user has configured as internal.</summary>
     public string? InternalUrl { get; set; }
 
     /// <summary>Address used from anywhere else. HTTPS only.</summary>
@@ -31,7 +31,7 @@ public sealed class ServerConfig
     [JsonConverter(typeof(JsonStringEnumConverter))]
     public ConnectionMode ConnectionMode { get; set; } = ConnectionMode.Automatic;
 
-    /// <summary>Networks on which the internal address is appropriate. Local only.</summary>
+    /// <summary>Local-only rules that make the internal address eligible.</summary>
     public TrustedNetworkSettings TrustedNetworks { get; set; } = new();
 
     /// <summary>The route that last carried a validated connection.</summary>

@@ -16,6 +16,7 @@
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
@@ -32,19 +33,56 @@
             IconSource="Assets/AppIcon.ico">
             <tb:TaskbarIcon.ContextFlyout>
                 <MenuFlyout>
-                    <MenuFlyoutItem AutomationProperties.AutomationId="Tray.OpenHomeAssistant" Text="Open Home Assistant" Click="OnOpenHomeAssistant" />
-                    <MenuFlyoutItem AutomationProperties.AutomationId="Tray.Show" Text="Show Companion" Click="OnShowWindow" />
+                    <MenuFlyoutItem
+                        x:Name="TrayOpenHomeAssistantItem"
+                        AutomationProperties.AutomationId="Tray.OpenHomeAssistant"
+                        Text="Open Home Assistant"
+                        Command="{x:Bind TrayOpenHomeAssistantCommand}" />
+                    <MenuFlyoutItem
+                        x:Name="TrayViewReleaseItem"
+                        Text="View available update"
+                        Visibility="Collapsed"
+                        Command="{x:Bind TrayViewReleaseCommand}" />
+                    <MenuFlyoutItem AutomationProperties.AutomationId="Tray.Show" Text="Show Companion" Command="{x:Bind TrayShowWindowCommand}" />
                     <MenuFlyoutSeparator />
-                    <MenuFlyoutItem AutomationProperties.AutomationId="Tray.Disconnect" Text="Disconnect" Click="OnDisconnect" />
-                    <MenuFlyoutItem AutomationProperties.AutomationId="Tray.Exit" Text="Exit" Click="OnExit" />
+                    <MenuFlyoutItem
+                        x:Name="TrayDisconnectItem"
+                        AutomationProperties.AutomationId="Tray.Disconnect"
+                        Text="Disconnect"
+                        Command="{x:Bind TrayDisconnectCommand}" />
+                    <MenuFlyoutItem AutomationProperties.AutomationId="Tray.Exit" Text="Exit" Command="{x:Bind TrayExitCommand}" />
                 </MenuFlyout>
             </tb:TaskbarIcon.ContextFlyout>
         </tb:TaskbarIcon>
 
+        <StackPanel Grid.Row="1">
+            <InfoBar
+                x:Name="DemoBanner"
+                Margin="24,4,24,0"
+                Severity="Warning"
+                IsOpen="False"
+                IsClosable="False">
+                <InfoBar.ActionButton>
+                    <Button Content="Leave demo mode" Click="OnLeaveDemoMode" />
+                </InfoBar.ActionButton>
+            </InfoBar>
+            <InfoBar
+                x:Name="UpdateBanner"
+                Margin="24,4,24,0"
+                Title="Update available"
+                Severity="Informational"
+                IsOpen="False"
+                IsClosable="False">
+                <InfoBar.ActionButton>
+                    <Button Content="View release" Click="OnViewRelease" />
+                </InfoBar.ActionButton>
+            </InfoBar>
+        </StackPanel>
+
         <!-- Connect view -->
         <StackPanel
             x:Name="ConnectPanel"
-            Grid.Row="1"
+            Grid.Row="2"
             Width="380"
             Padding="24"
             VerticalAlignment="Center"
@@ -52,14 +90,14 @@
             Spacing="12">
             <TextBlock Text="Connect to Home Assistant" Style="{StaticResource SubtitleTextBlockStyle}" />
             <TextBlock
-                Text="Enter your Home Assistant URL. You'll sign in through your browser — no tokens to copy."
+                Text="Enter the HTTPS address you normally use to reach Home Assistant. You'll sign in through your browser — no tokens to copy."
                 TextWrapping="Wrap"
                 Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
             <TextBox
                 x:Name="UrlBox"
                 AutomationProperties.AutomationId="Connect.Url"
                 Header="Home Assistant URL"
-                PlaceholderText="http://homeassistant.local:8123"
+                PlaceholderText="https://ha.example.com"
                 KeyDown="OnUrlBoxKeyDown" />
             <Button
                 x:Name="SignInButton"
@@ -74,12 +112,23 @@
                 Foreground="{ThemeResource SystemFillColorCriticalBrush}"
                 TextWrapping="Wrap"
                 Visibility="Collapsed" />
+            <TextBlock
+                Text="No server yet? Try demo mode to browse every sensor and its current value on this PC. Nothing is sent to Home Assistant."
+                TextWrapping="Wrap"
+                FontSize="12"
+                Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+            <Button
+                x:Name="DemoModeButton"
+                Content="Explore in demo mode"
+                IsEnabled="False"
+                Click="OnEnterDemoMode"
+                HorizontalAlignment="Stretch" />
         </StackPanel>
 
         <!-- Status view -->
         <StackPanel
             x:Name="StatusPanel"
-            Grid.Row="1"
+            Grid.Row="2"
             Width="380"
             Padding="24"
             VerticalAlignment="Center"
@@ -121,14 +170,15 @@
                 x:Name="StartupStatusText"
                 Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                 TextWrapping="Wrap" />
-            <Button Content="Open Home Assistant" Click="OnOpenHomeAssistant" HorizontalAlignment="Stretch" />
-            <Button Content="Connection…" Click="OnShowConnection" HorizontalAlignment="Stretch" />
+            <Button x:Name="OpenHomeAssistantButton" Content="Open Home Assistant" Click="OnOpenHomeAssistant" HorizontalAlignment="Stretch" />
+            <Button x:Name="ConnectionButton" Content="Connection…" Click="OnShowConnection" HorizontalAlignment="Stretch" />
             <Button x:Name="UpdateNowButton" AutomationProperties.AutomationId="Status.UpdateNow" Content="Update now" Click="OnForcePush" HorizontalAlignment="Stretch" />
             <Button AutomationProperties.AutomationId="Status.OpenSensors" Content="Sensors…" Click="OnShowSettings" HorizontalAlignment="Stretch" />
             <Button x:Name="DisconnectButton" AutomationProperties.AutomationId="Status.Disconnect" Content="Disconnect" Click="OnDisconnect" HorizontalAlignment="Stretch" />
             <Button Content="Open log file" Click="OnOpenLog" HorizontalAlignment="Stretch" />
             <Button
                 AutomationProperties.AutomationId="Status.RemoveServer"
+                x:Name="RemoveServerButton"
                 Content="Remove server…"
                 Click="OnRemoveServer"
                 HorizontalAlignment="Stretch"
@@ -136,7 +186,7 @@
         </StackPanel>
 
         <!-- Connection settings view -->
-        <Grid x:Name="ConnectionPanel" Grid.Row="1" Visibility="Collapsed">
+        <Grid x:Name="ConnectionPanel" Grid.Row="2" Visibility="Collapsed">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
@@ -146,7 +196,7 @@
             <StackPanel Grid.Row="0" Padding="24,16,24,8" Spacing="4">
                 <TextBlock Text="Connection" Style="{StaticResource SubtitleTextBlockStyle}" />
                 <TextBlock
-                    Text="Use one Home Assistant address by default. If your internal and external addresses differ, enable separate URLs below."
+                    Text="Use one address everywhere by default. Configure separate addresses only when Home Assistant is reached differently on your local networks and everywhere else."
                     TextWrapping="Wrap"
                     Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
             </StackPanel>
@@ -165,18 +215,23 @@
 
                     <StackPanel x:Name="SeparateUrlsPanel" Spacing="12" Visibility="Collapsed">
                         <TextBlock
-                            Text="Both addresses must reach the same Home Assistant instance. Keep the same sign-in, device, entities and history."
+                            Text="Both addresses must reach the same Home Assistant instance. “Internal” means reachable on networks you configure below; “external” means the address to try everywhere else."
                             TextWrapping="Wrap"
                             FontSize="12"
                             Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                         <TextBox
                             x:Name="InternalUrlBox"
-                            Header="Internal address (on your own network)"
-                            PlaceholderText="http://homeassistant.local:8123" />
+                            Header="Internal address (reachable on configured local networks)"
+                            PlaceholderText="https://ha.lan.example" />
                         <TextBox
                             x:Name="ExternalUrlBox"
-                            Header="External address (from anywhere else, HTTPS only)"
-                            PlaceholderText="https://example.duckdns.org" />
+                            Header="External address (reachable everywhere else, HTTPS only)"
+                            PlaceholderText="https://ha.example.com" />
+                        <TextBlock
+                            Text="Use HTTPS for both addresses. Plain HTTP is allowed only for the internal address when you deliberately accept that anyone on the matched local network could read or alter the traffic."
+                            TextWrapping="Wrap"
+                            FontSize="12"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                         <StackPanel Orientation="Horizontal" Spacing="8">
                             <Button Content="Suggest from Home Assistant" Click="OnSuggestUrls" />
                             <TextBlock
@@ -188,21 +243,41 @@
 
                         <ComboBox
                             x:Name="ConnectionModeBox"
-                            Header="When to use which address"
+                            Header="Routing behavior"
                             HorizontalAlignment="Stretch">
-                            <ComboBoxItem Content="Automatic" />
-                            <ComboBoxItem Content="Prefer internal" />
-                            <ComboBoxItem Content="Prefer external" />
-                            <ComboBoxItem Content="Internal only" />
-                            <ComboBoxItem Content="External only" />
+                            <ComboBoxItem Content="Automatic — internal on a match, otherwise external" />
+                            <ComboBoxItem Content="Prefer internal — always try internal first" />
+                            <ComboBoxItem Content="Prefer external — always try external first" />
+                            <ComboBoxItem Content="Internal only — never try external" />
+                            <ComboBoxItem Content="External only — never try internal" />
                         </ComboBox>
-
-                        <TextBlock Text="Trusted networks" FontWeight="SemiBold" />
                         <TextBlock
-                            Text="The internal address is only used on networks you list here. These names stay on this PC: they are never sent to Home Assistant, never written to the log, and listing a network does not switch on the Wi-Fi sensors."
+                            Text="A fallback is tried only when the first address cannot connect. In Automatic mode, a matched network tries internal then external; a definite nonmatch uses external only."
                             TextWrapping="Wrap"
                             FontSize="12"
                             Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+
+                        <TextBlock Text="Trusted networks" FontWeight="SemiBold" />
+                        <TextBlock
+                            Text="Add IPv4 or IPv6 CIDR blocks for networks where the internal address is reachable. If any active Ethernet or Wi-Fi address falls inside a block, Automatic mode may use the internal address. CIDRs and Wi-Fi identifiers stay on this PC and are never written to the log or sent to Home Assistant."
+                            TextWrapping="Wrap"
+                            FontSize="12"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        <TextBox
+                            x:Name="TrustedCidrsBox"
+                            Header="Network CIDRs (one per line)"
+                            PlaceholderText="192.168.50.0/24&#x0a;fd12:3456:789a::/48"
+                            AcceptsReturn="True"
+                            TextWrapping="NoWrap"
+                            MinHeight="88"
+                            TextChanged="OnTrustedCidrsChanged" />
+                        <TextBlock
+                            x:Name="TrustedCidrsErrorText"
+                            TextWrapping="Wrap"
+                            FontSize="12"
+                            Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+                            AutomationProperties.LiveSetting="Assertive"
+                            Visibility="Collapsed" />
                         <StackPanel Orientation="Horizontal" Spacing="8">
                             <TextBlock x:Name="CurrentNetworkText" VerticalAlignment="Center" TextWrapping="Wrap" />
                             <Button x:Name="TrustNetworkButton" Content="Trust this network" Click="OnTrustCurrentNetwork" />
@@ -216,13 +291,13 @@
                         <CheckBox x:Name="TrustWiredBox" Content="Treat any wired network as my own network" />
                         <CheckBox
                             x:Name="ProbeUnknownBox"
-                            Content="Try the internal address as a fallback on unrecognised networks" />
+                            Content="If the network cannot be identified, try external first and internal as a fallback" />
                         <Button
                             Content="Open Windows Location settings"
                             Click="OnOpenLocationSettings"
                             HorizontalAlignment="Stretch" />
                         <TextBlock
-                            Text="Windows only reveals the Wi-Fi network name to this app when Location is allowed. Without it, unrecognised networks use the external address."
+                            Text="Windows only reveals the Wi-Fi name when Location is allowed. CIDR matching can still identify a network from active interface addresses; otherwise Automatic mode uses the external address."
                             TextWrapping="Wrap"
                             FontSize="12"
                             Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
@@ -253,7 +328,7 @@
         </Grid>
 
         <!-- Sensor settings view -->
-        <Grid x:Name="SettingsPanel" Grid.Row="1" Visibility="Collapsed">
+        <Grid x:Name="SettingsPanel" Grid.Row="2" Visibility="Collapsed">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />

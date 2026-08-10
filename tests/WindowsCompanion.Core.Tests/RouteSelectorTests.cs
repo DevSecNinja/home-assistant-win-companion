@@ -112,6 +112,76 @@ public class RouteSelectorTests
     }
 
     [Fact]
+    public void A_cidr_matching_any_active_interface_prefers_internal()
+    {
+        var config = Config(trust: settings =>
+        {
+            settings.Ssids.Clear();
+            settings.Cidrs.Add("10.50.0.0/16");
+        });
+        var network = new NetworkContext(
+            NetworkKind.Wireless,
+            "CafeGuest",
+            LocalAddresses: ["192.168.1.20", "10.50.8.4"]);
+
+        var plan = RouteSelector.Plan(config, network);
+
+        Assert.Equal(NetworkTrust.Trusted, plan.Trust);
+        Assert.Equal([RouteKind.Internal, RouteKind.External], plan.Candidates);
+    }
+
+    [Fact]
+    public void A_definite_cidr_nonmatch_uses_external_even_when_wifi_name_is_unavailable()
+    {
+        var config = Config(trust: settings =>
+        {
+            settings.Ssids.Clear();
+            settings.Cidrs.Add("192.168.50.0/24");
+        });
+        var network = new NetworkContext(
+            NetworkKind.Wireless,
+            WirelessIdentityUnavailable: true,
+            LocalAddresses: ["192.168.51.20"]);
+
+        var plan = RouteSelector.Plan(config, network);
+
+        Assert.Equal(NetworkTrust.Untrusted, plan.Trust);
+        Assert.Equal([RouteKind.External], plan.Candidates);
+    }
+
+    [Fact]
+    public void Captured_addresses_do_not_change_ssid_only_unknown_network_fallback()
+    {
+        var config = Config(trust: settings =>
+            settings.ProbeInternalOnUnknownNetworks = true);
+        var network = new NetworkContext(
+            NetworkKind.Wireless,
+            WirelessIdentityUnavailable: true,
+            LocalAddresses: ["192.168.51.20"]);
+
+        var plan = RouteSelector.Plan(config, network);
+
+        Assert.Equal(NetworkTrust.Unidentifiable, plan.Trust);
+        Assert.Equal([RouteKind.External, RouteKind.Internal], plan.Candidates);
+    }
+
+    [Fact]
+    public void A_cidr_match_remains_trusted_while_a_vpn_is_active()
+    {
+        var config = Config(trust: settings =>
+        {
+            settings.Ssids.Clear();
+            settings.Cidrs.Add("fd12:3456::/48");
+        });
+        var network = new NetworkContext(
+            NetworkKind.Wired,
+            VpnActive: true,
+            LocalAddresses: ["fd12:3456::20"]);
+
+        Assert.Equal(NetworkTrust.Trusted, RouteSelector.Plan(config, network).Trust);
+    }
+
+    [Fact]
     public void Offline_yields_no_candidates_at_all()
     {
         var plan = RouteSelector.Plan(Config(), NetworkContext.Offline);

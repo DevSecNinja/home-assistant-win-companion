@@ -5,6 +5,7 @@ using WindowsCompanion.Core.HomeAssistant;
 using WindowsCompanion.Core.Lifecycle;
 using WindowsCompanion.Core.Models;
 using WindowsCompanion.Core.Sensors;
+using WindowsCompanion.Core.Updates;
 using WindowsCompanion_App.Services;
 
 namespace WindowsCompanion_App;
@@ -29,6 +30,9 @@ internal sealed class AppControllerDependencies
     public required OwnedDependency<IUriLauncher> UriLauncher { get; init; }
     public required OwnedDependency<INetworkContextProvider> Network { get; init; }
     public required OwnedDependency<ILoggerFactory> LoggerFactory { get; init; }
+    public OwnedDependency<HttpClient>? UpdateHttpClient { get; init; }
+    public OwnedDependency<IUpdateNotificationSink>? UpdateNotificationSink { get; init; }
+    public bool EnableStartupUpdates { get; init; }
     public required Func<IHaSocket> WebSocketFactory { get; init; }
     public required Func<ServerConfig, LifecycleCoordinator, ILifecycleSignalSource, IReadOnlyList<ISensorSource>>
         SensorSourceFactory { get; init; }
@@ -39,6 +43,7 @@ internal sealed class AppControllerDependencies
     {
         var status = new WindowsSystemStatusProvider();
         var winGet = new PowerShellWinGetUpdateProvider();
+        var notifications = new ToastNotifier();
 
         return new AppControllerDependencies
         {
@@ -46,7 +51,7 @@ internal sealed class AppControllerDependencies
             SecretStore = new(new WindowsSecretStore(), true),
             SettingsStore = new(new SettingsStore(), true),
             SystemStatus = new(status, true),
-            NotificationSink = new(new ToastNotifier(), true),
+            NotificationSink = new(notifications, true),
             WinGetUpdates = new(winGet, true),
             UriLauncher = new(new ShellUriLauncher(), true),
             Network = new(new WindowsNetworkContextProvider(), true),
@@ -55,6 +60,9 @@ internal sealed class AppControllerDependencies
                 builder.AddProvider(new FileLoggerProvider(LogLevel.Debug));
                 builder.SetMinimumLevel(LogLevel.Debug);
             }), true),
+            UpdateHttpClient = new(GitHubReleaseClient.CreateHttpClient(), true),
+            UpdateNotificationSink = new(notifications),
+            EnableStartupUpdates = true,
             WebSocketFactory = static () => new ClientWebSocketAdapter(),
             LifecycleJournalFactory = static () => new FileLifecycleJournal(),
             LifecycleSignalSourceFactory = static () => new WindowsLifecycleSignalSource(),
@@ -66,7 +74,7 @@ internal sealed class AppControllerDependencies
                 new WifiSensorSource(config.Sensors),
                 new SystemSensorSource(),
                 new DomainSensorSource(config.Sensors),
-                new DisplaySensorSource(),
+                new DisplaySensorSource(config.Sensors),
                 new WindowsThemeSensorSource(),
                 new LocaleSensorSource(),
                 new DiskUsageSensorSource(),
@@ -92,7 +100,9 @@ internal sealed class AppControllerDependencies
             WinGetUpdates.IsOwned ? WinGetUpdates.Value : null,
             UriLauncher.IsOwned ? UriLauncher.Value : null,
             Network.IsOwned ? Network.Value : null,
-            LoggerFactory.IsOwned ? LoggerFactory.Value : null
+            LoggerFactory.IsOwned ? LoggerFactory.Value : null,
+            UpdateHttpClient is { IsOwned: true } ? UpdateHttpClient.Value : null,
+            UpdateNotificationSink is { IsOwned: true } ? UpdateNotificationSink.Value : null
         };
 
         return dependencies

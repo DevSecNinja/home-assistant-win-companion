@@ -18,6 +18,50 @@ public class TrustedNetworkSettingsTests
     }
 
     [Fact]
+    public void A_matching_address_in_any_configured_cidr_is_trusted()
+    {
+        var settings = new TrustedNetworkSettings
+        {
+            Cidrs = ["192.168.50.0/24", "fd12:3456::/48"]
+        };
+        var network = new NetworkContext(
+            NetworkKind.Wireless,
+            WirelessIdentityUnavailable: true,
+            LocalAddresses: ["10.0.0.20", "fd12:3456::20"]);
+
+        Assert.True(settings.IsConfigured);
+        Assert.True(settings.Trusts(network));
+    }
+
+    [Fact]
+    public void Nonmatching_addresses_do_not_trust_the_network()
+    {
+        var settings = new TrustedNetworkSettings { Cidrs = ["192.168.50.0/24"] };
+        var network = new NetworkContext(
+            NetworkKind.Wired,
+            LocalAddresses: ["192.168.51.20", "2001:db8::20"]);
+
+        Assert.False(settings.Trusts(network));
+    }
+
+    [Fact]
+    public void A_validated_copy_is_detached_and_uses_canonical_cidrs()
+    {
+        var settings = new TrustedNetworkSettings
+        {
+            Cidrs = ["FD12:3456:0000::/48"],
+            Ssids = ["HomeNet"]
+        };
+
+        var copy = settings.ValidatedCopy();
+        settings.Cidrs.Clear();
+        settings.Ssids.Clear();
+
+        Assert.Equal(["fd12:3456::/48"], copy.Cidrs);
+        Assert.Equal(["HomeNet"], copy.Ssids);
+    }
+
+    [Fact]
     public void A_matching_ssid_is_trusted()
     {
         Assert.True(Home().Trusts(new NetworkContext(NetworkKind.Wireless, "HomeNet")));

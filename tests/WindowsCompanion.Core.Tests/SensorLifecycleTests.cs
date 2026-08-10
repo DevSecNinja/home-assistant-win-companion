@@ -12,6 +12,7 @@ namespace WindowsCompanion.Core.Tests;
 /// Everything here is driven by handshakes and invariants rather than by
 /// sleeping and hoping, so a slow machine makes these tests slower, not flaky.
 /// </summary>
+[Collection(AsyncLifecycleCollection.Name)]
 public class SensorLifecycleTests
 {
     private static readonly TimeSpan Never = TimeSpan.FromMinutes(10);
@@ -141,6 +142,56 @@ public class SensorLifecycleTests
     }
 
     [Fact]
+    public async Task A_refresh_joins_an_in_flight_scheduled_collection()
+    {
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var count = 0;
+        var loop = new SensorPollLoop(async (_, cancellationToken) =>
+        {
+            Interlocked.Increment(ref count);
+            entered.TrySetResult();
+            await release.Task.WaitAsync(cancellationToken);
+        }, Never);
+
+        loop.Start();
+        await entered.Task.WaitAsync(Timeout);
+        var refresh = loop.RunOnceAsync();
+        release.TrySetResult();
+
+        await refresh.WaitAsync(Timeout);
+        loop.Stop();
+
+        Assert.Equal(1, count);
+    }
+
+    [Fact]
+    public async Task Cancelling_one_refresh_does_not_cancel_a_joined_refresh()
+    {
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var count = 0;
+        var loop = new SensorPollLoop(async (_, cancellationToken) =>
+        {
+            Interlocked.Increment(ref count);
+            entered.TrySetResult();
+            await release.Task.WaitAsync(cancellationToken);
+        }, Never);
+        using var firstCancellation = new CancellationTokenSource();
+
+        var first = loop.RunOnceAsync(firstCancellation.Token);
+        await entered.Task.WaitAsync(Timeout);
+        var second = loop.RunOnceAsync();
+        firstCancellation.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => first);
+        release.TrySetResult();
+        await second.WaitAsync(Timeout);
+
+        Assert.Equal(1, count);
+    }
+
+    [Fact]
     public async Task Refreshing_without_a_running_loop_still_collects_once()
     {
         var tick = new TickRecorder();
@@ -167,6 +218,34 @@ public class SensorLifecycleTests
 
         Assert.Equal(2, tick.Count);
         Assert.Equal(SensorPollReason.Requested, tick.Reasons[1]);
+    }
+
+    [Fact]
+    public async Task Restarting_does_not_join_the_cancelled_previous_poll()
+    {
+        var firstStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var secondStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var attempt = 0;
+        var loop = new SensorPollLoop(async (_, cancellationToken) =>
+        {
+            if (Interlocked.Increment(ref attempt) == 1)
+            {
+                firstStarted.TrySetResult();
+                await Task.Delay(System.Threading.Timeout.InfiniteTimeSpan, cancellationToken);
+                return;
+            }
+
+            secondStarted.TrySetResult();
+        }, Never);
+
+        loop.Start();
+        await firstStarted.Task.WaitAsync(Timeout);
+        loop.Stop();
+        loop.Start();
+
+        await secondStarted.Task.WaitAsync(Timeout);
+        loop.Stop();
+        Assert.Equal(2, attempt);
     }
 
     [Fact]
@@ -198,6 +277,7 @@ public class SensorLifecycleTests
         caller.Cancel();
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => refresh);
+        await tick.Cancelled.Task.WaitAsync(Timeout);
     }
 
     [Fact]

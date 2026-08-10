@@ -238,9 +238,15 @@ public sealed class ConnectionManager : IAsyncDisposable
         {
             await Task.WhenAll(_wsLoop ?? Task.CompletedTask, _syncLoop ?? Task.CompletedTask).ConfigureAwait(false);
         }
-        catch { /* ignore shutdown races */ }
-        _cts.Dispose();
-        _cts = null;
+        catch (OperationCanceledException) when (_cts.IsCancellationRequested)
+        {
+            // Cancellation is the requested shutdown path. Any other loop failure
+            // still propagates to the application shutdown boundary and is logged.
+        }
+        finally
+        {
+            _cts.Dispose();
+            _cts = null;
+        }
     }
 }
-

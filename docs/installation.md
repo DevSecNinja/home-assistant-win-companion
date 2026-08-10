@@ -154,12 +154,30 @@ explicitly labelled unsigned. The longer-term decision remains tracked in
 
 ## Update
 
-1. Use the tray menu to select **Exit**.
-2. Download and verify the new release.
-3. For an installed copy, extract and run the newer setup package; it upgrades in
-   place.
-4. For a portable copy, replace the old extracted application folder.
-5. Launch the companion again.
+Official release builds check GitHub Releases once, in the background, each time the
+application process starts. When a newer stable release exists, Windows shows one
+toast with the installed and available versions and a **View release** action. The
+notification-area icon also changes for that run: its companion circle becomes a
+larger red badge containing `1`, and the tray menu offers the same release page. If
+the window is open, a persistent **Update available** banner provides the same
+action without widening the status view.
+
+The check never downloads, installs, or restarts the application. Drafts and
+prereleases are ignored. If GitHub is unavailable or returns an unusable response,
+startup and Home Assistant connectivity continue normally; the failure is written
+only to the local diagnostic log. Source builds, pull-request builds, and ordinary
+CI artifacts do not make this request because they are not official versioned
+releases.
+
+1. Download and verify the new release.
+2. For an installed copy, run the newer setup package; it upgrades in place. If
+   any installed or source-built companion is running, Setup asks permission to
+   close it gracefully. Setup waits up to 15 seconds for sensor, connection, tray,
+   window, and process teardown before replacing files. A failed or refused close
+   cancels Setup; it never force-terminates or automatically restarts the application.
+3. For a portable copy, use the tray menu to select **Exit**, then replace the old
+   extracted application folder.
+4. Launch the companion again.
 
 The following user data is outside the application directory and is preserved:
 
@@ -200,11 +218,13 @@ reconnects.
 2. Use **Remove server…** if Home Assistant credentials and the Mobile App
    connection should be revoked. This clears the saved sign-in and local settings,
    but Home Assistant's app API cannot delete its Mobile App device entry.
-3. Select **Exit** from the tray menu.
-4. For an installed copy, use **Settings → Apps → Installed apps →
-   WindowsCompanion → Uninstall**. For a portable copy, delete its
-   extracted application folder.
-5. Optionally delete `%LOCALAPPDATA%\WindowsCompanion\` to remove settings and logs;
+3. For an installed copy, use **Settings → Apps → Installed apps →
+   WindowsCompanion → Uninstall**. If the companion is running, the uninstaller
+   asks permission to close it gracefully and waits up to 15 seconds for complete
+   process teardown. A failed or refused close cancels uninstall without forcing
+   termination. For a portable copy, select **Exit** from the tray menu and delete
+   its extracted application folder.
+4. Optionally delete `%LOCALAPPDATA%\WindowsCompanion\` to remove settings and logs;
    normal uninstall deliberately preserves these for upgrades/reinstallation.
 
 If the application was deleted before **Remove server…** was used, reinstall or

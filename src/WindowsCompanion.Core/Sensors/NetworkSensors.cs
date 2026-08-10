@@ -5,16 +5,42 @@ namespace WindowsCompanion.Core.Sensors;
 /// cheap but reading addresses and hardware addresses is collection of identifying
 /// data, so the scope is decided from what the user has actually switched on.
 /// </summary>
+[Flags]
 public enum NetworkCaptureScope
 {
     /// <summary>Nothing is enabled: do not enumerate anything at all.</summary>
-    None,
+    None = 0,
 
     /// <summary>Adapter kinds only. No address and no hardware address is read.</summary>
-    ConnectionTypeOnly,
+    ConnectionTypeOnly = 1 << 0,
 
-    /// <summary>Addresses, hardware address and route resolution are needed.</summary>
-    Full
+    /// <summary>The active adapter's IPv4 address and IPv4 route are needed.</summary>
+    Ipv4Address = 1 << 1,
+
+    /// <summary>The active adapter's IPv6 address and IPv6 route are needed.</summary>
+    Ipv6Address = 1 << 2,
+
+    /// <summary>The active adapter's current hardware address is needed.</summary>
+    CurrentPhysicalAddress = 1 << 3,
+
+    /// <summary>The active adapter's default gateway address is needed.</summary>
+    GatewayAddress = 1 << 4,
+
+    /// <summary>The active adapter's DNS resolver addresses are needed.</summary>
+    DnsServers = 1 << 5,
+
+    /// <summary>The wired adapter's permanent hardware address is needed.</summary>
+    LanPermanentAddress = 1 << 6,
+
+    /// <summary>The wireless adapter's permanent hardware address is needed.</summary>
+    WlanPermanentAddress = 1 << 7,
+
+    /// <summary>The adapter carrying the active route must be identified without retaining its addresses.</summary>
+    ActiveAdapter = 1 << 8,
+
+    /// <summary>All network sensor fields may be collected.</summary>
+    Full = ConnectionTypeOnly | Ipv4Address | Ipv6Address | CurrentPhysicalAddress | GatewayAddress
+           | DnsServers | LanPermanentAddress | WlanPermanentAddress | ActiveAdapter
 }
 
 /// <summary>
@@ -27,10 +53,17 @@ public static class NetworkSensors
     public const string IpAddressId = "ip_address";
     public const string Ipv6AddressId = "ipv6_address";
     public const string MacAddressId = "mac_address";
+    public const string LanMacAddressId = "lan_mac_address";
+    public const string WlanMacAddressId = "wlan_mac_address";
+    public const string GatewayAddressId = "gateway_address";
+    public const string DnsServersId = "dns_servers";
 
     /// <summary>The sensors whose values are network identifiers.</summary>
     public static IReadOnlyList<string> IdentifierIds { get; } =
-        [IpAddressId, Ipv6AddressId, MacAddressId];
+        [
+            IpAddressId, Ipv6AddressId, MacAddressId,
+            LanMacAddressId, WlanMacAddressId, GatewayAddressId, DnsServersId
+        ];
 
     /// <summary>
     /// Decides what may be collected. With no network sensor enabled the answer is
@@ -40,9 +73,37 @@ public static class NetworkSensors
     public static NetworkCaptureScope ScopeFor(IReadOnlySet<string>? enabled)
     {
         if (enabled is null || enabled.Count == 0) return NetworkCaptureScope.None;
-        if (IdentifierIds.Any(enabled.Contains)) return NetworkCaptureScope.Full;
-        return enabled.Contains(ConnectionTypeId)
+
+        var scope = enabled.Contains(ConnectionTypeId)
             ? NetworkCaptureScope.ConnectionTypeOnly
             : NetworkCaptureScope.None;
+        if (enabled.Contains(IpAddressId)) scope |= NetworkCaptureScope.Ipv4Address;
+        if (enabled.Contains(Ipv6AddressId)) scope |= NetworkCaptureScope.Ipv6Address;
+
+        if (enabled.Contains(MacAddressId))
+        {
+            scope |= NetworkCaptureScope.ActiveAdapter
+                     | NetworkCaptureScope.CurrentPhysicalAddress;
+        }
+
+        if (enabled.Contains(LanMacAddressId))
+            scope |= NetworkCaptureScope.LanPermanentAddress;
+
+        if (enabled.Contains(WlanMacAddressId))
+            scope |= NetworkCaptureScope.WlanPermanentAddress;
+
+        if (enabled.Contains(GatewayAddressId))
+        {
+            scope |= NetworkCaptureScope.ActiveAdapter
+                     | NetworkCaptureScope.GatewayAddress;
+        }
+
+        if (enabled.Contains(DnsServersId))
+        {
+            scope |= NetworkCaptureScope.ActiveAdapter
+                     | NetworkCaptureScope.DnsServers;
+        }
+
+        return scope;
     }
 }

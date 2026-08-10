@@ -47,6 +47,8 @@
     <WindowsPackageType>None</WindowsPackageType>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <OfficialBuild Condition="'$(OfficialBuild)' == ''">false</OfficialBuild>
+    <DefineConstants Condition="'$(OfficialBuild)' == 'true'">$(DefineConstants);OFFICIAL_BUILD</DefineConstants>
   </PropertyGroup>
 
   <ItemGroup>
@@ -64,6 +66,9 @@
       output/publish folder and those icons silently fall back to the default.
     -->
     <Content Include="Assets\AppIcon.ico">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Assets\UpdateIcon.ico">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     <Content Include="Assets\Wide310x150Logo.scale-200.png" />

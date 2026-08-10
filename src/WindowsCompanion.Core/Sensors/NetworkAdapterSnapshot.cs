@@ -51,11 +51,17 @@ public sealed record NetworkAdapterSnapshot(
     bool HasGateway = false,
     IReadOnlyList<string>? Ipv4Addresses = null,
     IReadOnlyList<Ipv6AddressInfo>? Ipv6Addresses = null,
-    IReadOnlyList<byte>? PhysicalAddress = null)
+    IReadOnlyList<byte>? PhysicalAddress = null,
+    string? GatewayAddress = null,
+    IReadOnlyList<string>? DnsAddresses = null,
+    IReadOnlyList<byte>? PermanentPhysicalAddress = null,
+    bool MatchesActiveRoute = false)
 {
     public IReadOnlyList<string> Ipv4 => Ipv4Addresses ?? [];
 
     public IReadOnlyList<Ipv6AddressInfo> Ipv6 => Ipv6Addresses ?? [];
+
+    public IReadOnlyList<string> Dns => DnsAddresses ?? [];
 
     /// <summary>
     /// A real LAN adapter: Ethernet or Wi-Fi hardware rather than a tunnel, a

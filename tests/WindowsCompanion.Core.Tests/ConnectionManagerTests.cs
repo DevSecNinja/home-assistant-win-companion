@@ -61,6 +61,25 @@ public class ConnectionManagerTests
     }
 
     [Fact]
+    public async Task Disposing_during_reconnect_backoff_treats_cancellation_as_shutdown()
+    {
+        var reconnecting = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var client = CreateManager(
+            () => new ThrowingSocket(),
+            new FakeClient(),
+            new MutableClock());
+        client.StateChanged += state =>
+        {
+            if (state == ConnectionState.Reconnecting) reconnecting.TrySetResult();
+        };
+
+        client.Start();
+        await reconnecting.Task.WaitAsync(TimeSpan.FromSeconds(10));
+
+        await client.DisposeAsync();
+    }
+
+    [Fact]
     public async Task Health_tracks_success_failure_and_staleness()
     {
         var clock = new MutableClock();

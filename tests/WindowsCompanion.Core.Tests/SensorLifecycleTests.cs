@@ -727,8 +727,9 @@ public class SensorLifecycleTests
             }
         }
 
-        public Task<bool> IsModuleInstalledAsync(CancellationToken cancellationToken = default) =>
-            Task.FromResult(true);
+        public Task<WinGetCapabilityResult> ProbeCapabilityAsync(
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(WinGetCapabilityResult.FromStatus(WinGetCapabilityStatus.Ready));
 
         public Task<WinGetUpdateResult> CheckForUpdatesAsync(
             CancellationToken cancellationToken = default)

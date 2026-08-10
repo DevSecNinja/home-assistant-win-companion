@@ -47,7 +47,11 @@ internal sealed class StartupUpdateService
         {
             if (trigger == UpdateCheckTrigger.Automatic)
             {
-                _log.LogDebug("Skipping the update check for a source or CI build.");
+                if (_installed.IsOfficialRelease)
+                    _log.LogWarning(
+                        "Skipping the update check because the installed release version is invalid.");
+                else
+                    _log.LogDebug("Skipping the update check for a source or CI build.");
                 return;
             }
 

@@ -49,6 +49,37 @@ public class WinGetUpdateTests
         Assert.Equal(WinGetUpdateStatus.InvalidOutput, result.Status);
     }
 
+    [Theory]
+    [InlineData("ModuleMissing", WinGetCapabilityStatus.ModuleMissing)]
+    [InlineData("ModuleIncompatible", WinGetCapabilityStatus.ModuleIncompatible)]
+    [InlineData("ModuleUntrusted", WinGetCapabilityStatus.ModuleUntrusted)]
+    [InlineData("ImportFailed", WinGetCapabilityStatus.ImportFailed)]
+    [InlineData("Ready", WinGetCapabilityStatus.Ready)]
+    public void Capability_output_preserves_actionable_status(
+        string serializedStatus,
+        WinGetCapabilityStatus expected)
+    {
+        var result = WinGetCapabilityResult.Parse(
+            $$"""{"Status":"{{serializedStatus}}"}""");
+
+        Assert.Equal(expected, result.Status);
+    }
+
+    [Theory]
+    [InlineData("ImportFailed", WinGetUpdateStatus.ImportFailed)]
+    [InlineData("CommandFailed", WinGetUpdateStatus.CommandFailed)]
+    public void Update_output_preserves_execution_failure(
+        string serializedStatus,
+        WinGetUpdateStatus expected)
+    {
+        var result = WinGetUpdateResult.Parse(
+            $$"""{"Status":"{{serializedStatus}}"}""",
+            DateTimeOffset.UnixEpoch);
+
+        Assert.Equal(expected, result.Status);
+        Assert.NotNull(result.Error);
+    }
+
     [Fact]
     public async Task Disabled_preview_performs_no_provider_query()
     {
@@ -133,8 +164,9 @@ public class WinGetUpdateTests
         public WinGetUpdateResult Result { get; set; } =
             new(WinGetUpdateStatus.Ready, []);
 
-        public Task<bool> IsModuleInstalledAsync(CancellationToken cancellationToken = default) =>
-            Task.FromResult(true);
+        public Task<WinGetCapabilityResult> ProbeCapabilityAsync(
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(WinGetCapabilityResult.FromStatus(WinGetCapabilityStatus.Ready));
 
         public async Task<WinGetUpdateResult> CheckForUpdatesAsync(
             CancellationToken cancellationToken = default)

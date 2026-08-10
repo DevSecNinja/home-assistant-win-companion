@@ -37,6 +37,25 @@ them in attributes or logs.
 
 ## Decision: Explicit result states
 
-Results distinguish ready, checking, module missing, timeout, command failure and
-malformed output. Only ready has a numeric count. Errors cannot fail the overall
-sensor batch.
+Results distinguish ready, checking, module missing, incompatible version, invalid
+publisher signature, unavailable host, import failure, probe failure, timeout,
+command failure and malformed output. Only ready has a numeric count. Errors cannot
+fail the overall sensor batch.
+
+## Discovery correction: refresh Windows PowerShell module paths per probe
+
+`Install-Module -Scope CurrentUser` always writes to the host's default user module
+directory. Windows PowerShell, however, treats an existing user-scoped
+`PSModulePath` as authoritative and does not automatically prepend that default
+directory. A companion process can therefore inherit a stale or PowerShell
+7-specific path and pass it to every new Windows PowerShell child even after the
+module has been installed.
+
+Each probe now constructs a child-only module path from the current Documents known
+folder, both standard CurrentUser roots (`WindowsPowerShell\Modules` and
+`PowerShell\Modules`), architecture-compatible machine roots, freshly read
+user/machine environment values, and inherited custom paths. No process, user, or
+machine environment value is changed. The copied command explicitly invokes the
+same Windows PowerShell 5.1 host and uses `-Force` so an incompatible older module
+can be upgraded. Runtime invocation no longer bypasses the configured execution
+policy.

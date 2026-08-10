@@ -35,6 +35,9 @@
       Include="..\..\src\WindowsCompanion.App\Services\MainWindowActivation.cs"
       Link="AppBoundary\MainWindowActivation.cs" />
     <Compile
+      Include="..\..\src\WindowsCompanion.App\Services\PowerShellWinGetUpdateProvider.cs"
+      Link="AppBoundary\PowerShellWinGetUpdateProvider.cs" />
+    <Compile
       Include="..\..\src\WindowsCompanion.App\Services\TrayTooltipFormatter.cs"
       Link="AppBoundary\TrayTooltipFormatter.cs" />
     <Compile

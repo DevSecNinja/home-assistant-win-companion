@@ -1226,7 +1226,7 @@ public sealed partial class MainWindow : Window
             && !catalog.IsEnabled(uniqueId))
         {
             toggle.IsEnabled = false;
-            var installed = await _controller.IsWinGetModuleInstalledAsync();
+            var capability = await _controller.ProbeWinGetCapabilityAsync();
             if (!ReferenceEquals(catalog, _controller.Catalog))
             {
                 toggle.IsEnabled = true;
@@ -1234,50 +1234,21 @@ public sealed partial class MainWindow : Window
                 return;
             }
 
-            if (!installed)
+            if (!capability.IsReady)
             {
-                const string installCommand =
-                    "Install-Module Microsoft.WinGet.Client -Repository PSGallery "
-                    + "-Scope CurrentUser -MinimumVersion 1.29.280";
-                var commandBox = new TextBox
+                capability = await ShowWinGetCapabilityDialogAsync(capability);
+                toggle.IsEnabled = true;
+                if (!capability.IsReady)
                 {
-                    Header = "Run in Windows PowerShell",
-                    Text = installCommand,
-                    IsReadOnly = true,
-                    TextWrapping = TextWrapping.Wrap
-                };
-                var content = new StackPanel { Spacing = 12 };
-                content.Children.Add(new TextBlock
-                {
-                    Text = "WinGet Updates requires Microsoft's official "
-                           + "Microsoft.WinGet.Client PowerShell module version 1.29.280 "
-                           + "or newer. The companion will not install executable code "
-                           + "automatically. Install the module for your user, then enable "
-                           + "the sensor again.",
-                    TextWrapping = TextWrapping.Wrap
-                });
-                content.Children.Add(commandBox);
-
-                var dialog = new ContentDialog
-                {
-                    XamlRoot = Content.XamlRoot,
-                    Title = "WinGet client module required",
-                    Content = content,
-                    PrimaryButtonText = "Copy command",
-                    CloseButtonText = "Cancel",
-                    DefaultButton = ContentDialogButton.Close
-                };
-
-                if (await dialog.ShowAsync() == ContentDialogResult.Primary)
-                {
-                    var package = new DataPackage();
-                    package.SetText(installCommand);
-                    Clipboard.SetContent(package);
+                    SetToggleState(toggle, false);
+                    return;
                 }
 
-                toggle.IsEnabled = true;
-                SetToggleState(toggle, false);
-                return;
+                if (!ReferenceEquals(catalog, _controller.Catalog))
+                {
+                    SetToggleState(toggle, false);
+                    return;
+                }
             }
 
             toggle.IsEnabled = true;
@@ -1374,6 +1345,63 @@ public sealed partial class MainWindow : Window
             EndSensorPreview(uniqueId, previewCancellation);
             if (ReferenceEquals(catalog, _controller.Catalog)) toggle.IsEnabled = true;
         }
+    }
+
+    private async Task<WinGetCapabilityResult> ShowWinGetCapabilityDialogAsync(
+        WinGetCapabilityResult capability)
+    {
+        while (!capability.IsReady)
+        {
+            var content = new StackPanel { Spacing = 12 };
+            content.Children.Add(new TextBlock
+            {
+                Text = capability.Message,
+                TextWrapping = TextWrapping.Wrap
+            });
+
+            if (capability.CanInstallOrRepair)
+            {
+                content.Children.Add(new TextBlock
+                {
+                    Text = "The companion will not install executable code automatically. "
+                           + "Run the command below as the same Windows user, then return here "
+                           + "and select Recheck.",
+                    TextWrapping = TextWrapping.Wrap
+                });
+                content.Children.Add(new TextBox
+                {
+                    Header = "Run in PowerShell",
+                    Text = PowerShellWinGetUpdateProvider.InstallCommand,
+                    IsReadOnly = true,
+                    TextWrapping = TextWrapping.Wrap
+                });
+            }
+
+            var dialog = new ContentDialog
+            {
+                XamlRoot = Content.XamlRoot,
+                Title = "WinGet client module unavailable",
+                Content = content,
+                PrimaryButtonText = "Recheck",
+                SecondaryButtonText = capability.CanInstallOrRepair ? "Copy command" : null,
+                CloseButtonText = "Not now",
+                DefaultButton = ContentDialogButton.Primary
+            };
+
+            var answer = await dialog.ShowAsync();
+            if (answer == ContentDialogResult.None) return capability;
+            if (answer == ContentDialogResult.Secondary)
+            {
+                var package = new DataPackage();
+                package.SetText(PowerShellWinGetUpdateProvider.InstallCommand);
+                Clipboard.SetContent(package);
+                continue;
+            }
+
+            capability = await _controller.ProbeWinGetCapabilityAsync();
+        }
+
+        return capability;
     }
 
     private CancellationTokenSource BeginSensorListPreview()

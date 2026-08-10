@@ -59,6 +59,9 @@ locally after a successful enabled check.
    installation command.
 5. **Given** the user closes or copies the setup instructions, **When** enablement
    finishes, **Then** the sensor remains disabled until the module is installed.
+6. **Given** the displayed current-user command installs the module while the
+   companion remains open, **When** the user selects Recheck or enables the sensor
+   again, **Then** a fresh probe discovers it without an app restart.
 
 ---
 
@@ -89,6 +92,10 @@ fresh check occurs.
 
 - The `Microsoft.WinGet.Client` PowerShell module is not installed or cannot load.
 - The installed module is too old or is not signed by Microsoft.
+- The companion inherited a stale or host-specific `PSModulePath` before the module
+  was installed.
+- Windows PowerShell 5.1 is unavailable for the companion's architecture.
+- The module is discoverable but cannot be imported.
 - WinGet itself is unavailable, disabled by policy, or its catalog connection fails.
 - A check exceeds a reasonable timeout.
 - The PowerShell process exits unsuccessfully or emits malformed structured output.
@@ -109,6 +116,11 @@ fresh check occurs.
 - **FR-003b**: The app MUST NOT download, install, or update the PowerShell module.
 - **FR-003c**: The sensor MUST remain disabled until a supported Microsoft-signed
   module is detected.
+- **FR-003d**: Installation guidance and runtime probing MUST use Windows PowerShell
+  5.1 and MUST resolve its CurrentUser module directory consistently.
+- **FR-003e**: Every enablement or explicit recheck MUST perform a new capability
+  probe. Missing, incompatible, untrusted, host-unavailable, import, probe, and
+  command failures MUST remain distinguishable.
 - **FR-004**: Home Assistant MUST receive only the available-update count or an
   unavailable state.
 - **FR-005**: Package names, identifiers, installed versions, and available versions
@@ -150,6 +162,9 @@ fresh check occurs.
   available updates.
 - **SC-007**: Viewing or copying setup instructions creates no sensor preference;
   after explicit installation the sensor can be enabled without restarting the app.
+- **SC-008**: A long-lived companion process discovers a module newly installed into
+  either standard CurrentUser PowerShell module directory without changing the
+  machine or user environment.
 
 ## Assumptions
 

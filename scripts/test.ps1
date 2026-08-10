@@ -136,7 +136,12 @@ if ($EndToEnd) {
             -Project $e2eProject `
             -Name "end-to-end-$run" `
             -Configuration 'Release' `
-            -AdditionalArguments @("-p:Platform=$Platform", '-r', $runtimeIdentifier)
+            -AdditionalArguments @(
+                "-p:Platform=$Platform"
+                '-p:PublishReadyToRun=false'
+                '-r'
+                $runtimeIdentifier
+            )
     }
 }
 

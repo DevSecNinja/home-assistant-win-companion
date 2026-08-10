@@ -94,7 +94,7 @@ jobs:
         run: |
           foreach ($run in 1..10) {
             dotnet test tests\WindowsCompanion.E2E.Tests\WindowsCompanion.E2E.Tests.csproj -c Release `
-              -p:Platform=x64 -r win-x64 --no-restore `
+              -p:Platform=x64 -p:PublishReadyToRun=false -r win-x64 --no-restore `
               --logger "trx;LogFileName=e2e-test-results-$run.trx" `
               --results-directory TestResults --nologo
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

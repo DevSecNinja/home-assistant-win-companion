@@ -15,7 +15,8 @@ re-registering the device or losing the refresh token, webhook, entities or hist
 - Offer five modes: Automatic, Prefer internal, Prefer external, Internal only,
   External only.
 - Prove both addresses reach the same Home Assistant instance before saving.
-- Select a route from the current network, never from the hostname.
+- Select a route from user-configured local network rules, never by guessing from
+  the Home Assistant hostname.
 - Fail over to the other address when the active one stops working.
 - Show which address is in use and why, without revealing network identifiers.
 - Migrate a single-URL install without interrupting the connection.
@@ -30,10 +31,10 @@ re-registering the device or losing the refresh token, webhook, entities or hist
 | --- | --- |
 | `BaseUrl` | The address in use right now. Kept in step with the active route. |
 | `UseSeparateUrls` | Explicit opt-in to internal/external route selection; false by default. |
-| `InternalUrl` | Address used on the user's own network. May be plain HTTP. |
-| `ExternalUrl` | Address used from anywhere else. HTTPS only. |
+| `InternalUrl` | Address reachable on the local networks the user configures. HTTPS is recommended. |
+| `ExternalUrl` | Address reachable everywhere else. HTTPS only. |
 | `ConnectionMode` | `Automatic`, `PreferInternal`, `PreferExternal`, `InternalOnly`, `ExternalOnly`. |
-| `TrustedNetworks` | SSIDs, optional BSSIDs, and the wired/unknown-network switches. |
+| `TrustedNetworks` | Canonical IPv4/IPv6 CIDRs, SSIDs, optional BSSIDs, and the wired/unknown-network switches. |
 | `LastSuccessfulRoute` / `LastSuccessfulRouteAt` | The route that last carried a validated connection. |
 | `InstanceDeviceId` | Home Assistant's device-registry id for this registration. |
 | `RouteAssignmentPending` | Legacy compatibility field; cleared during migration. |
@@ -41,6 +42,11 @@ re-registering the device or losing the refresh token, webhook, entities or hist
 `BaseUrl` stays authoritative so anything that only needs "where is Home
 Assistant right now" keeps working. Modes and routes serialize as strings, so the
 file stays readable and stable across versions.
+
+`TrustedNetworks.Cidrs` is an empty list when absent, so existing installs retain
+their SSID/wired behavior. Saving advanced routing validates and canonicalizes the
+list without changing the webhook id, device id, refresh token, registration, or
+registered sensors.
 
 Secrets are unaffected: the refresh token, webhook id and cloudhook URL remain in
 the Windows Credential Locker and are never written to `settings.json`.
@@ -91,6 +97,42 @@ refuses to save it. This carries forward the protection the single-URL "change
 server URL" flow gained before it was replaced, without exposing the underlying
 socket error to the user.
 
+## Address meaning and transport
+
+The labels describe reachability, not a security boundary derived from a server
+request's source IP:
+
+- The **internal address** is reachable on one or more networks the user
+  deliberately configures below.
+- The **external address** is the address to try everywhere else.
+
+HTTPS is recommended for both. Plain HTTP is accepted only for the internal
+address, with an explicit warning: the user is deliberately accepting that
+another party on the matched local network could read or alter Home Assistant
+traffic. The default and placeholder examples use HTTPS and do not steer users
+toward a raw private IP over HTTP.
+
+## Trusted CIDRs
+
+Users can enter multiple IPv4 and IPv6 CIDR blocks, one per line. A block is
+valid only when:
+
+- it contains exactly one IPv4 or IPv6 address and prefix;
+- its prefix is `0..32` for IPv4 or `0..128` for IPv6;
+- the address is the network address (all host bits are zero);
+- it has no IPv6 zone id; and
+- it neither duplicates nor overlaps another configured block of the same
+  address family.
+
+Accepted values are persisted in canonical form. Errors identify the entry and
+show a corrected network address when host bits are set. Invalid persisted values
+fail closed and never match.
+
+For routing, Windows enumerates every active non-loopback, non-tunnel, non-virtual
+Ethernet or Wi-Fi interface. If any IPv4 or IPv6 address on any such interface is
+inside a configured block, the network is trusted. Addresses and configured
+blocks remain local-only and are never logged or sent to Home Assistant.
+
 ## Route selection
 
 `RouteSelector` is pure: it takes the configuration and a `NetworkContext` and
@@ -101,10 +143,12 @@ Trust classification:
 
 | Situation | Trust |
 | --- | --- |
+| Any active Ethernet/Wi-Fi address inside a configured IPv4/IPv6 CIDR | Trusted |
 | SSID in the trusted list (and BSSID, if required) | Trusted |
 | Wired, with "trust wired networks" on | Trusted |
 | Identifiable network that is not trusted | Untrusted |
-| Wi-Fi whose name Windows withholds (Location denied) | Unidentifiable |
+| Wi-Fi whose name Windows withholds, with no valid CIDRs configured or no addresses available for comparison | Unidentifiable |
+| Valid CIDRs configured and addresses available, but no CIDR/SSID/wired rule matches | Untrusted |
 | VPN active on an unrecognized network | Unidentifiable |
 | No trusted networks configured at all | Unidentifiable |
 | No network | Offline |
@@ -113,13 +157,15 @@ Automatic mode then chooses:
 
 | Trust | Candidates |
 | --- | --- |
-| Trusted | Internal, then External |
+| Trusted | Internal, then External if the internal address cannot connect |
 | Untrusted | External only - the internal address is **never** probed |
-| Unidentifiable | External; Internal only as a fallback if explicitly opted in |
+| Unidentifiable | External; Internal only if the external address cannot connect and unknown-network fallback is explicitly enabled |
 | Offline | Nothing |
 
 The four explicit modes ignore trust entirely and use the order the user asked
-for.
+for. "Fallback" always means the next configured address is tried only after the
+first one cannot establish a validated connection; it does not mean both
+addresses are connected simultaneously.
 
 ## Failover and flap protection
 
@@ -174,10 +220,16 @@ are migrated with `UseSeparateUrls` enabled. A configuration containing only one
 route-specific address is collapsed back to `BaseUrl`, because one address does
 not need network classification or failover.
 
+Configurations written before CIDR support deserialize with an empty CIDR list.
+Existing SSID, BSSID, wired-network and unknown-network choices are preserved, as
+are all registration and secret fields, so upgrading never causes a second device
+registration.
+
 ## Privacy
 
-- SSIDs and BSSIDs used for routing are stored locally and are never sent to Home
-  Assistant, and never written to the log. They are independent of the opt-in
+- CIDRs, connected interface addresses, SSIDs and BSSIDs used for routing stay
+  local and are never sent to Home Assistant or written to the log. They are
+  independent of the opt-in
   `connectivity_ssid` / `connectivity_bssid` sensors from
   [007-wifi-identifiers](../007-wifi-identifiers/spec.md), so routing works with
   those sensors disabled.
@@ -197,11 +249,12 @@ not need network classification or failover.
   alternative is sending credentials to an unverified host.
 - **No parallel connections.** Only one address is connected at a time. Failover
   costs a reconnect rather than being instant.
-- **Wired networks cannot be told apart.** Windows exposes no SSID for Ethernet,
-  so "trust wired networks" is all-or-nothing.
-- **Wi-Fi trust needs the Location permission.** Without it Windows withholds the
-  SSID, every Wi-Fi network is unidentifiable, and Automatic mode uses the
-  external address. The panel links to the Windows Location settings.
+- **Broad wired trust is still available.** "Trust wired networks" remains an
+  all-or-nothing compatibility option; CIDRs are the precise alternative.
+- **Wi-Fi-name trust needs the Location permission.** Without it Windows withholds
+  the SSID. CIDR matching still works from active interface addresses; if none are
+  available, Automatic mode uses the external address. The panel links to the
+  Windows Location settings.
 - **A single configured address is always used**, regardless of network. The
   alternative - refusing to connect - would leave the app permanently offline
   rather than merely cautious.

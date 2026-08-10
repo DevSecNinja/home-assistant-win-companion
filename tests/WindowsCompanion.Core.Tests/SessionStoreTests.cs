@@ -158,8 +158,37 @@ public class SessionStoreTests : IDisposable
         Assert.Null(config.InternalUrl);
         Assert.Null(config.ExternalUrl);
         Assert.Equal(ConnectionMode.Automatic, config.ConnectionMode);
+        Assert.Empty(config.TrustedNetworks.Cidrs);
 
         Assert.DoesNotContain("\"UseSeparateUrls\":true", File.ReadAllText(_path));
+    }
+
+    [Fact]
+    public void Adding_cidr_support_preserves_an_existing_registered_routing_session()
+    {
+        File.WriteAllText(_path, """
+            {
+              "BaseUrl": "https://ha.example.com/",
+              "DeviceId": "dev-1",
+              "InternalUrl": "https://ha.lan.example/",
+              "ExternalUrl": "https://ha.example.com/",
+              "UseSeparateUrls": true,
+              "TrustedNetworks": {
+                "Ssids": [ "HomeNet" ],
+                "TrustWiredNetworks": false
+              }
+            }
+            """);
+        var (store, secrets, _) = Create();
+        secrets.Values[SessionStore.WebhookIdKey] = "existing-webhook";
+
+        var config = store.Load()!;
+
+        Assert.True(config.Registered);
+        Assert.Equal("existing-webhook", config.WebhookId);
+        Assert.True(config.UseSeparateUrls);
+        Assert.Equal(["HomeNet"], config.TrustedNetworks.Ssids);
+        Assert.Empty(config.TrustedNetworks.Cidrs);
     }
 
     [Fact]

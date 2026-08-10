@@ -8,6 +8,8 @@ using System.Windows.Input;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
+using Microsoft.UI.Xaml.Automation.Peers;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Windows.ApplicationModel.DataTransfer;
@@ -413,6 +415,7 @@ public sealed partial class MainWindow : Window
         ConnectionModeBox.SelectedIndex = (int)settings.Mode;
         _trustedSsids = [.. settings.TrustedNetworks.Ssids];
         _trustedBssids = [.. settings.TrustedNetworks.Bssids];
+        TrustedCidrsBox.Text = string.Join(Environment.NewLine, settings.TrustedNetworks.Cidrs);
 
         _suppressBssidToggle = true;
         RequireBssidBox.IsChecked = settings.TrustedNetworks.RequireBssidMatch;
@@ -428,6 +431,7 @@ public sealed partial class MainWindow : Window
 
         UpdateSeparateUrlsVisibility();
         RefreshTrustedNetworkList();
+        UpdateTrustedCidrValidation();
     }
 
     private void OnUseSeparateUrlsChanged(object sender, RoutedEventArgs e)
@@ -527,6 +531,53 @@ public sealed partial class MainWindow : Window
         RefreshTrustedNetworkList();
     }
 
+    private void OnTrustedCidrsChanged(object sender, TextChangedEventArgs e) =>
+        UpdateTrustedCidrValidation();
+
+    private TrustedNetworkCidrValidation UpdateTrustedCidrValidation()
+    {
+        var validation = TrustedNetworkCidr.Validate(TrustedCidrEntries());
+        var errorMessage = string.Join(
+            Environment.NewLine,
+            validation.Errors.Select(error =>
+                $"Line {error.EntryNumber}: {error.Message}"));
+        var errorChanged = !string.Equals(
+            TrustedCidrsErrorText.Text,
+            errorMessage,
+            StringComparison.Ordinal);
+
+        TrustedCidrsErrorText.Text = errorMessage;
+        TrustedCidrsErrorText.Visibility = validation.IsValid
+            ? Visibility.Collapsed
+            : Visibility.Visible;
+        AutomationProperties.SetHelpText(TrustedCidrsBox, errorMessage);
+
+        if (!validation.IsValid && errorChanged)
+        {
+            var peer = FrameworkElementAutomationPeer.FromElement(TrustedCidrsErrorText)
+                       ?? FrameworkElementAutomationPeer.CreatePeerForElement(TrustedCidrsErrorText);
+            peer?.RaiseAutomationEvent(AutomationEvents.LiveRegionChanged);
+        }
+        else if (validation.IsValid && errorChanged)
+        {
+            var peer = FrameworkElementAutomationPeer.FromElement(TrustedCidrsBox)
+                       ?? FrameworkElementAutomationPeer.CreatePeerForElement(TrustedCidrsBox);
+            peer?.RaiseNotificationEvent(
+                AutomationNotificationKind.ActionCompleted,
+                AutomationNotificationProcessing.MostRecent,
+                "Network CIDRs are valid.",
+                "TrustedCidrsValidation");
+        }
+
+        return validation;
+    }
+
+    private IReadOnlyList<string> TrustedCidrEntries() =>
+        (TrustedCidrsBox.Text ?? string.Empty)
+        .Replace("\r\n", "\n", StringComparison.Ordinal)
+        .Replace('\r', '\n')
+        .Split('\n', StringSplitOptions.TrimEntries);
+
     private ConnectionSettingsDraft BuildDraft() => new()
     {
         PrimaryUrl = SingleUrlBox.Text?.Trim(),
@@ -537,6 +588,7 @@ public sealed partial class MainWindow : Window
         AcknowledgeUnreachable = AcknowledgeUnreachableBox.IsChecked == true,
         TrustedNetworks = new TrustedNetworkSettings
         {
+            Cidrs = [.. TrustedCidrEntries()],
             Ssids = [.. _trustedSsids],
             Bssids = [.. _trustedBssids],
             RequireBssidMatch = RequireBssidBox.IsChecked == true,
@@ -636,6 +688,9 @@ public sealed partial class MainWindow : Window
 
     private void ShowValidationReport(RouteValidationReport report)
     {
+        if (report.TrustedNetworkErrors is not null)
+            UpdateTrustedCidrValidation();
+
         var lines = new List<string> { report.Summary };
         foreach (var entry in report.Entries)
         {

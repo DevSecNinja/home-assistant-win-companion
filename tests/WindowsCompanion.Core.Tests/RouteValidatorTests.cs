@@ -112,6 +112,26 @@ public class RouteValidatorTests
     }
 
     [Fact]
+    public async Task Invalid_trusted_cidrs_are_rejected_before_anything_is_probed()
+    {
+        var probe = new FakeProbe();
+        var draft = Draft() with
+        {
+            TrustedNetworks = new TrustedNetworkSettings
+            {
+                Cidrs = ["192.168.50.20/24"]
+            }
+        };
+
+        var report = await RouteValidator.ValidateAsync(Current(), draft, probe);
+
+        Assert.False(report.CanSave);
+        Assert.Empty(probe.Calls);
+        Assert.NotNull(report.TrustedNetworkErrors);
+        Assert.Contains("192.168.50.0/24", report.Summary);
+    }
+
+    [Fact]
     public async Task An_empty_draft_is_refused()
     {
         var report = await RouteValidator.ValidateAsync(
@@ -265,7 +285,11 @@ public class RouteValidatorTests
         config.InstanceDeviceId = null;
         var draft = Draft(mode: ConnectionMode.PreferInternal) with
         {
-            TrustedNetworks = new TrustedNetworkSettings { Ssids = { "HomeNet" } }
+            TrustedNetworks = new TrustedNetworkSettings
+            {
+                Cidrs = ["FD12:3456:0000::/48"],
+                Ssids = { "HomeNet" }
+            }
         };
         var report = await RouteValidator.ValidateAsync(config, draft, new FakeProbe());
 
@@ -274,6 +298,7 @@ public class RouteValidatorTests
         Assert.Equal(Internal, config.InternalUrl);
         Assert.Equal(External, config.ExternalUrl);
         Assert.Equal(ConnectionMode.PreferInternal, config.ConnectionMode);
+        Assert.Equal(["fd12:3456::/48"], config.TrustedNetworks.Cidrs);
         Assert.Equal(["HomeNet"], config.TrustedNetworks.Ssids);
         Assert.False(config.RouteAssignmentPending);
         Assert.Equal(Instance, config.InstanceDeviceId);

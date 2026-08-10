@@ -379,6 +379,7 @@ public sealed partial class MainWindow : Window
         ConnectionModeBox.SelectedIndex = (int)settings.Mode;
         _trustedSsids = [.. settings.TrustedNetworks.Ssids];
         _trustedBssids = [.. settings.TrustedNetworks.Bssids];
+        TrustedCidrsBox.Text = string.Join(Environment.NewLine, settings.TrustedNetworks.Cidrs);
 
         _suppressBssidToggle = true;
         RequireBssidBox.IsChecked = settings.TrustedNetworks.RequireBssidMatch;
@@ -394,6 +395,7 @@ public sealed partial class MainWindow : Window
 
         UpdateSeparateUrlsVisibility();
         RefreshTrustedNetworkList();
+        UpdateTrustedCidrValidation();
     }
 
     private void OnUseSeparateUrlsChanged(object sender, RoutedEventArgs e)
@@ -493,6 +495,28 @@ public sealed partial class MainWindow : Window
         RefreshTrustedNetworkList();
     }
 
+    private void OnTrustedCidrsChanged(object sender, TextChangedEventArgs e) =>
+        UpdateTrustedCidrValidation();
+
+    private TrustedNetworkCidrValidation UpdateTrustedCidrValidation()
+    {
+        var validation = TrustedNetworkCidr.Validate(TrustedCidrEntries());
+        TrustedCidrsErrorText.Text = string.Join(
+            Environment.NewLine,
+            validation.Errors.Select(error =>
+                $"Line {error.EntryNumber}: {error.Message}"));
+        TrustedCidrsErrorText.Visibility = validation.IsValid
+            ? Visibility.Collapsed
+            : Visibility.Visible;
+        return validation;
+    }
+
+    private IReadOnlyList<string> TrustedCidrEntries() =>
+        (TrustedCidrsBox.Text ?? string.Empty)
+        .Replace("\r\n", "\n", StringComparison.Ordinal)
+        .Replace('\r', '\n')
+        .Split('\n', StringSplitOptions.TrimEntries);
+
     private ConnectionSettingsDraft BuildDraft() => new()
     {
         PrimaryUrl = SingleUrlBox.Text?.Trim(),
@@ -503,6 +527,7 @@ public sealed partial class MainWindow : Window
         AcknowledgeUnreachable = AcknowledgeUnreachableBox.IsChecked == true,
         TrustedNetworks = new TrustedNetworkSettings
         {
+            Cidrs = [.. TrustedCidrEntries()],
             Ssids = [.. _trustedSsids],
             Bssids = [.. _trustedBssids],
             RequireBssidMatch = RequireBssidBox.IsChecked == true,
@@ -602,6 +627,9 @@ public sealed partial class MainWindow : Window
 
     private void ShowValidationReport(RouteValidationReport report)
     {
+        if (report.TrustedNetworkErrors is not null)
+            UpdateTrustedCidrValidation();
+
         var lines = new List<string> { report.Summary };
         foreach (var entry in report.Entries)
         {

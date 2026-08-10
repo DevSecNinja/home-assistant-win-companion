@@ -50,11 +50,15 @@ public static class RouteSelector
         // external address.
         if (!settings.IsConfigured) return NetworkTrust.Unidentifiable;
 
-        if (network.Kind == NetworkKind.Unknown) return NetworkTrust.Unidentifiable;
+        if (network.Kind == NetworkKind.Unknown
+            && (!settings.HasValidCidrs || network.Addresses.Count == 0))
+            return NetworkTrust.Unidentifiable;
 
         // On Wi-Fi that Windows will not name (Location denied), the network is
-        // unidentifiable rather than untrusted; the UI explains the permission.
-        if (network.Kind == NetworkKind.Wireless && string.IsNullOrEmpty(network.Ssid))
+        // still identifiable when a connected address can be compared with CIDRs.
+        if (network.Kind == NetworkKind.Wireless
+            && string.IsNullOrEmpty(network.Ssid)
+            && (!settings.HasValidCidrs || network.Addresses.Count == 0))
             return NetworkTrust.Unidentifiable;
 
         return NetworkTrust.Untrusted;
@@ -108,12 +112,14 @@ public static class RouteSelector
                 ([], "No network."),
 
             NetworkTrust.Trusted =>
-                ([RouteKind.Internal, RouteKind.External], "On a trusted network."),
+                ([RouteKind.Internal, RouteKind.External],
+                    "A connected network matches the internal-route rules."),
 
             // Deliberately no internal probe: an untrusted network must not see
             // the internal hostname just because the app felt like checking.
             NetworkTrust.Untrusted =>
-                ([RouteKind.External], "Away from a trusted network."),
+                ([RouteKind.External],
+                    "No connected network matches the internal-route rules."),
 
             _ when config.TrustedNetworks.ProbeInternalOnUnknownNetworks =>
                 ([RouteKind.External, RouteKind.Internal],

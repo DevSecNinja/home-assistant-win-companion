@@ -281,6 +281,7 @@ public sealed class AppController : IAsyncDisposable
                 Mode = config.ConnectionMode,
                 TrustedNetworks = new TrustedNetworkSettings
                 {
+                    Cidrs = [.. config.TrustedNetworks.Cidrs],
                     Ssids = [.. config.TrustedNetworks.Ssids],
                     Bssids = [.. config.TrustedNetworks.Bssids],
                     RequireBssidMatch = config.TrustedNetworks.RequireBssidMatch,

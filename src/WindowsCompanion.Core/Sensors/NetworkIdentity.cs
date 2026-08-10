@@ -61,11 +61,17 @@ public sealed record NetworkIdentity(
     /// </summary>
     private static string? SelectMac(IReadOnlyList<NetworkAdapterSnapshot> adapters, NetworkAdapterKind kind)
     {
-        var candidates = adapters.Where(a => a.IsPhysicalLan && a.Kind == kind).ToList();
-        if (candidates.Count == 0) return null;
+        var candidates = adapters
+            .Where(a => a.IsPhysicalLan && a.Kind == kind)
+            .OrderByDescending(a => a.IsUp);
 
-        var chosen = candidates.FirstOrDefault(a => a.IsUp) ?? candidates[0];
-        return MacAddressFormatter.Format(chosen.PhysicalAddress);
+        foreach (var candidate in candidates)
+        {
+            var formatted = MacAddressFormatter.Format(candidate.PhysicalAddress);
+            if (formatted is not null) return formatted;
+        }
+
+        return null;
     }
 
     /// <summary>

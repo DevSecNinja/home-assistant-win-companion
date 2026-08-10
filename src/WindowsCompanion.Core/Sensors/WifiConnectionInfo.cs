@@ -15,9 +15,18 @@ public enum WifiConnectionStatus
 /// </summary>
 public static class WifiSecurityClassifier
 {
-    public static string? Describe(int authAlgorithm) => authAlgorithm switch
+    /// <summary><c>DOT11_CIPHER_ALGORITHM_NONE</c>: no cipher is in use.</summary>
+    private const int CipherAlgorithmNone = 0x00;
+
+    /// <summary>
+    /// <c>DOT11_AUTH_ALGORITHM_80211_OPEN</c> (1) covers both true Open System
+    /// networks and Open System WEP, which are distinguished only by the paired
+    /// cipher: <c>DOT11_CIPHER_ALGORITHM_NONE</c> means no security at all, while any
+    /// other cipher (WEP40/WEP104) means the network is still using WEP.
+    /// </summary>
+    public static string? Describe(int authAlgorithm, int? cipherAlgorithm = null) => authAlgorithm switch
     {
-        1 => "Open",
+        1 => cipherAlgorithm is null or CipherAlgorithmNone ? "Open" : "Shared Key (WEP)",
         2 => "Shared Key (WEP)",
         3 => "WPA-Enterprise",
         4 => "WPA-Personal",
@@ -37,6 +46,7 @@ public sealed record WifiConnectionInfo(
     string? Ssid = null,
     byte[]? Bssid = null,
     int? AuthAlgorithm = null,
+    int? CipherAlgorithm = null,
     bool? MacRandomizationEnabled = null,
     string? CurrentMacAddress = null)
 {
@@ -62,7 +72,7 @@ public sealed record WifiConnectionInfo(
     public string SecurityState => Status switch
     {
         WifiConnectionStatus.Connected => AuthAlgorithm is { } algorithm
-            ? WifiSecurityClassifier.Describe(algorithm) ?? "Unknown"
+            ? WifiSecurityClassifier.Describe(algorithm, CipherAlgorithm) ?? "Unknown"
             : "Unavailable",
         WifiConnectionStatus.PermissionRequired => "Location permission required",
         WifiConnectionStatus.NotConnected => "Not Connected",

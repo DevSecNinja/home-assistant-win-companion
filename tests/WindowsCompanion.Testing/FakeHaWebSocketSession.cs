@@ -24,8 +24,9 @@ public sealed class FakeHaWebSocketSession : IAsyncDisposable
 {
     private readonly FakeHaScenario _scenario;
     private readonly WebSocket _socket;
-    private readonly SemaphoreSlim _sendGate = new(1, 1);
+    private readonly SemaphoreSlim _lifetimeGate = new(1, 1);
     private int _subscriptionId;
+    private int _disposed;
 
     internal FakeHaWebSocketSession(FakeHaScenario scenario, WebSocket socket)
     {
@@ -160,9 +161,10 @@ public sealed class FakeHaWebSocketSession : IAsyncDisposable
 
     internal async Task CloseAsync(CancellationToken cancellationToken)
     {
-        await _sendGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        await _lifetimeGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
+            if (Volatile.Read(ref _disposed) != 0) return;
             if (_socket.State is WebSocketState.Open or WebSocketState.CloseReceived)
             {
                 await _socket.CloseOutputAsync(
@@ -173,7 +175,7 @@ public sealed class FakeHaWebSocketSession : IAsyncDisposable
         }
         finally
         {
-            _sendGate.Release();
+            _lifetimeGate.Release();
         }
     }
 
@@ -264,9 +266,10 @@ public sealed class FakeHaWebSocketSession : IAsyncDisposable
     private async Task SendAsync(object message, CancellationToken cancellationToken)
     {
         var bytes = JsonSerializer.SerializeToUtf8Bytes(message);
-        await _sendGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        await _lifetimeGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
+            if (Volatile.Read(ref _disposed) != 0) return;
             if (_socket.State == WebSocketState.Open)
             {
                 await _socket.SendAsync(
@@ -278,7 +281,7 @@ public sealed class FakeHaWebSocketSession : IAsyncDisposable
         }
         finally
         {
-            _sendGate.Release();
+            _lifetimeGate.Release();
         }
     }
 
@@ -305,14 +308,27 @@ public sealed class FakeHaWebSocketSession : IAsyncDisposable
     /// <inheritdoc />
     public async ValueTask DisposeAsync()
     {
+        await _lifetimeGate.WaitAsync().ConfigureAwait(false);
+        var disposeSocket = false;
         try
         {
-            await CloseAsync(CancellationToken.None).ConfigureAwait(false);
+            if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
+            disposeSocket = true;
+            if (_socket.State is WebSocketState.Open or WebSocketState.CloseReceived)
+            {
+                await _socket.CloseOutputAsync(
+                    WebSocketCloseStatus.NormalClosure,
+                    "Session disposed",
+                    CancellationToken.None).ConfigureAwait(false);
+            }
         }
         catch (WebSocketException)
         {
         }
-        _sendGate.Dispose();
-        _socket.Dispose();
+        finally
+        {
+            if (disposeSocket) _socket.Dispose();
+            _lifetimeGate.Release();
+        }
     }
 }

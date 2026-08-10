@@ -92,7 +92,7 @@
   -->
   <ItemGroup>
     <!-- 2.4.1 requires .NET 10; keep updates manual until the app moves runtimes. -->
-    <PackageReference Include="H.NotifyIcon.WinUI" Version="2.3.0" />
+    <PackageReference Include="H.NotifyIcon.WinUI" Version="2.4.1" />
     <PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.10" />
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.28000.2526" />
     <!--

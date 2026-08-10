@@ -141,11 +141,11 @@ public class WinGetUpdateTests
             CancellationToken cancellationToken = default)
         {
             CheckCount++;
+            Started.TrySetResult();
             if (!BlockUntilCancelled) return Result;
 
             using var registration = cancellationToken.Register(
                 () => Cancelled.TrySetResult());
-            Started.TrySetResult();
             await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
             return Result;
         }

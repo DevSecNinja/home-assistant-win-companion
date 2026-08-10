@@ -41,7 +41,7 @@ public enum EntraJoinType
 /// sensor reports.
 /// </summary>
 /// <remarks>
-/// The workgroup, domain or Microsoft Entra ID domain name is not a unique
+/// The workgroup, domain or Microsoft Entra tenant display name is not a unique
 /// hardware identifier, but it can reveal an organisation's internal naming, so
 /// the sensor stays off by default like the other network-identity sensors.
 /// </remarks>
@@ -66,17 +66,22 @@ public static class DomainMembershipFormatter
     /// <summary>
     /// The sensor's state: an on-premises domain name takes priority (a hybrid
     /// join still names the AD domain a user would recognise), otherwise a
-    /// Microsoft Entra ID join, otherwise the workgroup name, otherwise a
+    /// Microsoft Entra ID join using its human-readable tenant display name,
+    /// otherwise the workgroup name, otherwise a
     /// fallback.
     /// </summary>
     public static string DescribeState(
-        DomainJoinStatus status, string? name, EntraJoinType entraJoinType, string? entraDomain)
+        DomainJoinStatus status,
+        string? name,
+        EntraJoinType entraJoinType,
+        string? entraTenantDisplayName)
     {
         var cleanedName = Clean(name);
-        var cleanedEntraDomain = Clean(entraDomain);
+        var cleanedEntraTenantDisplayName = Clean(entraTenantDisplayName);
 
         if (status == DomainJoinStatus.Domain && cleanedName is not null) return cleanedName;
-        if (entraJoinType == EntraJoinType.Joined) return cleanedEntraDomain ?? EntraJoinedFallback;
+        if (entraJoinType == EntraJoinType.Joined)
+            return cleanedEntraTenantDisplayName ?? EntraJoinedFallback;
         if (status == DomainJoinStatus.Workgroup && cleanedName is not null) return cleanedName;
         if (status == DomainJoinStatus.Unjoined) return NotJoined;
 

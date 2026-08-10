@@ -30,7 +30,9 @@ public sealed class SensorPollLoop
     private readonly TimeSpan _interval;
     private readonly SemaphoreSlim _single = new(1, 1);
     private readonly object _gate = new();
+    private readonly object _flightGate = new();
     private CancellationTokenSource? _lifetime;
+    private Task? _inFlight;
 
     public SensorPollLoop(Func<SensorPollReason, CancellationToken, Task> tick, TimeSpan interval)
     {
@@ -82,6 +84,7 @@ public sealed class SensorPollLoop
         // The loop owns disposal: cancelling here and disposing there is what
         // keeps a concurrent refresh from touching a disposed source.
         lifetime?.Cancel();
+        lock (_flightGate) _inFlight = null;
     }
 
     /// <summary>
@@ -176,6 +179,27 @@ public sealed class SensorPollLoop
     }
 
     private async Task ExecuteAsync(SensorPollReason reason, CancellationToken cancellationToken)
+    {
+        Task execution;
+        lock (_flightGate)
+        {
+            if (_inFlight is { IsCompleted: false } current)
+            {
+                execution = current;
+            }
+            else
+            {
+                execution = ExecuteCoreAsync(reason, cancellationToken);
+                _inFlight = execution;
+            }
+        }
+
+        await execution.WaitAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task ExecuteCoreAsync(
+        SensorPollReason reason,
+        CancellationToken cancellationToken)
     {
         await _single.WaitAsync(cancellationToken).ConfigureAwait(false);
         try

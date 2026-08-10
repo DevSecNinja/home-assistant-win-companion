@@ -31,7 +31,8 @@ public sealed class WifiSensorSource : ISensorSource
             EnabledByDefault: false,
             ResourceUsage: "Usually low. Sends an extra update when Windows reports a network "
                            + "change. Windows can report several changes close together.",
-            AutomationIdea: "When the PC joins the office Wi-Fi, activate the work scene."),
+            AutomationIdea: "When the PC joins the office Wi-Fi, activate the work scene.",
+            OptInPlaceholder: "Enable to read Wi-Fi identifiers"),
         new(
             BssidId,
             "Wi-Fi BSSID",
@@ -40,13 +41,19 @@ public sealed class WifiSensorSource : ISensorSource
             EnabledByDefault: false,
             ResourceUsage: "Usually low. Shares the Wi-Fi check with SSID and sends an extra update "
                            + "for each Windows network-change notice.",
-            AutomationIdea: "When the PC connects to a specific access point, mark that room occupied.")
+            AutomationIdea: "When the PC connects to a specific access point, mark that room occupied.",
+            OptInPlaceholder: "Enable to read Wi-Fi identifiers")
     ];
 
     public IReadOnlyList<Sensor> Read(
         IReadOnlySet<string> enabled, SensorReadContext context)
     {
-        var info = ReadConnection();
+        var scope = WifiCaptureScope.StatusOnly;
+        if (enabled.Contains(SsidId)) scope |= WifiCaptureScope.Ssid;
+        if (enabled.Contains(BssidId)) scope |= WifiCaptureScope.Bssid;
+        if (scope == WifiCaptureScope.None) return [];
+
+        var info = ReadConnection(scope);
         var sensors = new List<Sensor>();
 
         if (enabled.Contains(SsidId))
@@ -112,8 +119,11 @@ public sealed class WifiSensorSource : ISensorSource
 
     private void OnNetworkChanged(object? sender, EventArgs e) => _onChanged?.Invoke();
 
-    internal static WifiConnectionInfo ReadConnection()
+    internal static WifiConnectionInfo ReadConnection(WifiCaptureScope scope)
     {
+        if (scope == WifiCaptureScope.None)
+            return new(WifiConnectionStatus.Unavailable);
+
         var result = WlanOpenHandle(2, 0, out _, out var client);
         if (result != 0) return new(WifiConnectionStatus.Unavailable);
 
@@ -139,7 +149,7 @@ public sealed class WifiSensorSource : ISensorSource
                         ref item.InterfaceGuid,
                         WlanIntfOpcode.CurrentConnection,
                         0,
-                        out _,
+                        out var dataSize,
                         out var dataPointer,
                         out _);
 
@@ -150,19 +160,42 @@ public sealed class WifiSensorSource : ISensorSource
 
                     try
                     {
-                        var connection =
-                            Marshal.PtrToStructure<WlanConnectionAttributes>(dataPointer);
-                        var length = Math.Min(
-                            (int)connection.Association.Dot11Ssid.Length,
-                            connection.Association.Dot11Ssid.Ssid.Length);
-                        var ssid = Encoding.UTF8.GetString(
-                            connection.Association.Dot11Ssid.Ssid,
-                            0,
-                            length);
+                        if (dataPointer == 0
+                            || dataSize < Marshal.SizeOf<WlanConnectionAttributes>())
+                        {
+                            return new(WifiConnectionStatus.Unavailable);
+                        }
+
+                        var associationPointer = IntPtr.Add(
+                            dataPointer,
+                            Marshal.OffsetOf<WlanConnectionAttributes>(
+                                nameof(WlanConnectionAttributes.Association)).ToInt32());
+                        string? ssid = null;
+                        byte[]? bssid = null;
+
+                        if (scope.HasFlag(WifiCaptureScope.Ssid))
+                        {
+                            var nativeSsid = Marshal.PtrToStructure<Dot11Ssid>(associationPointer);
+                            var length = Math.Min(
+                                (int)nativeSsid.Length,
+                                nativeSsid.Ssid.Length);
+                            ssid = Encoding.UTF8.GetString(nativeSsid.Ssid, 0, length);
+                        }
+
+                        if (scope.HasFlag(WifiCaptureScope.Bssid))
+                        {
+                            bssid = new byte[6];
+                            var bssidPointer = IntPtr.Add(
+                                associationPointer,
+                                Marshal.OffsetOf<WlanAssociationAttributes>(
+                                    nameof(WlanAssociationAttributes.Dot11Bssid)).ToInt32());
+                            Marshal.Copy(bssidPointer, bssid, 0, bssid.Length);
+                        }
+
                         return new(
                             WifiConnectionStatus.Connected,
                             ssid,
-                            connection.Association.Dot11Bssid);
+                            bssid);
                     }
                     finally
                     {
@@ -184,6 +217,15 @@ public sealed class WifiSensorSource : ISensorSource
     }
 
     private const int ErrorAccessDenied = 5;
+
+    [Flags]
+    internal enum WifiCaptureScope
+    {
+        None = 0,
+        StatusOnly = 1,
+        Ssid = 2,
+        Bssid = 4
+    }
 
     private enum WlanInterfaceState
     {

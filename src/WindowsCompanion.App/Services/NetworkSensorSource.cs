@@ -61,7 +61,8 @@ public sealed class NetworkSensorSource : ISensorSource
             SensorPrivacy.Sensitive,
             EnabledByDefault: false,
             ResourceUsage: "Low. Checks this PC only after a network change. It does not contact "
-                           + "an internet service to find the address."),
+                           + "an internet service to find the address.",
+            OptInPlaceholder: OptInPlaceholder),
         new(
             Ipv6AddressId,
             "IPv6 Address",
@@ -70,7 +71,8 @@ public sealed class NetworkSensorSource : ISensorSource
             SensorPrivacy.Sensitive,
             EnabledByDefault: false,
             ResourceUsage: "Low. Checks this PC only after a network change. It does not contact "
-                           + "an internet service to find the address."),
+                           + "an internet service to find the address.",
+            OptInPlaceholder: OptInPlaceholder),
         new(
             MacAddressId,
             "MAC Address",
@@ -79,7 +81,8 @@ public sealed class NetworkSensorSource : ISensorSource
             SensorPrivacy.Sensitive,
             EnabledByDefault: false,
             ResourceUsage: "Low. Reads the address from this PC only after a network change. It "
-                           + "does not send network traffic to discover it.")
+                           + "does not send network traffic to discover it.",
+            OptInPlaceholder: OptInPlaceholder)
     ];
 
     public IReadOnlyList<Sensor> Read(IReadOnlySet<string> enabled, SensorReadContext context)
@@ -186,19 +189,20 @@ public sealed class NetworkSensorSource : ISensorSource
 
     /// <summary>
     /// Takes one snapshot of the machine's adapters and reduces it to sensor states.
-    /// Outside <see cref="NetworkCaptureScope.Full"/> no address, hardware address or
-    /// route is read at all, so a disabled sensor collects nothing.
+    /// Each identifier flag controls its own field, so enabling IPv4 never reads IPv6
+    /// or the hardware address and vice versa.
     /// </summary>
     private static NetworkIdentity Capture(NetworkCaptureScope scope)
     {
         if (scope == NetworkCaptureScope.None) return NetworkIdentity.NotConnected;
 
-        var includeIdentifiers = scope == NetworkCaptureScope.Full;
+        var includeIdentifiers =
+            (scope & ~NetworkCaptureScope.ConnectionTypeOnly) != NetworkCaptureScope.None;
 
         try
         {
             var adapters = NetworkInterface.GetAllNetworkInterfaces()
-                .Select(adapter => Describe(adapter, includeIdentifiers))
+                .Select(adapter => Describe(adapter, scope))
                 .ToList();
 
             if (!includeIdentifiers)
@@ -211,8 +215,12 @@ public sealed class NetworkSensorSource : ISensorSource
 
             return NetworkIdentity.From(
                 adapters,
-                ResolveRoute(AddressFamily.InterNetwork),
-                ResolveRoute(AddressFamily.InterNetworkV6));
+                scope.HasFlag(NetworkCaptureScope.Ipv4Address)
+                    ? ResolveRoute(AddressFamily.InterNetwork)
+                    : null,
+                scope.HasFlag(NetworkCaptureScope.Ipv6Address)
+                    ? ResolveRoute(AddressFamily.InterNetworkV6)
+                    : null);
         }
         catch (NetworkInformationException)
         {
@@ -220,7 +228,9 @@ public sealed class NetworkSensorSource : ISensorSource
         }
     }
 
-    private static NetworkAdapterSnapshot Describe(NetworkInterface adapter, bool includeIdentifiers)
+    private static NetworkAdapterSnapshot Describe(
+        NetworkInterface adapter,
+        NetworkCaptureScope scope)
     {
         var kind = adapter.NetworkInterfaceType switch
         {
@@ -237,7 +247,10 @@ public sealed class NetworkSensorSource : ISensorSource
         var isVirtual = NetworkAdapterSelector.LooksVirtual(adapter.Description)
                         || NetworkAdapterSelector.LooksVirtual(adapter.Name);
 
-        if (!includeIdentifiers)
+        var includeIpv4 = scope.HasFlag(NetworkCaptureScope.Ipv4Address);
+        var includeIpv6 = scope.HasFlag(NetworkCaptureScope.Ipv6Address);
+        var includeMac = scope.HasFlag(NetworkCaptureScope.MacAddress);
+        if (!includeIpv4 && !includeIpv6 && !includeMac)
             return new NetworkAdapterSnapshot(adapter.Id, adapter.Description, kind, isUp, isVirtual);
 
         var ipv4 = new List<string>();
@@ -250,18 +263,23 @@ public sealed class NetworkSensorSource : ISensorSource
             hasGateway = properties.GatewayAddresses
                 .Any(gateway => gateway.Address is not null && !IsUnspecified(gateway.Address));
 
-            foreach (var unicast in properties.UnicastAddresses)
+            if (includeIpv4 || includeIpv6)
             {
-                if (unicast.Address.AddressFamily == AddressFamily.InterNetwork)
+                foreach (var unicast in properties.UnicastAddresses)
                 {
-                    ipv4.Add(unicast.Address.ToString());
-                }
-                else if (unicast.Address.AddressFamily == AddressFamily.InterNetworkV6)
-                {
-                    ipv6.Add(new Ipv6AddressInfo(
-                        unicast.Address.ToString(),
-                        StateOf(unicast),
-                        OriginOf(unicast)));
+                    if (includeIpv4
+                        && unicast.Address.AddressFamily == AddressFamily.InterNetwork)
+                    {
+                        ipv4.Add(unicast.Address.ToString());
+                    }
+                    else if (includeIpv6
+                             && unicast.Address.AddressFamily == AddressFamily.InterNetworkV6)
+                    {
+                        ipv6.Add(new Ipv6AddressInfo(
+                            unicast.Address.ToString(),
+                            StateOf(unicast),
+                            OriginOf(unicast)));
+                    }
                 }
             }
         }
@@ -282,7 +300,7 @@ public sealed class NetworkSensorSource : ISensorSource
             hasGateway,
             ipv4,
             ipv6,
-            PhysicalAddressOf(adapter));
+            includeMac ? PhysicalAddressOf(adapter) : null);
     }
 
     private static bool IsUnspecified(IPAddress address) =>

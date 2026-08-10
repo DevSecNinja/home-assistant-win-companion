@@ -30,8 +30,9 @@ headset classification, preview behavior, and source lifecycle
 
 **Project Type**: Native Windows desktop application with a platform-agnostic core
 
-**Performance Goals**: Poll no more often than every 10 seconds; no polling for
-fully disabled sources; push only when a cached reading changes
+**Performance Goals**: Poll capability activity every second and other polled
+meeting state no more often than every 10 seconds; no polling for fully disabled
+sources; push only when a cached reading changes
 
 **Constraints**: No new third-party dependency; no Teams/Graph/vendor SDK; disabled
 sensors must cost no polling work; device names remain local unless enabled

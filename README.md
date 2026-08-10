@@ -89,7 +89,7 @@ one that just works with stock Home Assistant.**
   headset presence, WinGet update count, system lifecycle state, and an optional
   frontmost-app/last-update value. Each sensor can be switched on or off
   individually, shows a local preview, and privacy-sensitive ones are off by
-  default. Network identifiers are only read once you enable their own sensor —
+  default. A privacy-sensitive value is only read once you enable that sensor —
   the preview shows nothing beforehand — and the IPv4, IPv6 and MAC readings all
   describe the adapter carrying the active route rather than a VPN or Hyper-V
   adapter.

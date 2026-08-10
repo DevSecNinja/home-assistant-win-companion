@@ -67,6 +67,59 @@ public class DemoSessionTests
         Assert.Equal(0, source.StartCount);
     }
 
+    [Fact]
+    public async Task A_sensitive_sensor_is_not_read_by_the_demo_until_it_is_switched_on()
+    {
+        var source = new SensitiveSource();
+        var demo = new DemoSession([source]);
+
+        var before = await demo.PreviewAsync();
+        Assert.False(before.ContainsKey(SensitiveSource.Id));
+        Assert.Equal(0, source.ReadCount);
+
+        demo.SetSensorEnabled(SensitiveSource.Id, true);
+        var after = await demo.PreviewAsync();
+
+        Assert.Equal("Sensitive", after[SensitiveSource.Id]);
+        Assert.Equal(1, source.ReadCount);
+    }
+
+    private sealed class SensitiveSource : ISensorSource
+    {
+        public const string Id = "demo_sensitive";
+
+        public int ReadCount { get; private set; }
+
+        public IReadOnlyList<SensorDefinition> Definitions { get; } =
+            [new(Id, "Sensitive", "Test sensor.", SensorPrivacy.Sensitive, false)];
+
+        public IReadOnlyList<Sensor> Read(IReadOnlySet<string> enabled, SensorReadContext context)
+        {
+            // Models the Windows sources: whatever is requested is collected, so
+            // the catalog is what must keep a sensitive value out of the request.
+            if (!enabled.Contains(Id)) return [];
+
+            ReadCount++;
+            return
+            [
+                new()
+                {
+                    UniqueId = Id,
+                    Name = "Sensitive",
+                    State = "Sensitive"
+                }
+            ];
+        }
+
+        public void Start(Action onChanged)
+        {
+        }
+
+        public void Stop()
+        {
+        }
+    }
+
     private sealed class CountingSource : ISensorSource
     {
         public const string PrimaryId = "demo_primary";

@@ -91,6 +91,10 @@ public sealed partial class MainWindow : Window
         {
             var resumed = await _controller.TryResumeAsync();
             ShowPanel(resumed);
+            // Only offered once it is settled that there is no session to resume:
+            // starting a demo alongside a connection in flight would make the app
+            // claim it sends nothing while it is connecting.
+            DemoModeButton.IsEnabled = !resumed;
             if (!resumed && _startHidden) Show();
             RefreshStartupSetting();
             if (resumed)
@@ -102,6 +106,7 @@ public sealed partial class MainWindow : Window
         catch
         {
             ShowPanel(false);
+            DemoModeButton.IsEnabled = true;
             if (_startHidden) Show();
         }
     }
@@ -295,6 +300,8 @@ public sealed partial class MainWindow : Window
         _connected = false;
         DisconnectButton.Content = "Disconnect";
         UpdateNowButton.IsEnabled = true;
+        // Nothing is connected any more, so the demo becomes available again.
+        DemoModeButton.IsEnabled = true;
         ShowView(View.Connect);
 
         var removed = new ContentDialog
@@ -932,7 +939,10 @@ public sealed partial class MainWindow : Window
             {
                 Text = previews.TryGetValue(definition.UniqueId, out var value)
                     ? $"Current value: {value}"
-                    : "Current value: Unavailable",
+                    : definition.Privacy == SensorPrivacy.Sensitive
+                      && !catalog.IsEnabled(definition.UniqueId)
+                        ? "Current value: read only once you enable this sensor"
+                        : "Current value: Unavailable",
                 TextWrapping = TextWrapping.Wrap,
                 FontSize = 12,
                 Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"]
@@ -1096,6 +1106,10 @@ public sealed partial class MainWindow : Window
 
         catalog.SetEnabled(uniqueId, toggle.IsOn);
         await _controller.ApplySensorChangesAsync();
+
+        // In the demo the value is the point: a sensitive sensor reveals nothing
+        // until it is switched on, so the list is re-read to show what it reports.
+        if (_controller.IsDemoMode) await BuildSensorListAsync();
     }
 
     private void SetToggleState(ToggleSwitch toggle, bool isOn)

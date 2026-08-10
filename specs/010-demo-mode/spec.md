@@ -17,9 +17,10 @@ server to point it at.
 - The demo writes nothing. The server settings file is untouched, no secret is
   stored, and the sensor choices made in the demo are discarded when it ends.
 - No sensor source is started. Values come from the same local preview the
-  Sensors screen already uses, which reads once per request and still applies
-  `SensorPreviewGate`, so a privacy-sensitive value is only read after the user
-  switches that sensor on. Nothing shown locally is transmitted.
+  Sensors screen already uses, which reads once per request and applies
+  `SensorPreviewGate` in `SensorCatalog.PreviewAsync`, so a privacy-sensitive
+  value is only read after the user switches that sensor on. Nothing shown
+  locally is transmitted.
 - A warning banner naming demo mode is visible on every screen for as long as the
   demo runs, and carries the action that leaves it.
 - Actions that only make sense against a server (Open Home Assistant, Connection,

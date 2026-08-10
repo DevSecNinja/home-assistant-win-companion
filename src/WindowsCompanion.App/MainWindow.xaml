@@ -91,6 +91,7 @@
             <Button
                 x:Name="DemoModeButton"
                 Content="Explore in demo mode"
+                IsEnabled="False"
                 Click="OnEnterDemoMode"
                 HorizontalAlignment="Stretch" />
         </StackPanel>

@@ -216,10 +216,6 @@ public sealed class AppController : IAsyncDisposable
         if (config is null || !config.IsValid()) return false;
         if (string.IsNullOrEmpty(_secrets.Get(AppConstants.RefreshTokenKey))) return false;
 
-        // A real session replaces the demo: its catalog must not stay behind and
-        // shadow the one built for the connection.
-        ExitDemoMode();
-
         _config = config;
         // The supervisor captures the config instance, so a reload must discard it
         // rather than leave it deciding routes from an orphaned object.
@@ -240,8 +236,6 @@ public sealed class AppController : IAsyncDisposable
             throw new InvalidOperationException("Home Assistant did not return a refresh token.");
 
         using var lease = await _lifecycle.AcquireAsync(LifecycleIntent.Start, ct).ConfigureAwait(false);
-
-        ExitDemoMode();
 
         _secrets.Save(AppConstants.RefreshTokenKey, tokens.RefreshToken);
 
@@ -526,6 +520,11 @@ public sealed class AppController : IAsyncDisposable
     private async Task BuildAndStartAsync(
         CancellationToken ct, string? seedAccessToken = null, int seedExpiresIn = 0)
     {
+        // A real session replaces the demo, wherever the demo was started: its
+        // catalog must not stay behind and shadow the one built here, and the UI
+        // must not keep claiming that nothing is being sent.
+        ExitDemoMode();
+
         // Defensive invariant: there is exactly one live manager at a time. Even if
         // a caller forgets to tear down first, the old WebSocket and sync loops are
         // stopped here rather than left running invisibly alongside the new ones.

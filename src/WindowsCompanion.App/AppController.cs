@@ -555,6 +555,7 @@ public sealed class AppController : IAsyncDisposable
                 new NetworkSensorSource(config.Sensors),
                 new WifiSensorSource(config.Sensors),
                 new SystemSensorSource(),
+                new DomainSensorSource(config.Sensors),
                 new DisplaySensorSource(),
                 new WindowsThemeSensorSource(),
                 new LocaleSensorSource(),

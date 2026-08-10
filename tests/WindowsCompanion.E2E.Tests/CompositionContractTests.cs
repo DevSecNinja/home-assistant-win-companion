@@ -7,12 +7,14 @@ using WindowsCompanion.Core.HomeAssistant;
 using WindowsCompanion.Core.Lifecycle;
 using WindowsCompanion.Core.Models;
 using WindowsCompanion.Core.Sensors;
+using WindowsCompanion.E2E.Tests.Fixtures;
 using WindowsCompanion.Testing;
 using WindowsCompanion_App;
 using WindowsCompanion_App.Services;
 
 namespace WindowsCompanion.E2E.Tests;
 
+[Collection(CompanionJourneyCollection.Name)]
 public sealed class CompositionContractTests
 {
     [Fact]

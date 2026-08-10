@@ -160,12 +160,20 @@ public sealed class FakeHaWebSocketSession : IAsyncDisposable
 
     internal async Task CloseAsync(CancellationToken cancellationToken)
     {
-        if (_socket.State is WebSocketState.Open or WebSocketState.CloseReceived)
+        await _sendGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
         {
-            await _socket.CloseOutputAsync(
-                WebSocketCloseStatus.NormalClosure,
-                "Test requested close",
-                cancellationToken).ConfigureAwait(false);
+            if (_socket.State is WebSocketState.Open or WebSocketState.CloseReceived)
+            {
+                await _socket.CloseOutputAsync(
+                    WebSocketCloseStatus.NormalClosure,
+                    "Test requested close",
+                    cancellationToken).ConfigureAwait(false);
+            }
+        }
+        finally
+        {
+            _sendGate.Release();
         }
     }
 

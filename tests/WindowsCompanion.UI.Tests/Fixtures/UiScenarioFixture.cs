@@ -110,6 +110,7 @@ internal sealed class UiScenarioFixture : IAsyncDisposable
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(action);
+        WindowsCompanion.UI.Tests.UiCapabilities.RequireInteractive();
         var fixture = await StartAsync(scenarioId, configure);
         Exception? scenarioFailure = null;
         try

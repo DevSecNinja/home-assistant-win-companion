@@ -30,6 +30,12 @@ internal static class UiCapabilities
 #endif
     }
 
+    internal static void RequireInteractive()
+    {
+        var reason = InteractiveUnsupportedReason();
+        if (reason is not null) throw new InvalidOperationException(reason);
+    }
+
     internal static string? TrayUnsupportedReason()
     {
         var interactive = InteractiveUnsupportedReason();
@@ -122,12 +128,10 @@ internal static class UiCapabilities
 
 internal sealed class UiFactAttribute : FactAttribute
 {
-    public UiFactAttribute() => Skip = UiCapabilities.InteractiveUnsupportedReason();
 }
 
 internal sealed class UiTheoryAttribute : TheoryAttribute
 {
-    public UiTheoryAttribute() => Skip = UiCapabilities.InteractiveUnsupportedReason();
 }
 
 internal sealed class UiNotificationFactAttribute : FactAttribute

@@ -154,7 +154,7 @@ if ($EndToEnd) {
                 '--blame-hang-timeout'
                 '2m'
                 '--blame-hang-dump-type'
-                'mini'
+                'none'
             )
     }
 }

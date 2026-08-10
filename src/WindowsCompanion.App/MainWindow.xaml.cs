@@ -7,6 +7,8 @@ using System.Runtime.InteropServices;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
+using Microsoft.UI.Xaml.Automation.Peers;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Windows.ApplicationModel.DataTransfer;
@@ -501,13 +503,38 @@ public sealed partial class MainWindow : Window
     private TrustedNetworkCidrValidation UpdateTrustedCidrValidation()
     {
         var validation = TrustedNetworkCidr.Validate(TrustedCidrEntries());
-        TrustedCidrsErrorText.Text = string.Join(
+        var errorMessage = string.Join(
             Environment.NewLine,
             validation.Errors.Select(error =>
                 $"Line {error.EntryNumber}: {error.Message}"));
+        var errorChanged = !string.Equals(
+            TrustedCidrsErrorText.Text,
+            errorMessage,
+            StringComparison.Ordinal);
+
+        TrustedCidrsErrorText.Text = errorMessage;
         TrustedCidrsErrorText.Visibility = validation.IsValid
             ? Visibility.Collapsed
             : Visibility.Visible;
+        AutomationProperties.SetHelpText(TrustedCidrsBox, errorMessage);
+
+        if (!validation.IsValid && errorChanged)
+        {
+            var peer = FrameworkElementAutomationPeer.FromElement(TrustedCidrsErrorText)
+                       ?? FrameworkElementAutomationPeer.CreatePeerForElement(TrustedCidrsErrorText);
+            peer?.RaiseAutomationEvent(AutomationEvents.LiveRegionChanged);
+        }
+        else if (validation.IsValid && errorChanged)
+        {
+            var peer = FrameworkElementAutomationPeer.FromElement(TrustedCidrsBox)
+                       ?? FrameworkElementAutomationPeer.CreatePeerForElement(TrustedCidrsBox);
+            peer?.RaiseNotificationEvent(
+                AutomationNotificationKind.ActionCompleted,
+                AutomationNotificationProcessing.MostRecent,
+                "Network CIDRs are valid.",
+                "TrustedCidrsValidation");
+        }
+
         return validation;
     }
 

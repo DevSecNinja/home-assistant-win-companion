@@ -158,6 +158,53 @@ public class NetworkIdentityTests
     }
 
     [Fact]
+    public void Reports_lan_and_wlan_mac_addresses_independently_of_the_active_route()
+    {
+        var identity = NetworkIdentity.From(
+            [
+                Ethernet(mac: [0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF]),
+                WiFi(mac: [0x11, 0x22, 0x33, 0x44, 0x55, 0x66], isUp: false)
+            ],
+            routeLocalIpv4: "192.168.1.20");
+
+        Assert.Equal("AA:BB:CC:DD:EE:FF", identity.LanMacAddress);
+        Assert.Equal("11:22:33:44:55:66", identity.WlanMacAddress);
+    }
+
+    [Fact]
+    public void Reports_not_connected_lan_or_wlan_mac_when_no_matching_adapter_exists()
+    {
+        var identity = NetworkIdentity.From([Ethernet()]);
+
+        Assert.Equal(NetworkClassifier.NotConnected, identity.WlanMacAddress);
+    }
+
+    [Fact]
+    public void Reports_the_gateway_and_dns_of_the_active_adapter()
+    {
+        var identity = NetworkIdentity.From(
+            [
+                new NetworkAdapterSnapshot(
+                    "eth", "Intel Ethernet", NetworkAdapterKind.Wired, true, false, true,
+                    ["192.168.1.20"], [], [0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF],
+                    "192.168.1.1", ["192.168.1.1", "8.8.8.8"])
+            ],
+            routeLocalIpv4: "192.168.1.20");
+
+        Assert.Equal("192.168.1.1", identity.GatewayAddress);
+        Assert.Equal("192.168.1.1, 8.8.8.8", identity.DnsServers);
+    }
+
+    [Fact]
+    public void Reports_not_connected_gateway_and_dns_when_none_are_configured()
+    {
+        var identity = NetworkIdentity.From([Ethernet()]);
+
+        Assert.Equal(NetworkClassifier.NotConnected, identity.GatewayAddress);
+        Assert.Equal(NetworkClassifier.NotConnected, identity.DnsServers);
+    }
+
+    [Fact]
     public void Follows_the_active_adapter_across_a_route_change()
     {
         var adapters = new[]

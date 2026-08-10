@@ -8,11 +8,11 @@ namespace WindowsCompanion_App.Services;
 
 /// <summary>
 /// Reports the PC's network context: connection type, local IPv4 and IPv6 address,
-/// and the MAC address of the adapter carrying the active LAN route. Updates are
-/// driven by network change events rather than polling.
+/// hardware addresses, default gateway and DNS servers. Updates are driven by
+/// network change events rather than polling.
 /// </summary>
 /// <remarks>
-/// Every reading comes from a single adapter snapshot taken per read, so the four
+/// Every reading comes from a single adapter snapshot taken per read, so the
 /// sensors always describe the same connection instead of each enumerating adapters
 /// and reaching its own conclusion. Nothing is enumerated unless a sensor that needs
 /// it is switched on, and the identifying values are never logged.
@@ -26,6 +26,10 @@ public sealed class NetworkSensorSource : ISensorSource
     public const string IpAddressId = NetworkSensors.IpAddressId;
     public const string Ipv6AddressId = NetworkSensors.Ipv6AddressId;
     public const string MacAddressId = NetworkSensors.MacAddressId;
+    public const string LanMacAddressId = NetworkSensors.LanMacAddressId;
+    public const string WlanMacAddressId = NetworkSensors.WlanMacAddressId;
+    public const string GatewayAddressId = NetworkSensors.GatewayAddressId;
+    public const string DnsServersId = NetworkSensors.DnsServersId;
 
     private const string OptInPlaceholder = "Enable to read network identifiers";
 
@@ -79,7 +83,41 @@ public sealed class NetworkSensorSource : ISensorSource
             SensorPrivacy.Sensitive,
             EnabledByDefault: false,
             ResourceUsage: "Low. Reads the address from this PC only after a network change. It "
-                           + "does not send network traffic to discover it.")
+                           + "does not send network traffic to discover it."),
+        new(
+            LanMacAddressId,
+            "LAN MAC Address",
+            "The physical hardware address of this PC's wired Ethernet adapter.",
+            SensorPrivacy.Sensitive,
+            EnabledByDefault: false,
+            ResourceUsage: "Low. Reads the address from this PC only after a network change. It "
+                           + "does not send network traffic to discover it."),
+        new(
+            WlanMacAddressId,
+            "WLAN MAC Address",
+            "The hardware address currently used by this PC's Wi-Fi adapter. If "
+            + "Windows' MAC randomization is on for the network, this reflects the "
+            + "randomized address rather than the factory one.",
+            SensorPrivacy.Sensitive,
+            EnabledByDefault: false,
+            ResourceUsage: "Low. Reads the address from this PC only after a network change. It "
+                           + "does not send network traffic to discover it."),
+        new(
+            GatewayAddressId,
+            "Default Gateway",
+            "The router address this PC uses to reach other networks.",
+            SensorPrivacy.Sensitive,
+            EnabledByDefault: false,
+            ResourceUsage: "Low. Checks this PC only after a network change. It does not contact "
+                           + "an internet service to find the address."),
+        new(
+            DnsServersId,
+            "DNS Servers",
+            "The DNS resolver addresses configured on this PC's active network adapter.",
+            SensorPrivacy.Sensitive,
+            EnabledByDefault: false,
+            ResourceUsage: "Low. Checks this PC only after a network change. It does not contact "
+                           + "an internet service to find the addresses.")
     ];
 
     public IReadOnlyList<Sensor> Read(IReadOnlySet<string> enabled, SensorReadContext context)
@@ -138,6 +176,58 @@ public sealed class NetworkSensorSource : ISensorSource
                 State = identity.MacAddress,
                 EntityCategory = "diagnostic",
                 Icon = "mdi:lan"
+            });
+        }
+
+        if (enabled.Contains(LanMacAddressId))
+        {
+            readings.Add(new Sensor
+            {
+                UniqueId = LanMacAddressId,
+                Type = "sensor",
+                Name = "LAN MAC Address",
+                State = identity.LanMacAddress,
+                EntityCategory = "diagnostic",
+                Icon = "mdi:ethernet"
+            });
+        }
+
+        if (enabled.Contains(WlanMacAddressId))
+        {
+            readings.Add(new Sensor
+            {
+                UniqueId = WlanMacAddressId,
+                Type = "sensor",
+                Name = "WLAN MAC Address",
+                State = identity.WlanMacAddress,
+                EntityCategory = "diagnostic",
+                Icon = "mdi:wifi"
+            });
+        }
+
+        if (enabled.Contains(GatewayAddressId))
+        {
+            readings.Add(new Sensor
+            {
+                UniqueId = GatewayAddressId,
+                Type = "sensor",
+                Name = "Default Gateway",
+                State = identity.GatewayAddress,
+                EntityCategory = "diagnostic",
+                Icon = "mdi:router-network"
+            });
+        }
+
+        if (enabled.Contains(DnsServersId))
+        {
+            readings.Add(new Sensor
+            {
+                UniqueId = DnsServersId,
+                Type = "sensor",
+                Name = "DNS Servers",
+                State = identity.DnsServers,
+                EntityCategory = "diagnostic",
+                Icon = "mdi:dns"
             });
         }
 
@@ -243,12 +333,21 @@ public sealed class NetworkSensorSource : ISensorSource
         var ipv4 = new List<string>();
         var ipv6 = new List<Ipv6AddressInfo>();
         var hasGateway = false;
+        string? gatewayAddress = null;
+        var dns = new List<string>();
 
         try
         {
             var properties = adapter.GetIPProperties();
-            hasGateway = properties.GatewayAddresses
-                .Any(gateway => gateway.Address is not null && !IsUnspecified(gateway.Address));
+            var gateways = properties.GatewayAddresses
+                .Where(gateway => gateway.Address is not null && !IsUnspecified(gateway.Address))
+                .ToList();
+            hasGateway = gateways.Count > 0;
+            gatewayAddress = gateways.FirstOrDefault()?.Address.ToString();
+            dns = properties.DnsAddresses
+                .Where(address => !IsUnspecified(address))
+                .Select(address => address.ToString())
+                .ToList();
 
             foreach (var unicast in properties.UnicastAddresses)
             {
@@ -282,7 +381,9 @@ public sealed class NetworkSensorSource : ISensorSource
             hasGateway,
             ipv4,
             ipv6,
-            PhysicalAddressOf(adapter));
+            PhysicalAddressOf(adapter),
+            gatewayAddress,
+            dns);
     }
 
     private static bool IsUnspecified(IPAddress address) =>

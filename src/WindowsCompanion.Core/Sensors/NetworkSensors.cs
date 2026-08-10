@@ -27,10 +27,17 @@ public static class NetworkSensors
     public const string IpAddressId = "ip_address";
     public const string Ipv6AddressId = "ipv6_address";
     public const string MacAddressId = "mac_address";
+    public const string LanMacAddressId = "lan_mac_address";
+    public const string WlanMacAddressId = "wlan_mac_address";
+    public const string GatewayAddressId = "gateway_address";
+    public const string DnsServersId = "dns_servers";
 
     /// <summary>The sensors whose values are network identifiers.</summary>
     public static IReadOnlyList<string> IdentifierIds { get; } =
-        [IpAddressId, Ipv6AddressId, MacAddressId];
+        [
+            IpAddressId, Ipv6AddressId, MacAddressId,
+            LanMacAddressId, WlanMacAddressId, GatewayAddressId, DnsServersId
+        ];
 
     /// <summary>
     /// Decides what may be collected. With no network sensor enabled the answer is

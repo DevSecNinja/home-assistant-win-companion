@@ -11,9 +11,17 @@ public sealed record NetworkIdentity(
     string ConnectionType,
     string Ipv4Address,
     string Ipv6Address,
-    string MacAddress)
+    string MacAddress,
+    string LanMacAddress = NetworkClassifier.NotConnected,
+    string WlanMacAddress = NetworkClassifier.NotConnected,
+    string GatewayAddress = NetworkClassifier.NotConnected,
+    string DnsServers = NetworkClassifier.NotConnected)
 {
     public static NetworkIdentity NotConnected { get; } = new(
+        NetworkClassifier.NotConnected,
+        NetworkClassifier.NotConnected,
+        NetworkClassifier.NotConnected,
+        NetworkClassifier.NotConnected,
         NetworkClassifier.NotConnected,
         NetworkClassifier.NotConnected,
         NetworkClassifier.NotConnected,
@@ -38,7 +46,37 @@ public sealed record NetworkIdentity(
             connectionType,
             SelectIpv4(active, routeLocalIpv4) ?? NetworkClassifier.NotConnected,
             Ipv6AddressClassifier.SelectPreferred(active.Ipv6) ?? NetworkClassifier.NotConnected,
-            MacAddressFormatter.Format(active.PhysicalAddress) ?? NetworkClassifier.NotConnected);
+            MacAddressFormatter.Format(active.PhysicalAddress) ?? NetworkClassifier.NotConnected,
+            SelectMac(adapters, NetworkAdapterKind.Wired) ?? NetworkClassifier.NotConnected,
+            SelectMac(adapters, NetworkAdapterKind.Wireless) ?? NetworkClassifier.NotConnected,
+            active.GatewayAddress ?? NetworkClassifier.NotConnected,
+            SelectDns(active) ?? NetworkClassifier.NotConnected);
+    }
+
+    /// <summary>
+    /// The hardware address of the physical LAN or Wi-Fi adapter regardless of which
+    /// one is carrying the active route, so a docked laptop can still report its
+    /// Wi-Fi MAC and vice versa. An adapter that is up is preferred over one that is
+    /// merely present but disconnected.
+    /// </summary>
+    private static string? SelectMac(IReadOnlyList<NetworkAdapterSnapshot> adapters, NetworkAdapterKind kind)
+    {
+        var candidates = adapters.Where(a => a.IsPhysicalLan && a.Kind == kind).ToList();
+        if (candidates.Count == 0) return null;
+
+        var chosen = candidates.FirstOrDefault(a => a.IsUp) ?? candidates[0];
+        return MacAddressFormatter.Format(chosen.PhysicalAddress);
+    }
+
+    /// <summary>
+    /// The DNS servers configured on the active adapter, joined for display. Only
+    /// the adapter's own configuration is reported, never a system-wide resolver
+    /// list, so this always matches the connection the other sensors describe.
+    /// </summary>
+    private static string? SelectDns(NetworkAdapterSnapshot adapter)
+    {
+        var servers = adapter.Dns.Where(address => !string.IsNullOrWhiteSpace(address)).ToList();
+        return servers.Count == 0 ? null : string.Join(", ", servers);
     }
 
     /// <summary>

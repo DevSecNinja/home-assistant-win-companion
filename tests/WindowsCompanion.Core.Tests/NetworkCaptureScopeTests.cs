@@ -34,6 +34,10 @@ public class NetworkCaptureScopeTests
     [InlineData(NetworkSensors.IpAddressId)]
     [InlineData(NetworkSensors.Ipv6AddressId)]
     [InlineData(NetworkSensors.MacAddressId)]
+    [InlineData(NetworkSensors.LanMacAddressId)]
+    [InlineData(NetworkSensors.WlanMacAddressId)]
+    [InlineData(NetworkSensors.GatewayAddressId)]
+    [InlineData(NetworkSensors.DnsServersId)]
     public void Any_enabled_identifier_permits_a_full_capture(string identifier)
     {
         Assert.Equal(NetworkCaptureScope.Full, NetworkSensors.ScopeFor(Set(identifier)));

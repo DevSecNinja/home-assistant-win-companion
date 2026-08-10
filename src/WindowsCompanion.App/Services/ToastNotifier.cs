@@ -24,12 +24,11 @@ public sealed class ToastNotifier : IUpdateNotificationSink
 
     public void Show(AvailableUpdate update)
     {
-        var releaseButton = new AppNotificationButton("View release")
-            .AddArgument("action", "openRelease");
+        var releaseButton = new AppNotificationButton("View release");
         releaseButton.InvokeUri = update.ReleasePage;
 
         var notification = new AppNotificationBuilder()
-            .AddText("Windows Companion update available")
+            .AddText($"{Branding.ProductName} update available")
             .AddText(
                 $"Installed: v{update.InstalledVersion}. Available: v{update.AvailableVersion}.")
             .AddButton(releaseButton)

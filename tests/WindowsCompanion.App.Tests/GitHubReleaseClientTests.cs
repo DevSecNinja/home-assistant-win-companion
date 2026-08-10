@@ -51,6 +51,18 @@ public class GitHubReleaseClientTests
     }
 
     [Fact]
+    public async Task An_unknown_length_multibyte_response_is_capped_by_encoded_bytes()
+    {
+        var content = new UnknownLengthContent(
+            Encoding.UTF8.GetBytes(new string('\u00e9', 600_000)));
+        var client = Client((_, _) => Task.FromResult(
+            new HttpResponseMessage(HttpStatusCode.OK) { Content = content }));
+
+        await Assert.ThrowsAsync<InvalidDataException>(
+            () => client.GetReleasesAsync(CancellationToken.None));
+    }
+
+    [Fact]
     public async Task The_request_has_a_bounded_timeout()
     {
         var client = Client(
@@ -130,5 +142,19 @@ public class GitHubReleaseClientTests
             HttpRequestMessage request,
             CancellationToken cancellationToken) =>
             responder(request, cancellationToken);
+    }
+
+    private sealed class UnknownLengthContent(byte[] content) : HttpContent
+    {
+        protected override Task SerializeToStreamAsync(
+            Stream stream,
+            TransportContext? context) =>
+            stream.WriteAsync(content).AsTask();
+
+        protected override bool TryComputeLength(out long length)
+        {
+            length = 0;
+            return false;
+        }
     }
 }

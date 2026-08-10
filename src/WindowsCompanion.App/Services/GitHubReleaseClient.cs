@@ -1,6 +1,5 @@
 using System.Net;
 using System.Net.Http.Headers;
-using System.Text;
 using WindowsCompanion.Core.Updates;
 
 namespace WindowsCompanion_App.Services;
@@ -12,7 +11,7 @@ internal sealed class GitHubReleaseClient : IReleaseSource
         "https://api.github.com/repos/DevSecNinja/home-assistant-win-companion/releases/latest");
 
     private static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(5);
-    private const int MaximumResponseCharacters = 1_048_576;
+    private const int MaximumResponseBytes = 1_048_576;
     private readonly HttpClient _http;
     private readonly string _productVersion;
     private readonly TimeSpan _timeout;
@@ -69,30 +68,32 @@ internal sealed class GitHubReleaseClient : IReleaseSource
         HttpContent content,
         CancellationToken cancellationToken)
     {
-        if (content.Headers.ContentLength > MaximumResponseCharacters)
+        if (content.Headers.ContentLength > MaximumResponseBytes)
             throw new InvalidDataException("The GitHub releases response was too large.");
 
         await using var stream = await content
             .ReadAsStreamAsync(cancellationToken)
             .ConfigureAwait(false);
-        using var reader = new StreamReader(
-            stream,
-            Encoding.UTF8,
-            detectEncodingFromByteOrderMarks: true,
-            leaveOpen: false);
-
-        var result = new StringBuilder();
-        var buffer = new char[8192];
+        using var bytes = new MemoryStream();
+        var buffer = new byte[8192];
         while (true)
         {
-            var read = await reader
-                .ReadAsync(buffer.AsMemory(), cancellationToken)
+            var read = await stream
+                .ReadAsync(buffer, cancellationToken)
                 .ConfigureAwait(false);
-            if (read == 0) return result.ToString();
-            if (result.Length + read > MaximumResponseCharacters)
+            if (read == 0) break;
+            if (bytes.Length + read > MaximumResponseBytes)
                 throw new InvalidDataException("The GitHub releases response was too large.");
-            result.Append(buffer, 0, read);
+            await bytes.WriteAsync(buffer.AsMemory(0, read), cancellationToken)
+                .ConfigureAwait(false);
         }
+
+        bytes.Position = 0;
+        using var reader = new StreamReader(
+            bytes,
+            detectEncodingFromByteOrderMarks: true,
+            leaveOpen: false);
+        return await reader.ReadToEndAsync(cancellationToken).ConfigureAwait(false);
     }
 
     internal static HttpClient CreateHttpClient() =>

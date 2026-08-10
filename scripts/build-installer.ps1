@@ -35,9 +35,11 @@ $requiredDirectives = @(
     '(?m)^CloseApplications=yes\r?$',
     '(?m)^CloseApplicationsFilter=\*\.exe,\*\.dll\r?$',
     '(?m)^RestartApplications=no\r?$',
+    '(?m)^\s+TShutdownResult = \(srCompleted, srDeclined, srFailed\);\r?$',
     '(?m)^function PrepareToInstall\(var NeedsRestart: Boolean\): String;\r?$',
     '(?m)^function InitializeUninstall\(\): Boolean;\r?$',
-    '(?m)^\s+if WaitForSingleObject\(ProcessHandle, ShutdownTimeoutMs\) <> WAIT_OBJECT_0 then\r?$'
+    '(?m)^\s+if WaitForSingleObject\(ProcessHandle, ShutdownTimeoutMs\) <> WAIT_OBJECT_0 then\r?$',
+    '(?m)^\s+if \(ShutdownResult = srFailed\) and \(not UninstallSilent\) then\r?$'
 )
 foreach ($directive in $requiredDirectives) {
     if ($definition -notmatch $directive) {

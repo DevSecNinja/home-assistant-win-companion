@@ -82,6 +82,9 @@ const
   ShutdownTimeoutMs = 15000;
   AppWindowTitle = 'Windows Companion for Home Assistant';
 
+type
+  TShutdownResult = (srCompleted, srDeclined, srFailed);
+
 function OpenEvent(DesiredAccess: LongWord; InheritHandle: Boolean;
   Name: String): THandle;
   external 'OpenEventW@kernel32.dll stdcall';
@@ -97,7 +100,8 @@ function CloseHandle(Handle: THandle): Boolean;
 function GetWindowThreadProcessId(Window: HWND; var ProcessId: LongWord): LongWord;
   external 'GetWindowThreadProcessId@user32.dll stdcall';
 
-function CloseRunningCompanions(OperationName: String; ConfirmClose: Boolean): Boolean;
+function CloseRunningCompanions(OperationName: String;
+  ConfirmClose: Boolean): TShutdownResult;
 var
   Window: HWND;
   ProcessId: LongWord;
@@ -105,7 +109,7 @@ var
   ProcessHandle: THandle;
   PromptResult: Integer;
 begin
-  Result := True;
+  Result := srCompleted;
   Window := FindWindowByWindowName(AppWindowTitle);
   if Window = 0 then
     exit;
@@ -119,7 +123,7 @@ begin
       mbConfirmation, MB_YESNO);
     if PromptResult <> IDYES then
     begin
-      Result := False;
+      Result := srDeclined;
       exit;
     end;
   end;
@@ -130,7 +134,7 @@ begin
     GetWindowThreadProcessId(Window, ProcessId);
     if ProcessId = 0 then
     begin
-      Result := False;
+      Result := srFailed;
       exit;
     end;
 
@@ -145,20 +149,20 @@ begin
         CloseHandle(Event);
       if ProcessHandle <> 0 then
         CloseHandle(ProcessHandle);
-      Result := False;
+      Result := srFailed;
       exit;
     end;
 
     try
       if not SetEvent(Event) then
       begin
-        Result := False;
+        Result := srFailed;
         exit;
       end;
 
       if WaitForSingleObject(ProcessHandle, ShutdownTimeoutMs) <> WAIT_OBJECT_0 then
       begin
-        Result := False;
+        Result := srFailed;
         exit;
       end;
     finally
@@ -171,18 +175,30 @@ begin
 end;
 
 function PrepareToInstall(var NeedsRestart: Boolean): String;
+var
+  ShutdownResult: TShutdownResult;
 begin
   Result := '';
-  if not CloseRunningCompanions('Setup', not WizardSilent) then
-    Result :=
-      'Windows Companion did not finish shutting down within 15 seconds. ' +
-      'No process was terminated. Close it from the tray and retry Setup.';
+  ShutdownResult := CloseRunningCompanions('Setup', not WizardSilent);
+  case ShutdownResult of
+    srDeclined:
+      Result :=
+        'Setup was cancelled because Windows Companion was left running. ' +
+        'Close it from the tray and retry Setup.';
+    srFailed:
+      Result :=
+        'Windows Companion did not finish shutting down within 15 seconds. ' +
+        'No process was terminated. Close it from the tray and retry Setup.';
+  end;
 end;
 
 function InitializeUninstall(): Boolean;
+var
+  ShutdownResult: TShutdownResult;
 begin
-  Result := CloseRunningCompanions('Uninstall', not UninstallSilent);
-  if not Result then
+  ShutdownResult := CloseRunningCompanions('Uninstall', not UninstallSilent);
+  Result := ShutdownResult = srCompleted;
+  if (ShutdownResult = srFailed) and (not UninstallSilent) then
     MsgBox(
       'Windows Companion did not finish shutting down within 15 seconds. ' +
       'No process was terminated, and uninstall has been cancelled.',

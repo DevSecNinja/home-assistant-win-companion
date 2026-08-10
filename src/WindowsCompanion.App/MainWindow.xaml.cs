@@ -83,6 +83,10 @@ public sealed partial class MainWindow : Window
         _controller.StateChanged += OnStateChanged;
         _controller.RouteChanged += OnRouteChanged;
 
+        // Kept in Core so the demo warning reads the same wherever it is shown.
+        DemoBanner.Title = DemoSession.Title;
+        DemoBanner.Message = DemoSession.Message;
+
         _statusTimer = _dispatcher.CreateTimer();
         _statusTimer.Interval = TimeSpan.FromSeconds(5);
         _statusTimer.Tick += (_, _) => RefreshBattery();
@@ -108,6 +112,10 @@ public sealed partial class MainWindow : Window
         {
             var resumed = await _controller.TryResumeAsync();
             ShowPanel(resumed);
+            // Only offered once it is settled that there is no session to resume:
+            // starting a demo alongside a connection in flight would make the app
+            // claim it sends nothing while it is connecting.
+            DemoModeButton.IsEnabled = !resumed;
             if (!resumed && _startHidden) Show();
             RefreshStartupSetting();
             if (resumed)
@@ -119,6 +127,7 @@ public sealed partial class MainWindow : Window
         catch
         {
             ShowPanel(false);
+            DemoModeButton.IsEnabled = true;
             if (_startHidden) Show();
         }
     }
@@ -127,7 +136,9 @@ public sealed partial class MainWindow : Window
         _dispatcher.TryEnqueue(() =>
         {
             RouteText.Text = _controller.RouteSummary;
-            ServerText.Text = _controller.BaseUrl ?? "—";
+            ServerText.Text = _controller.IsDemoMode
+                ? DemoSession.ServerLabel
+                : _controller.BaseUrl ?? "—";
             UpdateHealth();
         });
 
@@ -184,6 +195,7 @@ public sealed partial class MainWindow : Window
         try
         {
             await _controller.SignInAsync(url);
+            ApplyDemoChrome();
             ShowPanel(true);
             RefreshBattery();
             _statusTimer.Start();
@@ -198,8 +210,69 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    private async void OnEnterDemoMode(object sender, RoutedEventArgs e)
+    {
+        // A sign-in already in flight must win: entering the demo here would
+        // let the OAuth round-trip finish underneath it and register with
+        // Home Assistant while the demo banner still promises nothing is sent.
+        if (!SignInButton.IsEnabled) return;
+
+        DemoModeButton.IsEnabled = false;
+        try
+        {
+            _controller.EnterDemoMode();
+        }
+        catch (Exception ex)
+        {
+            ShowConnectError(ex.Message);
+            return;
+        }
+        finally
+        {
+            DemoModeButton.IsEnabled = true;
+        }
+
+        ApplyDemoChrome();
+        RefreshStatusFields();
+        ShowView(View.Status);
+        _statusTimer.Start();
+
+        // Seeing the sensors is the whole point of the demo, so it opens on them.
+        if (await BuildSensorListAsync()) ShowView(View.Settings);
+    }
+
+    private void OnLeaveDemoMode(object sender, RoutedEventArgs e)
+    {
+        _statusTimer.Stop();
+        _controller.ExitDemoMode();
+        ApplyDemoChrome();
+        ShowView(View.Connect);
+    }
+
+    /// <summary>
+    /// Shows the demo warning on every screen and hides the actions that need a
+    /// Home Assistant server, so nothing in the demo looks like it talks to one.
+    /// </summary>
+    private void ApplyDemoChrome()
+    {
+        var demo = _controller.IsDemoMode;
+        DemoBanner.IsOpen = demo;
+
+        var serverActions = demo ? Visibility.Collapsed : Visibility.Visible;
+        OpenHomeAssistantButton.Visibility = serverActions;
+        ConnectionButton.Visibility = serverActions;
+        UpdateNowButton.Visibility = serverActions;
+        DisconnectButton.Visibility = serverActions;
+        RemoveServerButton.Visibility = serverActions;
+        TrayOpenHomeAssistantItem.Visibility = serverActions;
+        TrayDisconnectItem.Visibility = serverActions;
+    }
+
     private async void OnDisconnect(object sender, RoutedEventArgs e)
     {
+        // Reachable from the tray menu, where the demo has nothing to disconnect.
+        if (_controller.IsDemoMode) return;
+
         if (Interlocked.Exchange(ref _connectionActionRunning, 1) != 0) return;
 
         try
@@ -268,6 +341,8 @@ public sealed partial class MainWindow : Window
         _connected = false;
         DisconnectButton.Content = "Disconnect";
         UpdateNowButton.IsEnabled = true;
+        // Nothing is connected any more, so the demo becomes available again.
+        DemoModeButton.IsEnabled = true;
         ShowView(View.Connect);
 
         var removed = new ContentDialog
@@ -714,13 +789,17 @@ public sealed partial class MainWindow : Window
             ? $"{status.BatteryPercent}% ({status.BatteryStateString})"
             : "No battery (desktop)";
 
-        ServerText.Text = _controller.BaseUrl ?? "—";
+        var demo = _controller.IsDemoMode;
+        ServerText.Text = demo ? DemoSession.ServerLabel : _controller.BaseUrl ?? "—";
         RouteText.Text = _controller.RouteSummary;
+        if (demo) StatusText.Text = DemoSession.Title;
 
         var last = _controller.LastSyncedAt;
-        LastUpdateText.Text = last is null
-            ? "—"
-            : $"{last.Value.ToLocalTime():HH:mm:ss} ({Ago(DateTimeOffset.UtcNow - last.Value)})";
+        LastUpdateText.Text = demo
+            ? "Never (demo mode)"
+            : last is null
+                ? "—"
+                : $"{last.Value.ToLocalTime():HH:mm:ss} ({Ago(DateTimeOffset.UtcNow - last.Value)})";
 
         UpdateHealth();
     }
@@ -810,10 +889,11 @@ public sealed partial class MainWindow : Window
         if (catalog is null) return false;
 
         var buildVersion = ++_sensorListBuildVersion;
-        var previews = await catalog.PreviewAsync();
+        var previews = await _controller.PreviewSensorsAsync();
         if (buildVersion != _sensorListBuildVersion
             || !ReferenceEquals(catalog, _controller.Catalog)
-            || _controller.State is ConnectionState.Disconnected or ConnectionState.AuthError)
+            || (!_controller.IsDemoMode
+                && _controller.State is ConnectionState.Disconnected or ConnectionState.AuthError))
         {
             return false;
         }
@@ -913,7 +993,10 @@ public sealed partial class MainWindow : Window
             {
                 Text = previews.TryGetValue(definition.UniqueId, out var value)
                     ? $"Current value: {value}"
-                    : "Current value: Unavailable",
+                    : definition.Privacy == SensorPrivacy.Sensitive
+                      && !catalog.IsEnabled(definition.UniqueId)
+                        ? "Current value: read only once you enable this sensor"
+                        : "Current value: Unavailable",
                 TextWrapping = TextWrapping.Wrap,
                 FontSize = 12,
                 Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"]
@@ -1077,6 +1160,10 @@ public sealed partial class MainWindow : Window
 
         catalog.SetEnabled(uniqueId, toggle.IsOn);
         await _controller.ApplySensorChangesAsync();
+
+        // In the demo the value is the point: a sensitive sensor reveals nothing
+        // until it is switched on, so the list is re-read to show what it reports.
+        if (_controller.IsDemoMode) await BuildSensorListAsync();
     }
 
     private void SetToggleState(ToggleSwitch toggle, bool isOn)
@@ -1113,10 +1200,15 @@ public sealed partial class MainWindow : Window
             var dialog = new ContentDialog
             {
                 XamlRoot = Content.XamlRoot,
-                Title = "Share full window titles?",
+                Title = _controller.IsDemoMode
+                    ? "Show full window titles locally?"
+                    : "Share full window titles?",
                 Content = "Window titles can contain document names, messages, customer names "
-                          + "and complete website titles. This value will be sent to your Home "
-                          + "Assistant server whenever the sensor reports.",
+                          + (_controller.IsDemoMode
+                              ? "and complete website titles. In demo mode, this value is shown "
+                                + "only on this device and is not saved or sent."
+                              : "and complete website titles. This value will be sent to your Home "
+                                + "Assistant server whenever the sensor reports."),
                 PrimaryButtonText = "Use full titles",
                 CloseButtonText = "Keep application names",
                 DefaultButton = ContentDialogButton.Close
@@ -1140,6 +1232,10 @@ public sealed partial class MainWindow : Window
     {
         SignInButton.IsEnabled = !busy;
         UrlBox.IsEnabled = !busy;
+        // A demo started while a sign-in is in flight would let the OAuth
+        // round-trip finish underneath it and register with Home Assistant
+        // while the demo banner still promises nothing is sent.
+        DemoModeButton.IsEnabled = !busy;
         SignInProgress.IsActive = busy;
         if (busy) ConnectError.Visibility = Visibility.Collapsed;
     }

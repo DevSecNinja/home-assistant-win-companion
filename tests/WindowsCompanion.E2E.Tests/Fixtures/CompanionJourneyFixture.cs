@@ -690,8 +690,10 @@ internal sealed class CompanionJourneyFixture : IAsyncDisposable
 
     private sealed class DeterministicWinGetUpdates : IWinGetUpdateProvider
     {
-        public Task<bool> IsModuleInstalledAsync(CancellationToken cancellationToken = default) =>
-            Task.FromResult(false);
+        public Task<WinGetCapabilityResult> ProbeCapabilityAsync(
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(WinGetCapabilityResult.FromStatus(
+                WinGetCapabilityStatus.ModuleMissing));
 
         public Task<WinGetUpdateResult> CheckForUpdatesAsync(
             CancellationToken cancellationToken = default) =>

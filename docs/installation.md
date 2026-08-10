@@ -158,16 +158,22 @@ Official release builds check GitHub Releases once, in the background, each time
 application process starts. When a newer stable release exists, Windows shows one
 toast with the installed and available versions and a **View release** action. The
 notification-area icon also changes for that run: its companion circle becomes a
-larger red badge containing `1`, and the tray menu offers the same release page. If
-the window is open, a persistent **Update available** banner provides the same
-action without widening the status view.
+larger red badge containing `1`, and the tray menu offers **Install update…**. That
+command opens or restores the companion and shows the **Update available** banner;
+**View release** opens the exact GitHub release page in the browser.
+
+Before an update is known, the tray instead offers **Check for updates…**. It opens
+and focuses the companion, immediately shows **Checking for updates…**, and then
+shows whether the app is current, an update is available, or the check failed. The
+banner also offers **Recheck for updates**. Double-clicking the tray icon opens,
+restores, and focuses the companion without changing the update state.
 
 The check never downloads, installs, or restarts the application. Drafts and
 prereleases are ignored. If GitHub is unavailable or returns an unusable response,
-startup and Home Assistant connectivity continue normally; the failure is written
-only to the local diagnostic log. Source builds, pull-request builds, and ordinary
-CI artifacts do not make this request because they are not official versioned
-releases.
+startup and Home Assistant connectivity continue normally. Automatic failures are
+written to the local diagnostic log; failures from a tray check are also shown in
+the banner. Source builds, pull-request builds, and ordinary CI artifacts do not
+make the automatic request because they are not official versioned releases.
 
 1. Download and verify the new release.
 2. For an installed copy, run the newer setup package; it upgrades in place. If

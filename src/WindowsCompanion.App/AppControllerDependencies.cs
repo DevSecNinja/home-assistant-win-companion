@@ -42,8 +42,14 @@ internal sealed class AppControllerDependencies
     public static AppControllerDependencies CreateProduction()
     {
         var status = new WindowsSystemStatusProvider();
-        var winGet = new PowerShellWinGetUpdateProvider();
         var notifications = new ToastNotifier();
+        var loggerFactory = Microsoft.Extensions.Logging.LoggerFactory.Create(builder =>
+        {
+            builder.AddProvider(new FileLoggerProvider(LogLevel.Debug));
+            builder.SetMinimumLevel(LogLevel.Debug);
+        });
+        var winGet = new PowerShellWinGetUpdateProvider(
+            loggerFactory.CreateLogger<PowerShellWinGetUpdateProvider>());
 
         return new AppControllerDependencies
         {
@@ -55,11 +61,7 @@ internal sealed class AppControllerDependencies
             WinGetUpdates = new(winGet, true),
             UriLauncher = new(new ShellUriLauncher(), true),
             Network = new(new WindowsNetworkContextProvider(), true),
-            LoggerFactory = new(Microsoft.Extensions.Logging.LoggerFactory.Create(builder =>
-            {
-                builder.AddProvider(new FileLoggerProvider(LogLevel.Debug));
-                builder.SetMinimumLevel(LogLevel.Debug);
-            }), true),
+            LoggerFactory = new(loggerFactory, true),
             UpdateHttpClient = new(GitHubReleaseClient.CreateHttpClient(), true),
             UpdateNotificationSink = new(notifications),
             EnableStartupUpdates = true,

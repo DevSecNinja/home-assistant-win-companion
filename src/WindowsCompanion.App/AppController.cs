@@ -61,7 +61,6 @@ public sealed class AppController : IAsyncDisposable
     private int _disposeStarted;
     private Task? _updateCheckTask;
     private int _updateCheckStarted;
-    private AvailableUpdate? _availableUpdate;
 
     public AppController() : this(AppControllerDependencies.CreateProduction())
     {
@@ -88,7 +87,6 @@ public sealed class AppController : IAsyncDisposable
         _updateNotifications = dependencies.UpdateNotificationSink?.Value
             ?? new NoOpUpdateNotificationSink();
         _enableStartupUpdates = dependencies.EnableStartupUpdates;
-
         var installedBuild = InstalledBuildResolver.Current();
         _startupUpdates = new StartupUpdateService(
             installedBuild,
@@ -97,6 +95,7 @@ public sealed class AppController : IAsyncDisposable
                 installedBuild.Version?.ToString() ?? "source"),
             new UpdateNotificationSink(NotifyUpdateAvailable),
             _loggerFactory.CreateLogger<StartupUpdateService>());
+        _startupUpdates.StateChanged += OnUpdateStateChanged;
         _login = new OAuthLoginService(_http, _uriLauncher);
         _settings = new SessionStore(dependencies.SettingsStore.Value, _secrets);
         _lifecycle = new ConnectionLifecycle(_loggerFactory.CreateLogger<ConnectionLifecycle>());
@@ -117,27 +116,41 @@ public sealed class AppController : IAsyncDisposable
     {
         if (!_enableStartupUpdates) return;
         if (Interlocked.Exchange(ref _updateCheckStarted, 1) != 0) return;
-        _updateCheckTask = _startupUpdates.CheckAsync(_updateCheckCancellation.Token);
+        _updateCheckTask = _startupUpdates.CheckAsync(
+            UpdateCheckTrigger.Automatic,
+            _updateCheckCancellation.Token);
     }
 
-    /// <summary>The release announced during this process, if any.</summary>
-    public AvailableUpdate? AvailableUpdate => Volatile.Read(ref _availableUpdate);
+    /// <summary>Starts a fresh user-visible check, cancelling an older lookup.</summary>
+    public void CheckForUpdates()
+    {
+        if (!_enableStartupUpdates) return;
+        if (_updateCheckCancellation.IsCancellationRequested) return;
+        _updateCheckTask = _startupUpdates.CheckAsync(
+            UpdateCheckTrigger.User,
+            _updateCheckCancellation.Token);
+    }
 
-    /// <summary>Raised after the update toast is shown so the tray can show its badge.</summary>
-    public event Action<AvailableUpdate>? UpdateAvailable;
+    public UpdateCheckState UpdateState => _startupUpdates.State;
+
+    public event Action<UpdateCheckState>? UpdateStateChanged;
+
+    private void OnUpdateStateChanged(UpdateCheckState state) =>
+        UpdateStateChanged?.Invoke(state);
 
     private void NotifyUpdateAvailable(AvailableUpdate update)
     {
-        Volatile.Write(ref _availableUpdate, update);
+        // State was published before this best-effort toast. The tray badge and
+        // in-app banner therefore remain available if the notification fails.
         try
         {
             _updateNotifications.Show(update);
         }
-        finally
+        catch (Exception ex)
         {
-            // The tray badge and window banner remain useful even if the Windows
-            // notification platform rejects this individual toast.
-            UpdateAvailable?.Invoke(update);
+            _loggerFactory
+                .CreateLogger<AppController>()
+                .LogDebug(ex, "The Windows update notification could not be shown.");
         }
     }
 
@@ -267,8 +280,9 @@ public sealed class AppController : IAsyncDisposable
         demo.End();
     }
 
-    public Task<bool> IsWinGetModuleInstalledAsync(CancellationToken ct = default) =>
-        _winGetUpdates.IsModuleInstalledAsync(ct);
+    public Task<WinGetCapabilityResult> ProbeWinGetCapabilityAsync(
+        CancellationToken ct = default) =>
+        _winGetUpdates.ProbeCapabilityAsync(ct);
 
     public bool HasSavedSession
     {
@@ -975,9 +989,11 @@ public sealed class AppController : IAsyncDisposable
         try
         {
             await _updateCheckCancellation.CancelAsync().ConfigureAwait(false);
+            await _startupUpdates.CancelAsync().ConfigureAwait(false);
             if (_updateCheckTask is not null)
                 await _updateCheckTask.ConfigureAwait(false);
 
+            _startupUpdates.StateChanged -= OnUpdateStateChanged;
             _network.NetworkChanged -= OnNetworkChanged;
             _network.Stop();
             _networkSettle?.Cancel();

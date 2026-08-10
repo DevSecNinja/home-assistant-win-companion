@@ -4,6 +4,7 @@ using WindowsCompanion.Core.Models;
 using WindowsCompanion.Core.Sensors;
 using WindowsCompanion.Core.Updates;
 using WindowsCompanion_App.Services;
+using System.ComponentModel;
 using System.Runtime.InteropServices;
 using System.Windows.Input;
 using Microsoft.UI.Dispatching;
@@ -24,7 +25,7 @@ namespace WindowsCompanion_App;
 /// session is established, then a lean Status view. The app is tray-resident:
 /// closing the window hides it to the notification area rather than exiting.
 /// </summary>
-public sealed partial class MainWindow : Window
+public sealed partial class MainWindow : Window, IMainWindowActivationTarget
 {
     private const int InitialWindowWidth = 720;
     private const int InitialWindowHeight = 820;
@@ -36,6 +37,8 @@ public sealed partial class MainWindow : Window
     private readonly DispatcherQueueTimer _statusTimer;
     private readonly WindowsStartupRegistration _startup = new();
     private readonly RestartManagerShutdownMonitor _restartManagerShutdown;
+    private readonly MainWindowActivation _windowActivation;
+    private readonly UpdateUiActions _updateActions;
     private readonly bool _startHidden;
     private bool _exiting;
     private bool _connected;
@@ -54,10 +57,9 @@ public sealed partial class MainWindow : Window
     private bool _loadingSensorSettings;
     private bool _loadingStartupSetting;
     private int _connectionActionRunning;
-    private AvailableUpdate? _availableUpdate;
 
     public ICommand TrayOpenHomeAssistantCommand { get; }
-    public ICommand TrayViewReleaseCommand { get; }
+    public ICommand TrayUpdateCommand { get; }
     public ICommand TrayShowWindowCommand { get; }
     public ICommand TrayDisconnectCommand { get; }
     public ICommand TrayExitCommand { get; }
@@ -65,12 +67,17 @@ public sealed partial class MainWindow : Window
     public MainWindow(bool startHidden = false)
     {
         _controller = App.Controller;
+        _windowActivation = new MainWindowActivation(this);
+        _updateActions = new UpdateUiActions(
+            ActivateMainWindow,
+            _controller.CheckForUpdates,
+            OpenReleasePage);
         TrayOpenHomeAssistantCommand = new ActionCommand(
             () => DispatchTrayAction(_controller.OpenHomeAssistant));
-        TrayViewReleaseCommand = new ActionCommand(
-            () => DispatchTrayAction(OpenAvailableRelease));
+        TrayUpdateCommand = new ActionCommand(
+            () => DispatchTrayAction(HandleUpdateTrayAction));
         TrayShowWindowCommand = new ActionCommand(
-            () => DispatchTrayAction(Show));
+            () => DispatchTrayAction(ActivateMainWindow));
         TrayDisconnectCommand = new ActionCommand(
             () => DispatchTrayAction(() => OnDisconnect(this, new RoutedEventArgs())));
         TrayExitCommand = new ActionCommand(
@@ -96,8 +103,8 @@ public sealed partial class MainWindow : Window
         _dispatcher = DispatcherQueue.GetForCurrentThread();
         _controller.StateChanged += OnStateChanged;
         _controller.RouteChanged += OnRouteChanged;
-        _controller.UpdateAvailable += OnUpdateAvailable;
-        if (_controller.AvailableUpdate is { } update) ApplyUpdateAvailable(update);
+        _controller.UpdateStateChanged += OnUpdateStateChanged;
+        ApplyUpdateState(_controller.UpdateState);
 
         // Kept in Core so the demo warning reads the same wherever it is shown.
         DemoBanner.Title = DemoSession.Title;
@@ -132,7 +139,7 @@ public sealed partial class MainWindow : Window
             // starting a demo alongside a connection in flight would make the app
             // claim it sends nothing while it is connecting.
             DemoModeButton.IsEnabled = !resumed;
-            if (!resumed && _startHidden) Show();
+            if (!resumed && _startHidden) ActivateMainWindow();
             RefreshStartupSetting();
             if (resumed)
             {
@@ -144,7 +151,7 @@ public sealed partial class MainWindow : Window
         {
             ShowPanel(false);
             DemoModeButton.IsEnabled = true;
-            if (_startHidden) Show();
+            if (_startHidden) ActivateMainWindow();
         }
     }
 
@@ -158,37 +165,112 @@ public sealed partial class MainWindow : Window
             UpdateHealth();
         });
 
-    private void OnUpdateAvailable(AvailableUpdate update) =>
-        _dispatcher.TryEnqueue(() => ApplyUpdateAvailable(update));
+    private void OnUpdateStateChanged(UpdateCheckState state) =>
+        _dispatcher.TryEnqueue(() => ApplyUpdateState(state));
 
-    private void ApplyUpdateAvailable(AvailableUpdate update)
+    private void ApplyUpdateState(UpdateCheckState state, bool showKnownUpdate = false)
     {
-        if (_exiting) return;
+        if (_exiting || state.Revision < _controller.UpdateState.Revision) return;
 
-        _availableUpdate = update;
-        TrayIcon.IconSource = new BitmapImage(
-            new Uri("ms-appx:///Assets/UpdateIcon.ico"));
-        TrayViewReleaseItem.Text = $"View update v{update.AvailableVersion}";
-        TrayViewReleaseItem.Visibility = Visibility.Visible;
-        UpdateBanner.Message =
-            $"Version {update.AvailableVersion} is available. "
-            + $"Installed version: {update.InstalledVersion}.";
-        UpdateBanner.IsOpen = true;
+        var presentation = UpdateStatusPresentation.Create(state, showKnownUpdate);
+        TrayIcon.IconSource = new BitmapImage(new Uri(
+            state.AvailableUpdate is null
+                ? "ms-appx:///Assets/AppIcon.ico"
+                : "ms-appx:///Assets/UpdateIcon.ico"));
+        TrayUpdateItem.Text = presentation.TrayActionLabel;
+        UpdateBanner.Title = presentation.BannerTitle;
+        var messageChanged = !string.Equals(
+            UpdateBannerMessage.Text,
+            presentation.BannerMessage,
+            StringComparison.Ordinal);
+        UpdateBannerMessage.Text = presentation.BannerMessage;
+        UpdateBanner.Severity = presentation.BannerTone switch
+        {
+            UpdateBannerTone.Success => InfoBarSeverity.Success,
+            UpdateBannerTone.Warning => InfoBarSeverity.Warning,
+            _ => InfoBarSeverity.Informational
+        };
+        UpdateBanner.IsOpen = presentation.IsBannerOpen;
+        ViewReleaseButton.Visibility = presentation.IsReleaseActionVisible
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+        RecheckUpdatesButton.Visibility = presentation.IsRecheckVisible
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+        RecheckUpdatesButton.IsEnabled = presentation.IsRecheckEnabled;
+        if (presentation.IsBannerOpen && messageChanged)
+        {
+            var peer = FrameworkElementAutomationPeer.FromElement(UpdateBannerMessage)
+                       ?? FrameworkElementAutomationPeer.CreatePeerForElement(
+                           UpdateBannerMessage);
+            peer?.RaiseAutomationEvent(AutomationEvents.LiveRegionChanged);
+        }
         UpdateHealth();
     }
 
     private void OnViewRelease(object sender, RoutedEventArgs e)
-        => OpenAvailableRelease();
-
-    private void OpenAvailableRelease()
     {
-        if (_availableUpdate is not { } update) return;
-
-        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+        try
         {
-            FileName = update.ReleasePage.AbsoluteUri,
+            _updateActions.OpenRelease(_controller.UpdateState);
+        }
+        catch (Win32Exception)
+        {
+            ShowReleaseLaunchFailure();
+        }
+        catch (InvalidOperationException)
+        {
+            ShowReleaseLaunchFailure();
+        }
+        catch (NotSupportedException)
+        {
+            ShowReleaseLaunchFailure();
+        }
+    }
+
+    private void OnRecheckUpdates(object sender, RoutedEventArgs e) =>
+        _updateActions.Recheck();
+
+    private void HandleUpdateTrayAction()
+    {
+        var state = _controller.UpdateState;
+        if (_updateActions.InvokeTrayAction(state))
+            ApplyUpdateState(state, showKnownUpdate: true);
+    }
+
+    private static void OpenReleasePage(Uri releasePage)
+    {
+        if (System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+        {
+            FileName = releasePage.AbsoluteUri,
             UseShellExecute = true
-        });
+        }) is null)
+        {
+            throw new InvalidOperationException("Windows did not start a browser.");
+        }
+    }
+
+    private void ShowReleaseLaunchFailure()
+    {
+        UpdateBanner.Title = "Couldn't open the release page";
+        var messageChanged = !string.Equals(
+            UpdateBannerMessage.Text,
+            "Windows couldn't open the browser. You can retry or recheck for updates.",
+            StringComparison.Ordinal);
+        UpdateBannerMessage.Text =
+            "Windows couldn't open the browser. You can retry or recheck for updates.";
+        UpdateBanner.Severity = InfoBarSeverity.Warning;
+        UpdateBanner.IsOpen = true;
+        ViewReleaseButton.Visibility = Visibility.Visible;
+        RecheckUpdatesButton.Visibility = Visibility.Visible;
+        RecheckUpdatesButton.IsEnabled = true;
+        if (messageChanged)
+        {
+            var peer = FrameworkElementAutomationPeer.FromElement(UpdateBannerMessage)
+                       ?? FrameworkElementAutomationPeer.CreatePeerForElement(
+                           UpdateBannerMessage);
+            peer?.RaiseAutomationEvent(AutomationEvents.LiveRegionChanged);
+        }
     }
 
     private void OnStateChanged(ConnectionState state) =>
@@ -206,7 +288,7 @@ public sealed partial class MainWindow : Window
             if (state == ConnectionState.AuthError)
             {
                 ShowPanel(false);
-                Show();
+                ActivateMainWindow();
             }
 
             UpdateHealth();
@@ -793,7 +875,11 @@ public sealed partial class MainWindow : Window
 
     private void DispatchTrayAction(Action action)
     {
-        _dispatcher.TryEnqueue(() => action());
+        if (_exiting) return;
+        _dispatcher.TryEnqueue(() =>
+        {
+            if (!_exiting) action();
+        });
     }
 
     internal void BeginShutdown()
@@ -805,7 +891,7 @@ public sealed partial class MainWindow : Window
         _statusTimer.Stop();
         _controller.StateChanged -= OnStateChanged;
         _controller.RouteChanged -= OnRouteChanged;
-        _controller.UpdateAvailable -= OnUpdateAvailable;
+        _controller.UpdateStateChanged -= OnUpdateStateChanged;
         _restartManagerShutdown.Dispose();
         TrayIcon.Dispose();
     }
@@ -824,12 +910,30 @@ public sealed partial class MainWindow : Window
         AppWindow.Hide();
     }
 
-    private void Show()
+    private void ActivateMainWindow()
     {
+        if (_exiting) return;
         RefreshStartupSetting();
-        AppWindow.Show();
-        AppWindow.MoveInZOrderAtTop();
+        _windowActivation.Activate();
     }
+
+    bool IMainWindowActivationTarget.IsMinimized =>
+        AppWindow.Presenter is Microsoft.UI.Windowing.OverlappedPresenter
+        {
+            State: Microsoft.UI.Windowing.OverlappedPresenterState.Minimized
+        };
+
+    void IMainWindowActivationTarget.Show() => AppWindow.Show();
+
+    void IMainWindowActivationTarget.Restore()
+    {
+        if (AppWindow.Presenter is Microsoft.UI.Windowing.OverlappedPresenter presenter)
+            presenter.Restore();
+    }
+
+    void IMainWindowActivationTarget.BringToFront() => AppWindow.MoveInZOrderAtTop();
+
+    void IMainWindowActivationTarget.Activate() => Activate();
 
     private void RefreshStartupSetting()
     {
@@ -921,30 +1025,13 @@ public sealed partial class MainWindow : Window
         TrayIcon.ToolTipText = TrayTooltipFormatter.Format(
             healthy,
             summary,
-            _availableUpdate?.AvailableVersion);
+            _controller.UpdateState.AvailableUpdate?.AvailableVersion);
     }
 
     private void OnOpenLog(object sender, RoutedEventArgs e) => _controller.OpenLogFile();
 
     private void OnOpenLocationSettings(object sender, RoutedEventArgs e) =>
         _controller.OpenLocationSettings();
-
-    private sealed class ActionCommand : ICommand
-    {
-        private readonly Action _execute;
-
-        public ActionCommand(Action execute) => _execute = execute;
-
-        public event EventHandler? CanExecuteChanged
-        {
-            add { }
-            remove { }
-        }
-
-        public bool CanExecute(object? parameter) => true;
-
-        public void Execute(object? parameter) => _execute();
-    }
 
     private static string Ago(TimeSpan span) => span.TotalSeconds switch
     {

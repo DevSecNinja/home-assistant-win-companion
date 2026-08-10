@@ -80,8 +80,9 @@ one that just works with stock Home Assistant.**
   tooltip shows current health. The status overview can register the app to start
   in the tray when the current Windows user signs in.
 - **Release notifications** — official builds check once in the background at
-  startup and show a Windows toast plus a numbered tray badge when a newer stable
-  GitHub Release exists. The app never downloads, installs, or restarts itself.
+  startup, and the tray supports fresh checks at any time. A newer stable GitHub
+  Release gets a Windows toast, numbered tray badge, and exact release-page link;
+  the app never downloads, installs, or restarts itself.
 - **Windows toasts** — notifications sent to this PC from Home Assistant appear as
   native toasts, delivered over the `mobile_app` local push channel (Windows has no
   APNS/FCM equivalent).

@@ -81,7 +81,13 @@ public partial class App : Application
 
         var startupLaunch = StartupCommand.IsStartupLaunch(Environment.GetCommandLineArgs());
         var startHidden = startupLaunch && Controller.HasSavedSession;
+#if DEBUG
+        _window = new MainWindow(
+            startHidden,
+            TestLaunchOptions is null ? null : new DisabledStartupRegistration());
+#else
         _window = new MainWindow(startHidden);
+#endif
         _dispatcher = DispatcherQueue.GetForCurrentThread();
         RegisterShutdownSignal();
         _window.Activate();

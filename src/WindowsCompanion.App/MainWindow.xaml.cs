@@ -36,7 +36,7 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
     private readonly AppController _controller;
     private readonly DispatcherQueue _dispatcher;
     private readonly DispatcherQueueTimer _statusTimer;
-    private readonly WindowsStartupRegistration _startup = new();
+    private readonly IStartupRegistration _startup;
     private readonly RestartManagerShutdownMonitor _restartManagerShutdown;
     private readonly MainWindowActivation _windowActivation;
     private readonly UpdateUiActions _updateActions;
@@ -65,9 +65,12 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
     public ICommand TrayDisconnectCommand { get; }
     public ICommand TrayExitCommand { get; }
 
-    public MainWindow(bool startHidden = false)
+    public MainWindow(
+        bool startHidden = false,
+        IStartupRegistration? startupRegistration = null)
     {
         _controller = App.Controller;
+        _startup = startupRegistration ?? new WindowsStartupRegistration();
         _windowActivation = new MainWindowActivation(this);
         _updateActions = new UpdateUiActions(
             ActivateMainWindow,
@@ -956,6 +959,15 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
         _loadingStartupSetting = true;
         try
         {
+            if (!_startup.IsSupported)
+            {
+                StartWithWindowsToggle.IsOn = false;
+                StartWithWindowsToggle.IsEnabled = false;
+                StartupStatusText.Text = "Unavailable in the isolated test profile.";
+                return;
+            }
+
+            StartWithWindowsToggle.IsEnabled = true;
             var state = _startup.GetState();
             var repaired = false;
             if (state == StartupRegistrationState.NeedsRepair)
@@ -988,7 +1000,7 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
 
     private void OnStartWithWindowsToggled(object sender, RoutedEventArgs e)
     {
-        if (_loadingStartupSetting) return;
+        if (_loadingStartupSetting || !_startup.IsSupported) return;
 
         try
         {

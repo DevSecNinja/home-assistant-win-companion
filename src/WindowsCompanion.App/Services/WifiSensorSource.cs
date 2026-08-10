@@ -127,23 +127,24 @@ public sealed class WifiSensorSource : ISensorSource
         IReadOnlySet<string> requested,
         CancellationToken cancellationToken = default)
     {
-        if (!Definitions.Any(_preferences.IsEnabled))
+        var permitted = SensorPreviewGate.Permitted(Definitions, requested, _preferences);
+
+        var readings = Read(permitted, new SensorReadContext("Preview")).ToList();
+
+        foreach (var definition in Definitions)
         {
-            return ValueTask.FromResult<IReadOnlyList<Sensor>>(
-            [
-                new() { UniqueId = SsidId, Name = "Wi-Fi SSID", State = "Enable to read Wi-Fi identifiers" },
-                new() { UniqueId = BssidId, Name = "Wi-Fi BSSID", State = "Enable to read Wi-Fi identifiers" },
-                new() { UniqueId = SecurityId, Name = "Wi-Fi Security", State = "Enable to read Wi-Fi identifiers" },
-                new()
+            if (requested.Contains(definition.UniqueId) && !permitted.Contains(definition.UniqueId))
+            {
+                readings.Add(new Sensor
                 {
-                    UniqueId = RandomMacId,
-                    Name = "Wi-Fi Randomized MAC Address",
+                    UniqueId = definition.UniqueId,
+                    Name = definition.Name,
                     State = "Enable to read Wi-Fi identifiers"
-                }
-            ]);
+                });
+            }
         }
 
-        return ValueTask.FromResult(Read(requested, new SensorReadContext("Preview")));
+        return ValueTask.FromResult<IReadOnlyList<Sensor>>(readings);
     }
 
     public void Start(Action onChanged)
@@ -217,6 +218,7 @@ public sealed class WifiSensorSource : ISensorSource
                             ssid,
                             connection.Association.Dot11Bssid,
                             connection.Security.AuthAlgorithm,
+                            connection.Security.CipherAlgorithm,
                             IsMacRandomizationEnabled(client, item.InterfaceGuid, connection.ProfileName),
                             CurrentMacAddress(item.InterfaceGuid));
                     }
@@ -281,22 +283,22 @@ public sealed class WifiSensorSource : ISensorSource
     /// </summary>
     private static string? CurrentMacAddress(Guid interfaceGuid)
     {
-        foreach (var adapter in NetworkInterface.GetAllNetworkInterfaces())
+        try
         {
-            if (!Guid.TryParse(adapter.Id, out var adapterGuid) || adapterGuid != interfaceGuid)
-                continue;
-
-            try
+            foreach (var adapter in NetworkInterface.GetAllNetworkInterfaces())
             {
+                if (!Guid.TryParse(adapter.Id, out var adapterGuid) || adapterGuid != interfaceGuid)
+                    continue;
+
                 return MacAddressFormatter.Format(adapter.GetPhysicalAddress().GetAddressBytes());
             }
-            catch (NetworkInformationException)
-            {
-                return null;
-            }
-        }
 
-        return null;
+            return null;
+        }
+        catch (NetworkInformationException)
+        {
+            return null;
+        }
     }
 
     private const int ErrorAccessDenied = 5;

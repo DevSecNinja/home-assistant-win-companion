@@ -16,7 +16,11 @@ SSID/BSSID.
   currently carrying the active route: a docked laptop reports both its Ethernet
   and its Wi-Fi hardware address. An adapter that is up is preferred over one that
   is merely present, and `Not Connected` is reported when no matching physical
-  adapter exists.
+  adapter exists. `wlan_mac_address` reports the OS-reported hardware address,
+  which reflects Windows' per-network MAC randomization when it is switched on for
+  the connected network; in that case it matches `connectivity_wifi_random_mac` by
+  design, because Windows does not expose the underlying factory address without
+  elevated privileges.
 - `gateway_address` and `dns_servers` are read from the same adapter snapshot as
   the existing IPv4/IPv6/MAC sensors, so they always describe the active
   connection. `dns_servers` joins multiple resolvers with `, `.

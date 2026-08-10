@@ -86,6 +86,19 @@ public class NetworkIdentityTests
     }
 
     [Fact]
+    public void Selects_the_active_route_without_retaining_adapter_addresses()
+    {
+        var routed = Ethernet(ipv4: []);
+        routed = routed with { MatchesActiveRoute = true };
+
+        var selected = NetworkAdapterSelector.SelectActive([WiFi(), routed]);
+
+        Assert.Equal("eth", selected!.Id);
+        Assert.Empty(selected.Ipv4);
+        Assert.Empty(selected.Ipv6);
+    }
+
+    [Fact]
     public void Matches_the_route_on_ipv6_when_ipv4_is_unavailable()
     {
         var selected = NetworkAdapterSelector.SelectActive(

@@ -41,6 +41,12 @@ public sealed partial class MainWindow : Window
     private bool _connected;
     private int _sensorListBuildVersion;
     private bool _suppressSensorToggle;
+    private readonly object _sensorPreviewCancellationGate = new();
+    private CancellationTokenSource? _sensorListPreviewCancellation;
+    private readonly Dictionary<string, CancellationTokenSource> _sensorPreviewCancellations =
+        new(StringComparer.Ordinal);
+    private readonly Dictionary<string, TextBlock> _sensorPreviewTexts =
+        new(StringComparer.Ordinal);
     private List<string> _trustedSsids = [];
     private List<string> _trustedBssids = [];
     private bool _suppressSeparateUrlsToggle;
@@ -975,7 +981,11 @@ public sealed partial class MainWindow : Window
             ShowView(View.Settings);
     }
 
-    private void OnCloseSettings(object sender, RoutedEventArgs e) => ShowView(View.Status);
+    private void OnCloseSettings(object sender, RoutedEventArgs e)
+    {
+        CancelSensorPreviews();
+        ShowView(View.Status);
+    }
 
     /// <summary>
     /// Renders one toggle per catalog sensor. Built in code rather than bound so the
@@ -987,7 +997,21 @@ public sealed partial class MainWindow : Window
         if (catalog is null) return false;
 
         var buildVersion = ++_sensorListBuildVersion;
-        var previews = await _controller.PreviewSensorsAsync();
+        using var previewCancellation = BeginSensorListPreview();
+        IReadOnlyDictionary<string, string> previews;
+        try
+        {
+            previews = await _controller.PreviewSensorsAsync(previewCancellation.Token);
+        }
+        catch (OperationCanceledException) when (previewCancellation.IsCancellationRequested)
+        {
+            return false;
+        }
+        finally
+        {
+            EndSensorListPreview(previewCancellation);
+        }
+
         if (buildVersion != _sensorListBuildVersion
             || !ReferenceEquals(catalog, _controller.Catalog)
             || (!_controller.IsDemoMode
@@ -997,6 +1021,7 @@ public sealed partial class MainWindow : Window
         }
 
         SensorList.Children.Clear();
+        _sensorPreviewTexts.Clear();
         _loadingSensorSettings = true;
         IdleMinutesBox.Value = Math.Max(1, catalog.Preferences.IdleThresholdSeconds / 60);
         _loadingSensorSettings = false;
@@ -1087,7 +1112,7 @@ public sealed partial class MainWindow : Window
                         "TextFillColorSecondaryBrush"]
                 });
             }
-            text.Children.Add(new TextBlock
+            var previewText = new TextBlock
             {
                 Text = previews.TryGetValue(definition.UniqueId, out var value)
                     ? $"Current value: {value}"
@@ -1098,7 +1123,9 @@ public sealed partial class MainWindow : Window
                 TextWrapping = TextWrapping.Wrap,
                 FontSize = 12,
                 Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"]
-            });
+            };
+            text.Children.Add(previewText);
+            _sensorPreviewTexts[definition.UniqueId] = previewText;
 
             if (definition.UniqueId == FrontmostAppSensorSource.FrontmostAppId)
                 AddFrontmostAppDetailSetting(text, catalog);
@@ -1256,12 +1283,172 @@ public sealed partial class MainWindow : Window
             toggle.IsEnabled = true;
         }
 
-        catalog.SetEnabled(uniqueId, toggle.IsOn);
-        await _controller.ApplySensorChangesAsync();
+        var wasEnabled = catalog.IsEnabled(uniqueId);
+        toggle.IsEnabled = false;
+        using var previewCancellation = BeginSensorPreview(uniqueId);
+        Exception? refreshFailure = null;
+        string? refreshedPreview = null;
+        try
+        {
+            try
+            {
+                refreshedPreview = await catalog.SetEnabledAndRefreshAsync(
+                    uniqueId,
+                    toggle.IsOn,
+                    previewCancellation.Token);
+            }
+            catch (OperationCanceledException) when (previewCancellation.IsCancellationRequested)
+            {
+            }
+            catch (Exception ex)
+            {
+                if (catalog.IsEnabled(uniqueId) == toggle.IsOn)
+                {
+                    refreshFailure = ex;
+                }
+                else
+                {
+                    SetToggleState(toggle, wasEnabled);
+                    ShowSensorPreviewError(uniqueId, "Could not update sensor: " + ex.Message);
+                    return;
+                }
+            }
 
-        // In the demo the value is the point: a sensitive sensor reveals nothing
-        // until it is switched on, so the list is re-read to show what it reports.
-        if (_controller.IsDemoMode) await BuildSensorListAsync();
+            if (!toggle.IsOn
+                && _sensorPreviewTexts.TryGetValue(uniqueId, out var disabledPreview))
+            {
+                var definition = catalog.Definitions.First(candidate =>
+                    string.Equals(candidate.UniqueId, uniqueId, StringComparison.Ordinal));
+                disabledPreview.Text = "Current value: " + definition.DisabledPreview;
+                disabledPreview.Foreground =
+                    (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources[
+                        "TextFillColorSecondaryBrush"];
+            }
+
+            try
+            {
+                await _controller.ApplySensorChangesAsync();
+            }
+            catch (Exception ex)
+            {
+                catalog.SetEnabled(uniqueId, wasEnabled);
+                SetToggleState(toggle, wasEnabled);
+                ShowSensorPreviewError(uniqueId, "Could not update sensor: " + ex.Message);
+                return;
+            }
+
+            if (!ReferenceEquals(catalog, _controller.Catalog)
+                || previewCancellation.IsCancellationRequested)
+            {
+                return;
+            }
+
+            if (refreshFailure is not null)
+            {
+                ShowSensorPreviewError(uniqueId, "Refresh failed: " + refreshFailure.Message);
+                return;
+            }
+
+            if (!ReferenceEquals(catalog, _controller.Catalog)
+                || catalog.IsEnabled(uniqueId) != toggle.IsOn)
+            {
+                return;
+            }
+
+            if (_sensorPreviewTexts.TryGetValue(uniqueId, out var previewText))
+            {
+                previewText.Text = $"Current value: {refreshedPreview ?? "Unavailable"}";
+                previewText.Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources[
+                    "TextFillColorSecondaryBrush"];
+            }
+        }
+        catch (OperationCanceledException) when (previewCancellation.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            ShowSensorPreviewError(uniqueId, "Refresh failed: " + ex.Message);
+        }
+        finally
+        {
+            EndSensorPreview(uniqueId, previewCancellation);
+            if (ReferenceEquals(catalog, _controller.Catalog)) toggle.IsEnabled = true;
+        }
+    }
+
+    private CancellationTokenSource BeginSensorListPreview()
+    {
+        var next = new CancellationTokenSource();
+        CancellationTokenSource? previous;
+        lock (_sensorPreviewCancellationGate)
+        {
+            previous = _sensorListPreviewCancellation;
+            _sensorListPreviewCancellation = next;
+        }
+
+        previous?.Cancel();
+        return next;
+    }
+
+    private void EndSensorListPreview(CancellationTokenSource completed)
+    {
+        lock (_sensorPreviewCancellationGate)
+        {
+            if (ReferenceEquals(_sensorListPreviewCancellation, completed))
+                _sensorListPreviewCancellation = null;
+        }
+    }
+
+    private CancellationTokenSource BeginSensorPreview(string uniqueId)
+    {
+        var next = new CancellationTokenSource();
+        CancellationTokenSource? previous = null;
+        lock (_sensorPreviewCancellationGate)
+        {
+            _sensorPreviewCancellations.Remove(uniqueId, out previous);
+            _sensorPreviewCancellations[uniqueId] = next;
+        }
+
+        previous?.Cancel();
+        return next;
+    }
+
+    private void EndSensorPreview(string uniqueId, CancellationTokenSource completed)
+    {
+        lock (_sensorPreviewCancellationGate)
+        {
+            if (_sensorPreviewCancellations.TryGetValue(uniqueId, out var current)
+                && ReferenceEquals(current, completed))
+            {
+                _sensorPreviewCancellations.Remove(uniqueId);
+            }
+        }
+    }
+
+    private void CancelSensorPreviews()
+    {
+        CancellationTokenSource? listPreview;
+        List<CancellationTokenSource> rowPreviews;
+        lock (_sensorPreviewCancellationGate)
+        {
+            listPreview = _sensorListPreviewCancellation;
+            _sensorListPreviewCancellation = null;
+            rowPreviews = [.. _sensorPreviewCancellations.Values];
+            _sensorPreviewCancellations.Clear();
+        }
+
+        listPreview?.Cancel();
+        foreach (var cancellation in rowPreviews)
+            cancellation.Cancel();
+    }
+
+    private void ShowSensorPreviewError(string uniqueId, string message)
+    {
+        if (!_sensorPreviewTexts.TryGetValue(uniqueId, out var previewText)) return;
+
+        previewText.Text = "Current value: " + message;
+        previewText.Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources[
+            "SystemFillColorCautionBrush"];
     }
 
     private void SetToggleState(ToggleSwitch toggle, bool isOn)

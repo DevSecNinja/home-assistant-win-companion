@@ -55,7 +55,10 @@ public sealed class WindowsNetworkContextProvider : INetworkContextProvider
                 LocalAddresses: localAddresses);
         }
 
-        var wifi = WifiSensorSource.ReadConnection();
+        var wifi = WifiSensorSource.ReadConnection(
+            WifiSensorSource.WifiCaptureScope.StatusOnly
+            | WifiSensorSource.WifiCaptureScope.Ssid
+            | WifiSensorSource.WifiCaptureScope.Bssid);
         return wifi.Status switch
         {
             WifiConnectionStatus.Connected => new NetworkContext(
@@ -74,7 +77,8 @@ public sealed class WindowsNetworkContextProvider : INetworkContextProvider
 
     /// <summary>True when Windows is withholding Wi-Fi identifiers from this app.</summary>
     public static bool WirelessIdentifiersBlocked() =>
-        WifiSensorSource.ReadConnection().Status == WifiConnectionStatus.PermissionRequired;
+        WifiSensorSource.ReadConnection(WifiSensorSource.WifiCaptureScope.StatusOnly).Status
+        == WifiConnectionStatus.PermissionRequired;
 
     private static string? Bssid(WifiConnectionInfo info) =>
         info.Bssid is { Length: 6 }

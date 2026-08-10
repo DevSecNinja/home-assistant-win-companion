@@ -65,7 +65,8 @@ public sealed class NetworkSensorSource : ISensorSource
             SensorPrivacy.Sensitive,
             EnabledByDefault: false,
             ResourceUsage: "Low. Checks this PC only after a network change. It does not contact "
-                           + "an internet service to find the address."),
+                           + "an internet service to find the address.",
+            OptInPlaceholder: OptInPlaceholder),
         new(
             Ipv6AddressId,
             "IPv6 Address",
@@ -74,7 +75,8 @@ public sealed class NetworkSensorSource : ISensorSource
             SensorPrivacy.Sensitive,
             EnabledByDefault: false,
             ResourceUsage: "Low. Checks this PC only after a network change. It does not contact "
-                           + "an internet service to find the address."),
+                           + "an internet service to find the address.",
+            OptInPlaceholder: OptInPlaceholder),
         new(
             MacAddressId,
             "MAC Address",
@@ -83,7 +85,8 @@ public sealed class NetworkSensorSource : ISensorSource
             SensorPrivacy.Sensitive,
             EnabledByDefault: false,
             ResourceUsage: "Low. Reads the address from this PC only after a network change. It "
-                           + "does not send network traffic to discover it."),
+                           + "does not send network traffic to discover it.",
+            OptInPlaceholder: OptInPlaceholder),
         new(
             LanMacAddressId,
             "LAN MAC Address",
@@ -91,7 +94,8 @@ public sealed class NetworkSensorSource : ISensorSource
             SensorPrivacy.Sensitive,
             EnabledByDefault: false,
             ResourceUsage: "Low. Reads the address from this PC only after a network change. It "
-                           + "does not send network traffic to discover it."),
+                           + "does not send network traffic to discover it.",
+            OptInPlaceholder: OptInPlaceholder),
         new(
             WlanMacAddressId,
             "WLAN MAC Address",
@@ -100,7 +104,8 @@ public sealed class NetworkSensorSource : ISensorSource
             SensorPrivacy.Sensitive,
             EnabledByDefault: false,
             ResourceUsage: "Low. Reads the address from this PC only after a network change. It "
-                           + "does not send network traffic to discover it."),
+                           + "does not send network traffic to discover it.",
+            OptInPlaceholder: OptInPlaceholder),
         new(
             GatewayAddressId,
             "Default Gateway",
@@ -108,7 +113,8 @@ public sealed class NetworkSensorSource : ISensorSource
             SensorPrivacy.Sensitive,
             EnabledByDefault: false,
             ResourceUsage: "Low. Checks this PC only after a network change. It does not contact "
-                           + "an internet service to find the address."),
+                           + "an internet service to find the address.",
+            OptInPlaceholder: OptInPlaceholder),
         new(
             DnsServersId,
             "DNS Servers",
@@ -116,7 +122,8 @@ public sealed class NetworkSensorSource : ISensorSource
             SensorPrivacy.Sensitive,
             EnabledByDefault: false,
             ResourceUsage: "Low. Checks this PC only after a network change. It does not contact "
-                           + "an internet service to find the addresses.")
+                           + "an internet service to find the addresses.",
+            OptInPlaceholder: OptInPlaceholder)
     ];
 
     public IReadOnlyList<Sensor> Read(IReadOnlySet<string> enabled, SensorReadContext context)
@@ -282,12 +289,20 @@ public sealed class NetworkSensorSource : ISensorSource
     {
         if (scope == NetworkCaptureScope.None) return NetworkIdentity.NotConnected;
 
-        var includeIpAddresses = scope.HasFlag(NetworkCaptureScope.IpAddresses);
+        var includeIpv4 = scope.HasFlag(NetworkCaptureScope.Ipv4Address);
+        var includeIpv6 = scope.HasFlag(NetworkCaptureScope.Ipv6Address);
+        var identifyActiveAdapter = scope.HasFlag(NetworkCaptureScope.ActiveAdapter);
 
         try
         {
+            var routeLocalIpv4 = includeIpv4 || identifyActiveAdapter
+                ? ResolveRoute(AddressFamily.InterNetwork)
+                : null;
+            var routeLocalIpv6 = includeIpv6 || identifyActiveAdapter
+                ? ResolveRoute(AddressFamily.InterNetworkV6)
+                : null;
             var adapters = NetworkInterface.GetAllNetworkInterfaces()
-                .Select(adapter => Describe(adapter, scope))
+                .Select(adapter => Describe(adapter, scope, routeLocalIpv4, routeLocalIpv6))
                 .ToList();
 
             if (scope == NetworkCaptureScope.ConnectionTypeOnly)
@@ -300,8 +315,8 @@ public sealed class NetworkSensorSource : ISensorSource
 
             return NetworkIdentity.From(
                 adapters,
-                includeIpAddresses ? ResolveRoute(AddressFamily.InterNetwork) : null,
-                includeIpAddresses ? ResolveRoute(AddressFamily.InterNetworkV6) : null);
+                includeIpv4 ? routeLocalIpv4 : null,
+                includeIpv6 ? routeLocalIpv6 : null);
         }
         catch (NetworkInformationException)
         {
@@ -311,7 +326,9 @@ public sealed class NetworkSensorSource : ISensorSource
 
     private static NetworkAdapterSnapshot Describe(
         NetworkInterface adapter,
-        NetworkCaptureScope scope)
+        NetworkCaptureScope scope,
+        string? routeLocalIpv4,
+        string? routeLocalIpv6)
     {
         var kind = adapter.NetworkInterfaceType switch
         {
@@ -328,10 +345,12 @@ public sealed class NetworkSensorSource : ISensorSource
         var isVirtual = NetworkAdapterSelector.LooksVirtual(adapter.Description)
                         || NetworkAdapterSelector.LooksVirtual(adapter.Name);
 
+        var includeIpv4 = scope.HasFlag(NetworkCaptureScope.Ipv4Address);
+        var includeIpv6 = scope.HasFlag(NetworkCaptureScope.Ipv6Address);
+        var identifyActiveAdapter = scope.HasFlag(NetworkCaptureScope.ActiveAdapter);
         if (scope == NetworkCaptureScope.ConnectionTypeOnly)
             return new NetworkAdapterSnapshot(adapter.Id, adapter.Description, kind, isUp, isVirtual);
 
-        var includeIpAddresses = scope.HasFlag(NetworkCaptureScope.IpAddresses);
         var includeCurrentPhysicalAddress =
             scope.HasFlag(NetworkCaptureScope.CurrentPhysicalAddress);
         var includePermanentPhysicalAddress =
@@ -345,21 +364,24 @@ public sealed class NetworkSensorSource : ISensorSource
         var ipv4 = new List<string>();
         var ipv6 = new List<Ipv6AddressInfo>();
         var hasGateway = false;
+        var matchesActiveRoute = false;
         string? gatewayAddress = null;
         var dns = new List<string>();
 
-        if (includeIpAddresses || includeGatewayAddress || includeDnsServers)
+        if (includeIpv4 || includeIpv6 || identifyActiveAdapter
+            || includeGatewayAddress || includeDnsServers)
         {
             try
             {
                 var properties = adapter.GetIPProperties();
-                var gateways = properties.GatewayAddresses
-                    .Where(gateway => gateway.Address is not null && !IsUnspecified(gateway.Address))
-                    .ToList();
-                hasGateway = gateways.Count > 0;
-
                 if (includeGatewayAddress)
-                    gatewayAddress = gateways.FirstOrDefault()?.Address.ToString();
+                {
+                    gatewayAddress = properties.GatewayAddresses
+                        .Select(gateway => gateway.Address)
+                        .FirstOrDefault(address => address is not null && !IsUnspecified(address))
+                        ?.ToString();
+                    hasGateway = gatewayAddress is not null;
+                }
 
                 if (includeDnsServers)
                 {
@@ -369,20 +391,35 @@ public sealed class NetworkSensorSource : ISensorSource
                         .ToList();
                 }
 
-                if (includeIpAddresses)
+                if (includeIpv4 || includeIpv6 || identifyActiveAdapter)
                 {
                     foreach (var unicast in properties.UnicastAddresses)
                     {
                         if (unicast.Address.AddressFamily == AddressFamily.InterNetwork)
                         {
-                            ipv4.Add(unicast.Address.ToString());
+                            if (identifyActiveAdapter
+                                && SameAddress(unicast.Address, routeLocalIpv4))
+                            {
+                                matchesActiveRoute = true;
+                            }
+
+                            if (includeIpv4) ipv4.Add(unicast.Address.ToString());
                         }
                         else if (unicast.Address.AddressFamily == AddressFamily.InterNetworkV6)
                         {
-                            ipv6.Add(new Ipv6AddressInfo(
-                                unicast.Address.ToString(),
-                                StateOf(unicast),
-                                OriginOf(unicast)));
+                            if (identifyActiveAdapter
+                                && SameAddress(unicast.Address, routeLocalIpv6))
+                            {
+                                matchesActiveRoute = true;
+                            }
+
+                            if (includeIpv6)
+                            {
+                                ipv6.Add(new Ipv6AddressInfo(
+                                    unicast.Address.ToString(),
+                                    StateOf(unicast),
+                                    OriginOf(unicast)));
+                            }
                         }
                     }
                 }
@@ -410,8 +447,13 @@ public sealed class NetworkSensorSource : ISensorSource
             dns,
             includePermanentPhysicalAddress
                 ? WindowsNetworkInterfaceIdentity.PermanentPhysicalAddressOf(adapter.Id)
-                : null);
+                : null,
+            matchesActiveRoute);
     }
+
+    private static bool SameAddress(IPAddress address, string? routeLocalAddress) =>
+        IPAddress.TryParse(routeLocalAddress, out var route)
+        && address.GetAddressBytes().SequenceEqual(route.GetAddressBytes());
 
     private static bool IsUnspecified(IPAddress address) =>
         address.Equals(IPAddress.Any) || address.Equals(IPAddress.IPv6Any);

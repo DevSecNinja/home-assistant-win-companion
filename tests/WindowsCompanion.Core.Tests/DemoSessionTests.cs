@@ -74,7 +74,7 @@ public class DemoSessionTests
         var demo = new DemoSession([source]);
 
         var before = await demo.PreviewAsync();
-        Assert.False(before.ContainsKey(SensitiveSource.Id));
+        Assert.Equal("Enable to read this value", before[SensitiveSource.Id]);
         Assert.Equal(0, source.ReadCount);
 
         demo.SetSensorEnabled(SensitiveSource.Id, true);

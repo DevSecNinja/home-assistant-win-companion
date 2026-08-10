@@ -13,9 +13,9 @@ public class DomainMembershipFormatterTests
     public void Domain_member_reports_the_domain_name()
     {
         Assert.Equal(
-            "contoso.com",
+            "corp.example",
             DomainMembershipFormatter.DescribeState(
-                DomainJoinStatus.Domain, "contoso.com", EntraJoinType.None, null));
+                DomainJoinStatus.Domain, "corp.example", EntraJoinType.None, null));
     }
 
     [Fact]
@@ -39,7 +39,7 @@ public class DomainMembershipFormatterTests
     [Theory]
     [InlineData(DomainJoinStatus.Domain, null)]
     [InlineData(DomainJoinStatus.Workgroup, "   ")]
-    [InlineData(DomainJoinStatus.Unknown, "contoso.com")]
+    [InlineData(DomainJoinStatus.Unknown, "corp.example")]
     public void Missing_or_unusable_data_reports_unknown(DomainJoinStatus status, string? name)
     {
         Assert.Equal(
@@ -51,18 +51,18 @@ public class DomainMembershipFormatterTests
     public void Name_is_trimmed()
     {
         Assert.Equal(
-            "contoso.com",
+            "corp.example",
             DomainMembershipFormatter.DescribeState(
-                DomainJoinStatus.Domain, "  contoso.com  ", EntraJoinType.None, null));
+                DomainJoinStatus.Domain, "  corp.example  ", EntraJoinType.None, null));
     }
 
     [Fact]
-    public void Entra_joined_pc_with_no_ad_domain_reports_the_entra_domain_name()
+    public void Entra_joined_pc_with_no_ad_domain_reports_the_tenant_display_name()
     {
         Assert.Equal(
-            "contoso.onmicrosoft.com",
+            "Contoso Example",
             DomainMembershipFormatter.DescribeState(
-                DomainJoinStatus.Workgroup, "WORKGROUP", EntraJoinType.Joined, "contoso.onmicrosoft.com"));
+                DomainJoinStatus.Workgroup, "WORKGROUP", EntraJoinType.Joined, "Contoso Example"));
     }
 
     [Fact]
@@ -78,9 +78,9 @@ public class DomainMembershipFormatterTests
     public void Hybrid_joined_pc_prefers_the_on_premises_domain_name_as_state()
     {
         Assert.Equal(
-            "contoso.com",
+            "corp.example",
             DomainMembershipFormatter.DescribeState(
-                DomainJoinStatus.Domain, "contoso.com", EntraJoinType.Joined, "contoso.onmicrosoft.com"));
+                DomainJoinStatus.Domain, "corp.example", EntraJoinType.Joined, "Contoso Example"));
     }
 
     [Fact]
@@ -89,7 +89,7 @@ public class DomainMembershipFormatterTests
         Assert.Equal(
             "WORKGROUP",
             DomainMembershipFormatter.DescribeState(
-                DomainJoinStatus.Workgroup, "WORKGROUP", EntraJoinType.Registered, "contoso.onmicrosoft.com"));
+                DomainJoinStatus.Workgroup, "WORKGROUP", EntraJoinType.Registered, "Contoso Example"));
     }
 
     [Theory]

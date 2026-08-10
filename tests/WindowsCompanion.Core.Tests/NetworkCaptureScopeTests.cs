@@ -31,19 +31,22 @@ public class NetworkCaptureScopeTests
     }
 
     [Theory]
-    [InlineData(NetworkSensors.IpAddressId, NetworkCaptureScope.IpAddresses)]
-    [InlineData(NetworkSensors.Ipv6AddressId, NetworkCaptureScope.IpAddresses)]
+    [InlineData(NetworkSensors.IpAddressId, NetworkCaptureScope.Ipv4Address)]
+    [InlineData(NetworkSensors.Ipv6AddressId, NetworkCaptureScope.Ipv6Address)]
     [InlineData(
         NetworkSensors.MacAddressId,
-        NetworkCaptureScope.IpAddresses | NetworkCaptureScope.CurrentPhysicalAddress)]
+        NetworkCaptureScope.ActiveAdapter
+        | NetworkCaptureScope.CurrentPhysicalAddress)]
     [InlineData(NetworkSensors.LanMacAddressId, NetworkCaptureScope.LanPermanentAddress)]
     [InlineData(NetworkSensors.WlanMacAddressId, NetworkCaptureScope.WlanPermanentAddress)]
     [InlineData(
         NetworkSensors.GatewayAddressId,
-        NetworkCaptureScope.IpAddresses | NetworkCaptureScope.GatewayAddress)]
+        NetworkCaptureScope.ActiveAdapter
+        | NetworkCaptureScope.GatewayAddress)]
     [InlineData(
         NetworkSensors.DnsServersId,
-        NetworkCaptureScope.IpAddresses | NetworkCaptureScope.DnsServers)]
+        NetworkCaptureScope.ActiveAdapter
+        | NetworkCaptureScope.DnsServers)]
     public void Each_identifier_permits_only_the_fields_it_needs(
         string identifier,
         NetworkCaptureScope expected)
@@ -63,7 +66,8 @@ public class NetworkCaptureScopeTests
 
         Assert.Equal(
             NetworkCaptureScope.ConnectionTypeOnly
-            | NetworkCaptureScope.IpAddresses
+            | NetworkCaptureScope.Ipv6Address
+            | NetworkCaptureScope.ActiveAdapter
             | NetworkCaptureScope.CurrentPhysicalAddress,
             NetworkSensors.ScopeFor(enabled));
 

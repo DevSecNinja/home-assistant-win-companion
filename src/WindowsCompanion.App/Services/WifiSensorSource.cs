@@ -33,7 +33,8 @@ public sealed class WifiSensorSource : ISensorSource
             EnabledByDefault: false,
             ResourceUsage: "Usually low. Sends an extra update when Windows reports a network "
                            + "change. Windows can report several changes close together.",
-            AutomationIdea: "When the PC joins the office Wi-Fi, activate the work scene."),
+            AutomationIdea: "When the PC joins the office Wi-Fi, activate the work scene.",
+            OptInPlaceholder: "Enable to read Wi-Fi identifiers"),
         new(
             BssidId,
             "Wi-Fi BSSID",
@@ -42,7 +43,8 @@ public sealed class WifiSensorSource : ISensorSource
             EnabledByDefault: false,
             ResourceUsage: "Usually low. Shares the Wi-Fi check with SSID and sends an extra update "
                            + "for each Windows network-change notice.",
-            AutomationIdea: "When the PC connects to a specific access point, mark that room occupied."),
+            AutomationIdea: "When the PC connects to a specific access point, mark that room occupied.",
+            OptInPlaceholder: "Enable to read Wi-Fi identifiers"),
         new(
             SecurityId,
             "Wi-Fi Security",
@@ -51,7 +53,8 @@ public sealed class WifiSensorSource : ISensorSource
             SensorPrivacy.Sensitive,
             EnabledByDefault: false,
             ResourceUsage: "Usually low. Shares the Wi-Fi check with SSID and sends an extra update "
-                           + "for each Windows network-change notice."),
+                           + "for each Windows network-change notice.",
+            OptInPlaceholder: "Enable to read Wi-Fi identifiers"),
         new(
             RandomMacId,
             "Wi-Fi Randomized MAC Address",
@@ -60,21 +63,21 @@ public sealed class WifiSensorSource : ISensorSource
             SensorPrivacy.Sensitive,
             EnabledByDefault: false,
             ResourceUsage: "Usually low. Shares the Wi-Fi check with SSID and sends an extra update "
-                           + "for each Windows network-change notice.")
+                           + "for each Windows network-change notice.",
+            OptInPlaceholder: "Enable to read Wi-Fi identifiers")
     ];
 
     public IReadOnlyList<Sensor> Read(
         IReadOnlySet<string> enabled, SensorReadContext context)
     {
-        if (!enabled.Contains(SsidId)
-            && !enabled.Contains(BssidId)
-            && !enabled.Contains(SecurityId)
-            && !enabled.Contains(RandomMacId))
-        {
-            return [];
-        }
+        var scope = WifiCaptureScope.None;
+        if (enabled.Contains(SsidId)) scope |= WifiCaptureScope.Ssid;
+        if (enabled.Contains(BssidId)) scope |= WifiCaptureScope.Bssid;
+        if (enabled.Contains(SecurityId)) scope |= WifiCaptureScope.Security;
+        if (enabled.Contains(RandomMacId)) scope |= WifiCaptureScope.RandomMac;
+        if (scope == WifiCaptureScope.None) return [];
 
-        var info = ReadConnection(enabled.Contains(RandomMacId));
+        var info = ReadConnection(scope);
         var sensors = new List<Sensor>();
 
         if (enabled.Contains(SsidId))
@@ -174,8 +177,11 @@ public sealed class WifiSensorSource : ISensorSource
 
     private void OnNetworkChanged(object? sender, EventArgs e) => _onChanged?.Invoke();
 
-    internal static WifiConnectionInfo ReadConnection(bool includeRandomMac = false)
+    internal static WifiConnectionInfo ReadConnection(WifiCaptureScope scope)
     {
+        if (scope == WifiCaptureScope.None)
+            return new(WifiConnectionStatus.Unavailable);
+
         var result = WlanOpenHandle(2, 0, out _, out var client);
         if (result != 0) return new(WifiConnectionStatus.Unavailable);
 
@@ -201,7 +207,7 @@ public sealed class WifiSensorSource : ISensorSource
                         ref item.InterfaceGuid,
                         WlanIntfOpcode.CurrentConnection,
                         0,
-                        out _,
+                        out var dataSize,
                         out var dataPointer,
                         out _);
 
@@ -212,23 +218,67 @@ public sealed class WifiSensorSource : ISensorSource
 
                     try
                     {
-                        var connection =
-                            Marshal.PtrToStructure<WlanConnectionAttributes>(dataPointer);
-                        var length = Math.Min(
-                            (int)connection.Association.Dot11Ssid.Length,
-                            connection.Association.Dot11Ssid.Ssid.Length);
-                        var ssid = Encoding.UTF8.GetString(
-                            connection.Association.Dot11Ssid.Ssid,
-                            0,
-                            length);
+                        if (dataPointer == 0
+                            || dataSize < Marshal.SizeOf<WlanConnectionAttributes>())
+                        {
+                            return new(WifiConnectionStatus.Unavailable);
+                        }
+
+                        var associationPointer = IntPtr.Add(
+                            dataPointer,
+                            Marshal.OffsetOf<WlanConnectionAttributes>(
+                                nameof(WlanConnectionAttributes.Association)).ToInt32());
+                        var securityPointer = IntPtr.Add(
+                            dataPointer,
+                            Marshal.OffsetOf<WlanConnectionAttributes>(
+                                nameof(WlanConnectionAttributes.Security)).ToInt32());
+                        string? ssid = null;
+                        byte[]? bssid = null;
+                        int? authAlgorithm = null;
+                        int? cipherAlgorithm = null;
                         bool? macRandomizationEnabled = null;
                         string? currentMacAddress = null;
-                        if (includeRandomMac)
+
+                        if (scope.HasFlag(WifiCaptureScope.Ssid))
                         {
+                            var nativeSsid = Marshal.PtrToStructure<Dot11Ssid>(associationPointer);
+                            var length = Math.Min(
+                                (int)nativeSsid.Length,
+                                nativeSsid.Ssid.Length);
+                            ssid = Encoding.UTF8.GetString(nativeSsid.Ssid, 0, length);
+                        }
+
+                        if (scope.HasFlag(WifiCaptureScope.Bssid))
+                        {
+                            bssid = new byte[6];
+                            var bssidPointer = IntPtr.Add(
+                                associationPointer,
+                                Marshal.OffsetOf<WlanAssociationAttributes>(
+                                    nameof(WlanAssociationAttributes.Dot11Bssid)).ToInt32());
+                            Marshal.Copy(bssidPointer, bssid, 0, bssid.Length);
+                        }
+
+                        if (scope.HasFlag(WifiCaptureScope.Security))
+                        {
+                            authAlgorithm = Marshal.ReadInt32(
+                                securityPointer,
+                                Marshal.OffsetOf<WlanSecurityAttributes>(
+                                    nameof(WlanSecurityAttributes.AuthAlgorithm)).ToInt32());
+                            cipherAlgorithm = Marshal.ReadInt32(
+                                securityPointer,
+                                Marshal.OffsetOf<WlanSecurityAttributes>(
+                                    nameof(WlanSecurityAttributes.CipherAlgorithm)).ToInt32());
+                        }
+
+                        if (scope.HasFlag(WifiCaptureScope.RandomMac))
+                        {
+                            var profilePointer = IntPtr.Add(
+                                dataPointer,
+                                Marshal.OffsetOf<WlanConnectionAttributes>(
+                                    nameof(WlanConnectionAttributes.ProfileName)).ToInt32());
+                            var profileName = Marshal.PtrToStringUni(profilePointer) ?? string.Empty;
                             macRandomizationEnabled = IsMacRandomizationEnabled(
-                                client,
-                                item.InterfaceGuid,
-                                connection.ProfileName);
+                                client, item.InterfaceGuid, profileName);
                             if (macRandomizationEnabled == true)
                                 currentMacAddress = CurrentMacAddress(item.InterfaceGuid);
                         }
@@ -236,9 +286,9 @@ public sealed class WifiSensorSource : ISensorSource
                         return new(
                             WifiConnectionStatus.Connected,
                             ssid,
-                            connection.Association.Dot11Bssid,
-                            connection.Security.AuthAlgorithm,
-                            connection.Security.CipherAlgorithm,
+                            bssid,
+                            authAlgorithm,
+                            cipherAlgorithm,
                             macRandomizationEnabled,
                             currentMacAddress);
                     }
@@ -327,6 +377,17 @@ public sealed class WifiSensorSource : ISensorSource
     }
 
     private const int ErrorAccessDenied = 5;
+
+    [Flags]
+    internal enum WifiCaptureScope
+    {
+        None = 0,
+        StatusOnly = 1 << 0,
+        Ssid = 1 << 1,
+        Bssid = 1 << 2,
+        Security = 1 << 3,
+        RandomMac = 1 << 4
+    }
 
     private enum WlanInterfaceState
     {

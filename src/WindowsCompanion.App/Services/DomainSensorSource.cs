@@ -14,10 +14,10 @@ namespace WindowsCompanion_App.Services;
 /// <remarks>
 /// The domain/workgroup name comes from <c>NetGetJoinInformation</c> and the
 /// Entra ID status from <c>NetGetAadJoinInformation</c>, the documented APIs
-/// for these questions. Only the join type and the Entra ID domain name are
+/// for these questions. Only the join type and the Entra tenant display name are
 /// read; the join certificate, tenant id, MDM enrollment URLs and the signed-in
 /// user's email are deliberately never touched, since those would leak more
-/// than a sensor state should. A workgroup, domain or Entra ID domain name can
+/// than a sensor state should. A workgroup, domain or Entra tenant display name can
 /// still reveal an organisation's internal naming, so this sensor is off by
 /// default like the other network-identity sensors.
 /// </remarks>
@@ -41,7 +41,8 @@ public sealed class DomainSensorSource : ISensorSource
             SensorPrivacy.Sensitive,
             EnabledByDefault: false,
             ResourceUsage: "Low. Reads this PC's join status once per sync; it does not change "
-                           + "while the PC is running.")
+                           + "while the PC is running.",
+            OptInPlaceholder: "Enable to read domain join status")
     ];
 
     public IReadOnlyList<Sensor> Read(IReadOnlySet<string> enabled, SensorReadContext context)
@@ -49,7 +50,7 @@ public sealed class DomainSensorSource : ISensorSource
         if (!enabled.Contains(DomainId)) return [];
 
         var (status, name) = QueryDomain();
-        var (entraJoinType, entraDomain) = QueryEntra();
+        var (entraJoinType, entraTenantDisplayName) = QueryEntra();
 
         var attributes = new Dictionary<string, object>(StringComparer.Ordinal)
         {
@@ -64,7 +65,8 @@ public sealed class DomainSensorSource : ISensorSource
                 UniqueId = DomainId,
                 Type = "sensor",
                 Name = "Domain",
-                State = DomainMembershipFormatter.DescribeState(status, name, entraJoinType, entraDomain),
+                State = DomainMembershipFormatter.DescribeState(
+                    status, name, entraJoinType, entraTenantDisplayName),
                 EntityCategory = "diagnostic",
                 Icon = "mdi:domain",
                 Attributes = attributes
@@ -116,7 +118,7 @@ public sealed class DomainSensorSource : ISensorSource
         }
     }
 
-    private static (EntraJoinType JoinType, string? IdpDomain) QueryEntra()
+    private static (EntraJoinType JoinType, string? TenantDisplayName) QueryEntra()
     {
         IntPtr joinInfo = IntPtr.Zero;
         try
@@ -126,7 +128,9 @@ public sealed class DomainSensorSource : ISensorSource
             if (joinInfo == IntPtr.Zero) return (EntraJoinType.None, null);
 
             var info = Marshal.PtrToStructure<DsRegJoinInfo>(joinInfo);
-            return (ToEntraJoinType(info.JoinType), info.IdpDomain);
+            return (
+                ToEntraJoinType(info.JoinType),
+                Marshal.PtrToStringUni(info.TenantDisplayName));
         }
         catch (DllNotFoundException)
         {
@@ -182,7 +186,7 @@ public sealed class DomainSensorSource : ISensorSource
         public int JoinType;
         public IntPtr JoinCertificate;
         public IntPtr DeviceId;
-        [MarshalAs(UnmanagedType.LPWStr)] public string? IdpDomain;
+        public IntPtr IdpDomain;
         public IntPtr TenantId;
         public IntPtr JoinUserEmail;
         public IntPtr TenantDisplayName;

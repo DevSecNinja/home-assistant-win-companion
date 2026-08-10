@@ -40,7 +40,8 @@ public sealed class WinGetUpdateSensorSource : ISensorSource, IRefreshableSensor
             ResourceUsage: "Moderate. Checks for app updates when enabled and every 6 hours. This "
                            + "may use your internet connection. Sends an extra update only when the "
                            + "number of available updates changes.",
-            AutomationIdea: "When updates are available, send a weekly reminder to install them.")
+            AutomationIdea: "When updates are available, send a weekly reminder to install them.",
+            OptInPlaceholder: "Enable to check for updates")
     ];
 
     public IReadOnlyList<Sensor> Read(

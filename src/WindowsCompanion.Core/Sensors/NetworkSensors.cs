@@ -14,27 +14,33 @@ public enum NetworkCaptureScope
     /// <summary>Adapter kinds only. No address and no hardware address is read.</summary>
     ConnectionTypeOnly = 1 << 0,
 
-    /// <summary>IP addresses and route resolution are needed.</summary>
-    IpAddresses = 1 << 1,
+    /// <summary>The active adapter's IPv4 address and IPv4 route are needed.</summary>
+    Ipv4Address = 1 << 1,
+
+    /// <summary>The active adapter's IPv6 address and IPv6 route are needed.</summary>
+    Ipv6Address = 1 << 2,
 
     /// <summary>The active adapter's current hardware address is needed.</summary>
-    CurrentPhysicalAddress = 1 << 2,
+    CurrentPhysicalAddress = 1 << 3,
 
     /// <summary>The active adapter's default gateway address is needed.</summary>
-    GatewayAddress = 1 << 3,
+    GatewayAddress = 1 << 4,
 
     /// <summary>The active adapter's DNS resolver addresses are needed.</summary>
-    DnsServers = 1 << 4,
+    DnsServers = 1 << 5,
 
     /// <summary>The wired adapter's permanent hardware address is needed.</summary>
-    LanPermanentAddress = 1 << 5,
+    LanPermanentAddress = 1 << 6,
 
     /// <summary>The wireless adapter's permanent hardware address is needed.</summary>
-    WlanPermanentAddress = 1 << 6,
+    WlanPermanentAddress = 1 << 7,
+
+    /// <summary>The adapter carrying the active route must be identified without retaining its addresses.</summary>
+    ActiveAdapter = 1 << 8,
 
     /// <summary>All network sensor fields may be collected.</summary>
-    Full = ConnectionTypeOnly | IpAddresses | CurrentPhysicalAddress | GatewayAddress
-           | DnsServers | LanPermanentAddress | WlanPermanentAddress
+    Full = ConnectionTypeOnly | Ipv4Address | Ipv6Address | CurrentPhysicalAddress | GatewayAddress
+           | DnsServers | LanPermanentAddress | WlanPermanentAddress | ActiveAdapter
 }
 
 /// <summary>
@@ -71,12 +77,14 @@ public static class NetworkSensors
         var scope = enabled.Contains(ConnectionTypeId)
             ? NetworkCaptureScope.ConnectionTypeOnly
             : NetworkCaptureScope.None;
-
-        if (enabled.Contains(IpAddressId) || enabled.Contains(Ipv6AddressId))
-            scope |= NetworkCaptureScope.IpAddresses;
+        if (enabled.Contains(IpAddressId)) scope |= NetworkCaptureScope.Ipv4Address;
+        if (enabled.Contains(Ipv6AddressId)) scope |= NetworkCaptureScope.Ipv6Address;
 
         if (enabled.Contains(MacAddressId))
-            scope |= NetworkCaptureScope.IpAddresses | NetworkCaptureScope.CurrentPhysicalAddress;
+        {
+            scope |= NetworkCaptureScope.ActiveAdapter
+                     | NetworkCaptureScope.CurrentPhysicalAddress;
+        }
 
         if (enabled.Contains(LanMacAddressId))
             scope |= NetworkCaptureScope.LanPermanentAddress;
@@ -85,10 +93,16 @@ public static class NetworkSensors
             scope |= NetworkCaptureScope.WlanPermanentAddress;
 
         if (enabled.Contains(GatewayAddressId))
-            scope |= NetworkCaptureScope.IpAddresses | NetworkCaptureScope.GatewayAddress;
+        {
+            scope |= NetworkCaptureScope.ActiveAdapter
+                     | NetworkCaptureScope.GatewayAddress;
+        }
 
         if (enabled.Contains(DnsServersId))
-            scope |= NetworkCaptureScope.IpAddresses | NetworkCaptureScope.DnsServers;
+        {
+            scope |= NetworkCaptureScope.ActiveAdapter
+                     | NetworkCaptureScope.DnsServers;
+        }
 
         return scope;
     }

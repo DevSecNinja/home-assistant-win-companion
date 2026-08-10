@@ -35,8 +35,7 @@ jobs:
         with:
           name: extended-e2e-results-${{ github.sha }}
           path: |
-            TestResults\*.trx
-            TestResults\evidence\**
+            TestResults\**
           if-no-files-found: error
           retention-days: 14
   ui-repeatability:

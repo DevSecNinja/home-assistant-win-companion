@@ -150,6 +150,11 @@ if ($EndToEnd) {
                 '-p:PublishReadyToRun=false'
                 '-r'
                 $runtimeIdentifier
+                '--blame-hang'
+                '--blame-hang-timeout'
+                '2m'
+                '--blame-hang-dump-type'
+                'mini'
             )
     }
 }

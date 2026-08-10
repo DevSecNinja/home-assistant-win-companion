@@ -465,7 +465,14 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
             }
             else
             {
-                await _controller.ReconnectAsync();
+                if (!await _controller.ReconnectAsync())
+                {
+                    ReconcileConnectionControlsAfterFailure();
+                    ShowSettingsActionStatus(
+                        "Could not reconnect because the saved server or sign-in is unavailable.",
+                        false);
+                    return;
+                }
                 _connected = true;
                 DisconnectButton.Content = "Stop connection";
                 SyncSensorsButton.IsEnabled = true;

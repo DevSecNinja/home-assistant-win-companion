@@ -29,7 +29,8 @@
         <tb:TaskbarIcon
             x:Name="TrayIcon"
             ToolTipText="Windows Companion for Home Assistant"
-            IconSource="Assets/AppIcon.ico">
+            IconSource="Assets/AppIcon.ico"
+            DoubleClickCommand="{x:Bind TrayShowWindowCommand}">
             <tb:TaskbarIcon.ContextFlyout>
                 <MenuFlyout>
                     <MenuFlyoutItem
@@ -37,10 +38,9 @@
                         Text="Open Home Assistant"
                         Command="{x:Bind TrayOpenHomeAssistantCommand}" />
                     <MenuFlyoutItem
-                        x:Name="TrayViewReleaseItem"
-                        Text="View available update"
-                        Visibility="Collapsed"
-                        Command="{x:Bind TrayViewReleaseCommand}" />
+                        x:Name="TrayUpdateItem"
+                        Text="Check for updates…"
+                        Command="{x:Bind TrayUpdateCommand}" />
                     <MenuFlyoutItem Text="Show Companion" Command="{x:Bind TrayShowWindowCommand}" />
                     <MenuFlyoutSeparator />
                     <MenuFlyoutItem
@@ -70,9 +70,23 @@
                 Severity="Informational"
                 IsOpen="False"
                 IsClosable="False">
-                <InfoBar.ActionButton>
-                    <Button Content="View release" Click="OnViewRelease" />
-                </InfoBar.ActionButton>
+                <StackPanel Spacing="8">
+                    <TextBlock
+                        x:Name="UpdateBannerMessage"
+                        TextWrapping="Wrap" />
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Button
+                            x:Name="ViewReleaseButton"
+                            Content="View release"
+                            Visibility="Collapsed"
+                            Click="OnViewRelease" />
+                        <Button
+                            x:Name="RecheckUpdatesButton"
+                            Content="Recheck for updates"
+                            Visibility="Collapsed"
+                            Click="OnRecheckUpdates" />
+                    </StackPanel>
+                </StackPanel>
             </InfoBar>
         </StackPanel>
 

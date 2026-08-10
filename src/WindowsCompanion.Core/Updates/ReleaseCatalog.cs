@@ -148,32 +148,202 @@ public interface IUpdateNotificationSink
     void Show(AvailableUpdate update);
 }
 
-/// <summary>Runs at most one release lookup and one notification per process instance.</summary>
+public enum UpdateCheckStatus
+{
+    Idle,
+    Checking,
+    Current,
+    Available,
+    Error
+}
+
+public enum UpdateCheckTrigger
+{
+    Automatic,
+    User
+}
+
+/// <summary>The latest process-wide update-check result.</summary>
+public sealed record UpdateCheckState(
+    UpdateCheckStatus Status,
+    UpdateCheckTrigger Trigger,
+    SemanticVersion InstalledVersion,
+    AvailableUpdate? AvailableUpdate = null,
+    string? ErrorMessage = null,
+    long Revision = 0);
+
+/// <summary>
+/// Serializes update checks, cancels superseded work, and publishes only the
+/// newest result.
+/// </summary>
 public sealed class StartupUpdateChecker
 {
+    private const string FailureMessage =
+        "The update check failed. Check your internet connection and try again.";
+
     private readonly IReleaseSource _releases;
     private readonly IUpdateNotificationSink _notifications;
-    private int _started;
+    private readonly SemanticVersion _installedVersion;
+    private readonly object _gate = new();
+    private readonly SemaphoreSlim _singleFlight = new(1, 1);
+    private readonly HashSet<string> _notifiedVersions = new(StringComparer.Ordinal);
+    private CancellationTokenSource? _activeCheck;
+    private UpdateCheckState _state;
+    private long _revision;
 
-    public StartupUpdateChecker(IReleaseSource releases, IUpdateNotificationSink notifications)
+    public StartupUpdateChecker(
+        SemanticVersion installedVersion,
+        IReleaseSource releases,
+        IUpdateNotificationSink notifications)
     {
+        _installedVersion = installedVersion
+            ?? throw new ArgumentNullException(nameof(installedVersion));
         _releases = releases ?? throw new ArgumentNullException(nameof(releases));
         _notifications = notifications ?? throw new ArgumentNullException(nameof(notifications));
+        _state = new(
+            UpdateCheckStatus.Idle,
+            UpdateCheckTrigger.Automatic,
+            _installedVersion);
     }
 
-    public async Task<bool> CheckOnceAsync(
-        SemanticVersion installedVersion,
+    public UpdateCheckState State
+    {
+        get
+        {
+            lock (_gate) return _state;
+        }
+    }
+
+    public event Action<UpdateCheckState>? StateChanged;
+
+    public async Task<UpdateCheckState> CheckAsync(
+        UpdateCheckTrigger trigger,
         CancellationToken cancellationToken = default)
     {
-        if (Interlocked.Exchange(ref _started, 1) != 0) return false;
+        CancellationTokenSource checkCancellation;
+        long revision;
+        AvailableUpdate? knownUpdate;
+        lock (_gate)
+        {
+            revision = ++_revision;
+            _activeCheck?.Cancel();
+            checkCancellation =
+                CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            _activeCheck = checkCancellation;
+            knownUpdate = _state.AvailableUpdate;
+        }
 
-        var releases = await _releases
-            .GetReleasesAsync(cancellationToken)
-            .ConfigureAwait(false);
-        var update = UpdatePolicy.FindUpdate(installedVersion, releases);
-        if (update is null) return false;
+        PublishIfCurrent(
+            revision,
+            checkCancellation,
+            new(
+                UpdateCheckStatus.Checking,
+                trigger,
+                _installedVersion,
+                knownUpdate,
+                Revision: revision));
 
-        _notifications.Show(update);
+        var entered = false;
+        try
+        {
+            await _singleFlight
+                .WaitAsync(checkCancellation.Token)
+                .ConfigureAwait(false);
+            entered = true;
+
+            var releases = await _releases
+                .GetReleasesAsync(checkCancellation.Token)
+                .ConfigureAwait(false);
+            checkCancellation.Token.ThrowIfCancellationRequested();
+
+            var update = UpdatePolicy.FindUpdate(_installedVersion, releases);
+            var result = new UpdateCheckState(
+                update is null ? UpdateCheckStatus.Current : UpdateCheckStatus.Available,
+                trigger,
+                _installedVersion,
+                update,
+                Revision: revision);
+            if (!PublishIfCurrent(revision, checkCancellation, result))
+                throw new OperationCanceledException(checkCancellation.Token);
+
+            if (update is not null)
+                NotifyIfCurrent(revision, checkCancellation, update);
+
+            return result;
+        }
+        catch (OperationCanceledException) when (checkCancellation.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch
+        {
+            PublishIfCurrent(
+                revision,
+                checkCancellation,
+                new(
+                    UpdateCheckStatus.Error,
+                    trigger,
+                    _installedVersion,
+                    knownUpdate,
+                    FailureMessage,
+                    revision));
+            throw;
+        }
+        finally
+        {
+            if (entered) _singleFlight.Release();
+            lock (_gate)
+            {
+                if (ReferenceEquals(_activeCheck, checkCancellation))
+                    _activeCheck = null;
+            }
+            checkCancellation.Dispose();
+        }
+    }
+
+    public async Task CancelAsync()
+    {
+        lock (_gate)
+        {
+            _revision++;
+            _activeCheck?.Cancel();
+        }
+
+        await _singleFlight.WaitAsync().ConfigureAwait(false);
+        _singleFlight.Release();
+    }
+
+    private bool PublishIfCurrent(
+        long revision,
+        CancellationTokenSource checkCancellation,
+        UpdateCheckState state)
+    {
+        Action<UpdateCheckState>? changed;
+        lock (_gate)
+        {
+            if (revision != _revision || checkCancellation.IsCancellationRequested)
+                return false;
+
+            _state = state;
+            changed = StateChanged;
+        }
+
+        changed?.Invoke(state);
         return true;
+    }
+
+    private void NotifyIfCurrent(
+        long revision,
+        CancellationTokenSource checkCancellation,
+        AvailableUpdate update)
+    {
+        lock (_gate)
+        {
+            if (revision != _revision || checkCancellation.IsCancellationRequested)
+                return;
+
+            if (_notifiedVersions.Add(update.AvailableVersion.ToString()))
+                _notifications.Show(update);
+        }
     }
 }

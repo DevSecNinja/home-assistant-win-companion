@@ -106,32 +106,168 @@ public class StartupUpdateTests
     }
 
     [Fact]
-    public async Task The_startup_check_suppresses_duplicate_attempts_and_notifications()
+    public void The_checker_starts_idle()
     {
-        var source = new BlockingReleaseSource([Release("v2.0.0")]);
+        var checker = Checker(
+            new ScriptedReleaseSource(_ => Task.FromResult(Releases("v1.0.0"))));
+
+        Assert.Equal(UpdateCheckStatus.Idle, checker.State.Status);
+        Assert.Equal("1.0.0", checker.State.InstalledVersion.ToString());
+    }
+
+    [Fact]
+    public async Task A_check_transitions_through_checking_to_current()
+    {
+        var started = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var source = new ScriptedReleaseSource(async cancellationToken =>
+        {
+            started.TrySetResult();
+            await release.Task.WaitAsync(cancellationToken);
+            return Releases("v1.0.0");
+        });
+        var checker = Checker(source);
+        var states = new List<UpdateCheckState>();
+        checker.StateChanged += states.Add;
+
+        var check = checker.CheckAsync(UpdateCheckTrigger.User);
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(2));
+
+        Assert.Equal(UpdateCheckStatus.Checking, checker.State.Status);
+        release.TrySetResult();
+        var result = await check;
+
+        Assert.Equal(UpdateCheckStatus.Current, result.Status);
+        Assert.Equal(
+            [UpdateCheckStatus.Checking, UpdateCheckStatus.Current],
+            states.Select(state => state.Status));
+    }
+
+    [Fact]
+    public async Task A_newer_release_transitions_to_available_and_notifies_once()
+    {
+        var source = new ScriptedReleaseSource(
+            _ => Task.FromResult(Releases("v2.0.0")),
+            _ => Task.FromResult(Releases("v2.0.0")));
         var notifications = new RecordingNotifications();
-        var checker = new StartupUpdateChecker(source, notifications);
+        var checker = Checker(source, notifications);
 
-        var first = checker.CheckOnceAsync(Parse("1.0.0"));
-        await source.Started.Task.WaitAsync(TimeSpan.FromSeconds(2));
-        var duplicate = await checker.CheckOnceAsync(Parse("1.0.0"));
-        source.Release();
+        var first = await checker.CheckAsync(UpdateCheckTrigger.Automatic);
+        var second = await checker.CheckAsync(UpdateCheckTrigger.User);
 
-        Assert.True(await first);
-        Assert.False(duplicate);
-        Assert.Equal(1, source.CallCount);
+        Assert.Equal(UpdateCheckStatus.Available, first.Status);
+        Assert.Equal(UpdateCheckStatus.Available, second.Status);
+        Assert.Equal("2.0.0", second.AvailableUpdate?.AvailableVersion.ToString());
         Assert.Single(notifications.Updates);
     }
 
     [Fact]
-    public async Task No_newer_release_produces_no_notification()
+    public async Task Each_available_version_notifies_at_most_once_per_process()
     {
-        var source = new BlockingReleaseSource([Release("v1.0.0")], blocked: false);
+        var source = new ScriptedReleaseSource(
+            _ => Task.FromResult(Releases("v2.0.0")),
+            _ => Task.FromResult(Releases("v3.0.0")),
+            _ => Task.FromResult(Releases("v2.0.0")));
         var notifications = new RecordingNotifications();
-        var checker = new StartupUpdateChecker(source, notifications);
+        var checker = Checker(source, notifications);
 
-        Assert.False(await checker.CheckOnceAsync(Parse("1.0.0")));
+        await checker.CheckAsync(UpdateCheckTrigger.User);
+        await checker.CheckAsync(UpdateCheckTrigger.User);
+        await checker.CheckAsync(UpdateCheckTrigger.User);
+
+        Assert.Equal(
+            ["2.0.0", "3.0.0"],
+            notifications.Updates.Select(update => update.AvailableVersion.ToString()));
+    }
+
+    [Fact]
+    public async Task A_failure_is_nonfatal_and_preserves_a_known_update()
+    {
+        var source = new ScriptedReleaseSource(
+            _ => Task.FromResult(Releases("v2.0.0")),
+            _ => Task.FromException<IReadOnlyList<ReleaseCandidate>>(
+                new HttpRequestException("offline")));
+        var checker = Checker(source);
+
+        await checker.CheckAsync(UpdateCheckTrigger.Automatic);
+        await Assert.ThrowsAsync<HttpRequestException>(
+            () => checker.CheckAsync(UpdateCheckTrigger.User));
+
+        Assert.Equal(UpdateCheckStatus.Error, checker.State.Status);
+        Assert.Equal("2.0.0", checker.State.AvailableUpdate?.AvailableVersion.ToString());
+        Assert.Contains("try again", checker.State.ErrorMessage, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task A_new_check_cancels_the_old_one_and_cannot_publish_a_stale_result()
+    {
+        var firstStarted = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseFirst = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var source = new ScriptedReleaseSource(
+            async _ =>
+            {
+                firstStarted.TrySetResult();
+                await releaseFirst.Task;
+                return Releases("v9.0.0");
+            },
+            _ => Task.FromResult(Releases("v2.0.0")));
+        var notifications = new RecordingNotifications();
+        var checker = Checker(source, notifications);
+        var availableVersions = new List<string>();
+        checker.StateChanged += state =>
+        {
+            if (state.Status == UpdateCheckStatus.Available)
+                availableVersions.Add(state.AvailableUpdate!.AvailableVersion.ToString());
+        };
+
+        var first = checker.CheckAsync(UpdateCheckTrigger.User);
+        await firstStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        var second = checker.CheckAsync(UpdateCheckTrigger.User);
+
+        Assert.Equal(1, source.CallCount);
+        releaseFirst.TrySetResult();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => first);
+        var result = await second;
+
+        Assert.Equal(2, source.CallCount);
+        Assert.Equal(1, source.MaxConcurrentCalls);
+        Assert.Equal("2.0.0", result.AvailableUpdate?.AvailableVersion.ToString());
+        Assert.Equal(["2.0.0"], availableVersions);
+        Assert.Equal("2.0.0", Assert.Single(notifications.Updates).AvailableVersion.ToString());
+    }
+
+    [Fact]
+    public async Task Superseding_a_published_result_before_notification_suppresses_its_toast()
+    {
+        var source = new ScriptedReleaseSource(
+            _ => Task.FromResult(Releases("v2.0.0")),
+            _ => Task.FromResult(Releases("v1.0.0")));
+        var notifications = new RecordingNotifications();
+        var checker = Checker(source, notifications);
+        var publishing = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var continuePublishing = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        checker.StateChanged += state =>
+        {
+            if (state.Status != UpdateCheckStatus.Available) return;
+            publishing.TrySetResult();
+            continuePublishing.Task.GetAwaiter().GetResult();
+        };
+
+        var first = Task.Run(() => checker.CheckAsync(UpdateCheckTrigger.User));
+        await publishing.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        var second = checker.CheckAsync(UpdateCheckTrigger.User);
+        continuePublishing.TrySetResult();
+
+        Assert.Equal(UpdateCheckStatus.Available, (await first).Status);
+        Assert.Equal(UpdateCheckStatus.Current, (await second).Status);
         Assert.Empty(notifications.Updates);
+        Assert.Equal(UpdateCheckStatus.Current, checker.State.Status);
     }
 
     private static SemanticVersion Parse(string value)
@@ -144,29 +280,39 @@ public class StartupUpdateTests
         new(tag, false, false,
             $"https://github.com/DevSecNinja/home-assistant-win-companion/releases/tag/{tag}");
 
-    private sealed class BlockingReleaseSource(
-        IReadOnlyList<ReleaseCandidate> releases,
-        bool blocked = true) : IReleaseSource
+    private static StartupUpdateChecker Checker(
+        IReleaseSource source,
+        RecordingNotifications? notifications = null) =>
+        new(Parse("1.0.0"), source, notifications ?? new RecordingNotifications());
+
+    private static IReadOnlyList<ReleaseCandidate> Releases(params string[] tags) =>
+        tags.Select(Release).ToArray();
+
+    private sealed class ScriptedReleaseSource(
+        params Func<CancellationToken, Task<IReadOnlyList<ReleaseCandidate>>>[] steps)
+        : IReleaseSource
     {
-        private readonly TaskCompletionSource _release =
-            new(TaskCreationOptions.RunContinuationsAsynchronously);
-        private readonly bool _blocked = blocked;
+        private int _activeCalls;
+        private int _callCount;
 
-        public TaskCompletionSource Started { get; } =
-            new(TaskCreationOptions.RunContinuationsAsynchronously);
-
-        public int CallCount { get; private set; }
+        public int CallCount => Volatile.Read(ref _callCount);
+        public int MaxConcurrentCalls { get; private set; }
 
         public async Task<IReadOnlyList<ReleaseCandidate>> GetReleasesAsync(
             CancellationToken cancellationToken)
         {
-            CallCount++;
-            Started.TrySetResult();
-            if (_blocked) await _release.Task.WaitAsync(cancellationToken);
-            return releases;
+            var call = Interlocked.Increment(ref _callCount);
+            var active = Interlocked.Increment(ref _activeCalls);
+            MaxConcurrentCalls = Math.Max(MaxConcurrentCalls, active);
+            try
+            {
+                return await steps[call - 1](cancellationToken);
+            }
+            finally
+            {
+                Interlocked.Decrement(ref _activeCalls);
+            }
         }
-
-        public void Release() => _release.TrySetResult();
     }
 
     private sealed class RecordingNotifications : IUpdateNotificationSink

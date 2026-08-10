@@ -8,7 +8,7 @@ namespace WindowsCompanion_App.Services;
 /// Shows native Windows toast notifications for Home Assistant notifications
 /// using the Windows App SDK AppNotifications API (works unpackaged).
 /// </summary>
-public sealed class ToastNotifier
+public sealed class ToastNotifier : INotificationSink
 {
     public void Show(NotificationMessage notification)
     {

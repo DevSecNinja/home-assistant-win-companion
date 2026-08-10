@@ -28,7 +28,10 @@ public partial class App : Application
     private int _shutdownStarted;
 
     /// <summary>Shared coordinator for the OAuth session and Home Assistant connection.</summary>
-    public static AppController Controller { get; } = new();
+    public static AppController Controller { get; private set; } = null!;
+#if DEBUG
+    internal static TestAppLaunchOptions? TestLaunchOptions { get; private set; }
+#endif
     
     /// <summary>
     /// Initializes the singleton application object.  This is the first line of authored code
@@ -36,7 +39,18 @@ public partial class App : Application
     /// </summary>
     public App()
     {
+#if DEBUG
+        TestLaunchOptions = TestAppLaunchOptions.Parse(Environment.GetCommandLineArgs());
+        Controller = TestLaunchOptions is null
+            ? new AppController()
+            : TestAppComposition.Create(TestLaunchOptions);
+        _instanceMutex = new Mutex(
+            initiallyOwned: false,
+            TestLaunchOptions?.MutexName ?? InstanceMutexName);
+#else
+        Controller = new AppController();
         _instanceMutex = new Mutex(initiallyOwned: false, InstanceMutexName);
+#endif
         InitializeComponent();
     }
 

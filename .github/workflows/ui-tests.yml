@@ -1,0 +1,47 @@
+---
+name: UI tests
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+permissions:
+  contents: read
+concurrency:
+  group: ui-tests
+  cancel-in-progress: false
+jobs:
+  ui-smoke:
+    name: Interactive UI smoke tests
+    runs-on:
+      - self-hosted
+      - windows
+      - x64
+      - interactive
+    timeout-minutes: 20
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 10.0.x
+      - name: Run UI smoke tests
+        id: ui-tests
+        shell: pwsh
+        run: >-
+          .\scripts\test.ps1 -Ui
+          -ResultsDirectory TestResults
+      - name: Upload UI test results
+        if: ${{ always() && steps.ui-tests.outcome != 'skipped' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ui-test-results-${{ github.sha }}
+          path: |
+            TestResults\*.trx
+            TestResults\evidence\**
+            TestResults\ui-evidence\**
+          if-no-files-found: error
+          retention-days: 14

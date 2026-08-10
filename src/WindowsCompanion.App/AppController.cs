@@ -1,4 +1,5 @@
 using WindowsCompanion.Core.App;
+using WindowsCompanion.Core.Abstractions;
 using WindowsCompanion.Core.HomeAssistant;
 using WindowsCompanion.Core.Lifecycle;
 using WindowsCompanion.Core.Models;
@@ -25,21 +26,23 @@ public sealed class AppController : IAsyncDisposable
     /// </summary>
     private static readonly TimeSpan FinalLifecyclePushTimeout = TimeSpan.FromSeconds(2);
 
-    private readonly HttpClient _http = new();
-    private readonly WindowsSecretStore _secrets = new();
+    private readonly HttpClient _http;
+    private readonly ISecretStore _secrets;
     private readonly SessionStore _settings;
-    private readonly WindowsSystemStatusProvider _status = new();
-    private readonly ToastNotifier _toasts = new();
-    private readonly PowerShellWinGetUpdateProvider _winGetUpdates = new();
+    private readonly ISystemStatusProvider _status;
+    private readonly INotificationSink _notifications;
+    private readonly IWinGetUpdateProvider _winGetUpdates;
+    private readonly IUriLauncher _uriLauncher;
     private readonly OAuthLoginService _login;
-    private readonly WindowsNetworkContextProvider _network = new();
+    private readonly INetworkContextProvider _network;
     private readonly ConnectionLifecycle _lifecycle;
-    private readonly ILoggerFactory _loggerFactory =
-        LoggerFactory.Create(builder =>
-        {
-            builder.AddProvider(new FileLoggerProvider(LogLevel.Debug));
-            builder.SetMinimumLevel(LogLevel.Debug);
-        });
+    private readonly ILoggerFactory _loggerFactory;
+    private readonly Func<IHaSocket> _webSocketFactory;
+    private readonly Func<ServerConfig, LifecycleCoordinator, ILifecycleSignalSource,
+        IReadOnlyList<ISensorSource>> _sensorSourceFactory;
+    private readonly Func<ILifecycleJournal> _lifecycleJournalFactory;
+    private readonly Func<ILifecycleSignalSource> _lifecycleSignalSourceFactory;
+    private readonly IReadOnlyList<object> _ownedDependencies;
 
     private readonly HttpRouteProbe _probe;
 
@@ -49,10 +52,30 @@ public sealed class AppController : IAsyncDisposable
     private RouteSupervisor? _supervisor;
     private CancellationTokenSource? _networkSettle;
 
-    public AppController()
+    public AppController() : this(AppControllerDependencies.CreateProduction())
     {
-        _login = new OAuthLoginService(_http);
-        _settings = new SessionStore(new SettingsStore(), _secrets);
+    }
+
+    internal AppController(AppControllerDependencies dependencies)
+    {
+        ArgumentNullException.ThrowIfNull(dependencies);
+
+        _http = dependencies.HttpClient.Value;
+        _secrets = dependencies.SecretStore.Value;
+        _status = dependencies.SystemStatus.Value;
+        _notifications = dependencies.NotificationSink.Value;
+        _winGetUpdates = dependencies.WinGetUpdates.Value;
+        _uriLauncher = dependencies.UriLauncher.Value;
+        _network = dependencies.Network.Value;
+        _loggerFactory = dependencies.LoggerFactory.Value;
+        _webSocketFactory = dependencies.WebSocketFactory;
+        _sensorSourceFactory = dependencies.SensorSourceFactory;
+        _lifecycleJournalFactory = dependencies.LifecycleJournalFactory;
+        _lifecycleSignalSourceFactory = dependencies.LifecycleSignalSourceFactory;
+        _ownedDependencies = dependencies.OwnedValues().ToArray();
+
+        _login = new OAuthLoginService(_http, _uriLauncher);
+        _settings = new SessionStore(dependencies.SettingsStore.Value, _secrets);
         _lifecycle = new ConnectionLifecycle(_loggerFactory.CreateLogger<ConnectionLifecycle>());
         _probe = new HttpRouteProbe(
             _http,
@@ -131,11 +154,7 @@ public sealed class AppController : IAsyncDisposable
     }
 
     public void OpenLocationSettings() =>
-        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-        {
-            FileName = "ms-settings:privacy-location",
-            UseShellExecute = true
-        });
+        _ = _uriLauncher.LaunchAsync(new Uri("ms-settings:privacy-location"));
 
     /// <summary>Persists the current sensor choices and pushes them immediately.</summary>
     public async Task ApplySensorChangesAsync()
@@ -470,11 +489,7 @@ public sealed class AppController : IAsyncDisposable
     {
         var url = BaseUrl;
         if (string.IsNullOrEmpty(url)) return;
-        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-        {
-            FileName = url,
-            UseShellExecute = true
-        });
+        _ = _uriLauncher.LaunchAsync(new Uri(url));
     }
 
     public SystemStatus GetSystemStatus() => _status.GetStatus();
@@ -529,7 +544,7 @@ public sealed class AppController : IAsyncDisposable
         await LearnInstanceIdentityAsync(client, config, ct).ConfigureAwait(false);
 
         var ws = new HaWebSocketClient(
-            () => new ClientWebSocketAdapter(), url, tokenManager, config.WebhookId!,
+            _webSocketFactory, url, tokenManager, config.WebhookId!,
             _loggerFactory.CreateLogger<HaWebSocketClient>());
 
         // The connection does not exist yet, and the lifecycle source has to be part
@@ -540,7 +555,7 @@ public sealed class AppController : IAsyncDisposable
         // gate in _lifecycle. A new one is built per connection and released by
         // the catalog's Stop, so a route switch does not leak its signal hooks.
         var systemLifecycle = new LifecycleCoordinator(
-            new FileLifecycleJournal(),
+            _lifecycleJournalFactory(),
             finalPush: token => live is null
                 ? Task.FromResult(false)
                 : live.SyncNowAsync(SensorReadContext.LifecycleTransition, token),
@@ -548,25 +563,7 @@ public sealed class AppController : IAsyncDisposable
             log: _loggerFactory.CreateLogger<LifecycleCoordinator>());
 
         var catalog = new SensorCatalog(
-            new ISensorSource[]
-            {
-                new BatterySensorSource(_status),
-                new ActiveSensorSource(config.Sensors),
-                new NetworkSensorSource(config.Sensors),
-                new WifiSensorSource(config.Sensors),
-                new SystemSensorSource(),
-                new DomainSensorSource(config.Sensors),
-                new DisplaySensorSource(),
-                new WindowsThemeSensorSource(),
-                new LocaleSensorSource(),
-                new DiskUsageSensorSource(),
-                new NotificationStateSensorSource(),
-                new CapabilityUsageSensorSource(config.Sensors),
-                new AudioDeviceSensorSource(config.Sensors),
-                new FrontmostAppSensorSource(config.Sensors),
-                new WinGetUpdateSensorSource(_winGetUpdates, config.Sensors),
-                new LifecycleSensorSource(systemLifecycle, new WindowsLifecycleSignalSource())
-            },
+            _sensorSourceFactory(config, systemLifecycle, _lifecycleSignalSourceFactory()),
             config.Sensors);
         _catalog = catalog;
 
@@ -579,7 +576,7 @@ public sealed class AppController : IAsyncDisposable
             log: _loggerFactory.CreateLogger<ConnectionManager>(),
             route: _supervisor?.ActiveRoute);
         connection.StateChanged += s => StateChanged?.Invoke(s);
-        connection.NotificationReceived += n => _toasts.Show(n);
+        connection.NotificationReceived += n => _notifications.Show(n);
         connection.RouteUnhealthy += _ => RequestRouteEvaluation(RouteTrigger.ConnectionFailed);
 
         // Only a batch Home Assistant actually accepted counts as delivery; anything
@@ -824,6 +821,18 @@ public sealed class AppController : IAsyncDisposable
         if (_connection is not null)
             await _connection.DisposeAsync().ConfigureAwait(false);
         _lifecycle.Dispose();
-        _http.Dispose();
+
+        foreach (var dependency in _ownedDependencies.Reverse())
+        {
+            switch (dependency)
+            {
+                case IAsyncDisposable asyncDisposable:
+                    await asyncDisposable.DisposeAsync().ConfigureAwait(false);
+                    break;
+                case IDisposable disposable:
+                    disposable.Dispose();
+                    break;
+            }
+        }
     }
 }

@@ -154,6 +154,21 @@ explicitly labelled unsigned. The longer-term decision remains tracked in
 
 ## Update
 
+Official release builds check GitHub Releases once, in the background, each time the
+application process starts. When a newer stable release exists, Windows shows one
+toast with the installed and available versions and a **View release** action. The
+notification-area icon also changes for that run: its companion circle becomes a
+larger red badge containing `1`, and the tray menu offers the same release page. If
+the window is open, a persistent **Update available** banner provides the same
+action without widening the status view.
+
+The check never downloads, installs, or restarts the application. Drafts and
+prereleases are ignored. If GitHub is unavailable or returns an unusable response,
+startup and Home Assistant connectivity continue normally; the failure is written
+only to the local diagnostic log. Source builds, pull-request builds, and ordinary
+CI artifacts do not make this request because they are not official versioned
+releases.
+
 1. Download and verify the new release.
 2. For an installed copy, run the newer setup package; it upgrades in place. If
    any installed or source-built companion is running, Setup asks permission to

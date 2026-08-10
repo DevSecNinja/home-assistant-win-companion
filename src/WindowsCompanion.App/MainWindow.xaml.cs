@@ -2,6 +2,7 @@ using WindowsCompanion.Core.App;
 using WindowsCompanion.Core.Lifecycle;
 using WindowsCompanion.Core.Models;
 using WindowsCompanion.Core.Sensors;
+using WindowsCompanion.Core.Updates;
 using WindowsCompanion_App.Services;
 using System.Runtime.InteropServices;
 using System.Windows.Input;
@@ -12,6 +13,7 @@ using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Automation.Peers;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Media.Imaging;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.Graphics;
 
@@ -52,8 +54,10 @@ public sealed partial class MainWindow : Window
     private bool _loadingSensorSettings;
     private bool _loadingStartupSetting;
     private int _connectionActionRunning;
+    private AvailableUpdate? _availableUpdate;
 
     public ICommand TrayOpenHomeAssistantCommand { get; }
+    public ICommand TrayViewReleaseCommand { get; }
     public ICommand TrayShowWindowCommand { get; }
     public ICommand TrayDisconnectCommand { get; }
     public ICommand TrayExitCommand { get; }
@@ -63,6 +67,8 @@ public sealed partial class MainWindow : Window
         _controller = App.Controller;
         TrayOpenHomeAssistantCommand = new ActionCommand(
             () => DispatchTrayAction(_controller.OpenHomeAssistant));
+        TrayViewReleaseCommand = new ActionCommand(
+            () => DispatchTrayAction(OpenAvailableRelease));
         TrayShowWindowCommand = new ActionCommand(
             () => DispatchTrayAction(Show));
         TrayDisconnectCommand = new ActionCommand(
@@ -90,6 +96,8 @@ public sealed partial class MainWindow : Window
         _dispatcher = DispatcherQueue.GetForCurrentThread();
         _controller.StateChanged += OnStateChanged;
         _controller.RouteChanged += OnRouteChanged;
+        _controller.UpdateAvailable += OnUpdateAvailable;
+        if (_controller.AvailableUpdate is { } update) ApplyUpdateAvailable(update);
 
         // Kept in Core so the demo warning reads the same wherever it is shown.
         DemoBanner.Title = DemoSession.Title;
@@ -149,6 +157,39 @@ public sealed partial class MainWindow : Window
                 : _controller.BaseUrl ?? "—";
             UpdateHealth();
         });
+
+    private void OnUpdateAvailable(AvailableUpdate update) =>
+        _dispatcher.TryEnqueue(() => ApplyUpdateAvailable(update));
+
+    private void ApplyUpdateAvailable(AvailableUpdate update)
+    {
+        if (_exiting) return;
+
+        _availableUpdate = update;
+        TrayIcon.IconSource = new BitmapImage(
+            new Uri("ms-appx:///Assets/UpdateIcon.ico"));
+        TrayViewReleaseItem.Text = $"View update v{update.AvailableVersion}";
+        TrayViewReleaseItem.Visibility = Visibility.Visible;
+        UpdateBanner.Message =
+            $"Version {update.AvailableVersion} is available. "
+            + $"Installed version: {update.InstalledVersion}.";
+        UpdateBanner.IsOpen = true;
+        UpdateHealth();
+    }
+
+    private void OnViewRelease(object sender, RoutedEventArgs e)
+        => OpenAvailableRelease();
+
+    private void OpenAvailableRelease()
+    {
+        if (_availableUpdate is not { } update) return;
+
+        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+        {
+            FileName = update.ReleasePage.AbsoluteUri,
+            UseShellExecute = true
+        });
+    }
 
     private void OnStateChanged(ConnectionState state) =>
         _dispatcher.TryEnqueue(() =>
@@ -764,6 +805,7 @@ public sealed partial class MainWindow : Window
         _statusTimer.Stop();
         _controller.StateChanged -= OnStateChanged;
         _controller.RouteChanged -= OnRouteChanged;
+        _controller.UpdateAvailable -= OnUpdateAvailable;
         _restartManagerShutdown.Dispose();
         TrayIcon.Dispose();
     }
@@ -876,9 +918,10 @@ public sealed partial class MainWindow : Window
         // The tray tooltip is the at-a-glance view when the window is hidden.
         // The short name is used because Windows truncates the tooltip at 127
         // characters and the status summary can be long.
-        TrayIcon.ToolTipText = healthy
-            ? $"{Branding.ShortName} — Healthy"
-            : $"{Branding.ShortName} — {summary}";
+        TrayIcon.ToolTipText = TrayTooltipFormatter.Format(
+            healthy,
+            summary,
+            _availableUpdate?.AvailableVersion);
     }
 
     private void OnOpenLog(object sender, RoutedEventArgs e) => _controller.OpenLogFile();

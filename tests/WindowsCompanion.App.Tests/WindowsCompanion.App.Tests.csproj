@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.8.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\WindowsCompanion.Core\WindowsCompanion.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile
+      Include="..\..\src\WindowsCompanion.App\Services\GitHubReleaseClient.cs"
+      Link="AppBoundary\GitHubReleaseClient.cs" />
+    <Compile
+      Include="..\..\src\WindowsCompanion.App\Services\InstalledBuildResolver.cs"
+      Link="AppBoundary\InstalledBuildResolver.cs" />
+    <Compile
+      Include="..\..\src\WindowsCompanion.App\Services\TrayTooltipFormatter.cs"
+      Link="AppBoundary\TrayTooltipFormatter.cs" />
+    <Compile
+      Include="..\..\src\WindowsCompanion.App\Branding.cs"
+      Link="AppBoundary\Branding.cs" />
+  </ItemGroup>
+
+</Project>

@@ -307,4 +307,23 @@ public class RouteSupervisorTests
 
         Assert.Equal([RouteKind.Internal], activations);
     }
+
+    [Fact]
+    public async Task Network_event_storm_on_the_active_route_does_no_probe_or_restart_work()
+    {
+        var probe = new FakeProbe().Ok(RouteKind.Internal).Ok(RouteKind.External);
+        var supervisor = new RouteSupervisor(Config(), probe, new MutableClock());
+        var activations = 0;
+        supervisor.RouteActivated += _ => activations++;
+        await supervisor.EvaluateAsync(Home, RouteTrigger.Startup);
+        probe.Probed.Clear();
+
+        var decisions = await Task.WhenAll(Enumerable.Range(0, 100)
+            .Select(_ => supervisor.EvaluateAsync(Home, RouteTrigger.NetworkChanged)));
+
+        Assert.All(decisions, decision =>
+            Assert.Equal(RouteDecisionKind.Unchanged, decision.Kind));
+        Assert.Empty(probe.Probed);
+        Assert.Equal(1, activations);
+    }
 }

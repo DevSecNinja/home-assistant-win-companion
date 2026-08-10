@@ -12,6 +12,7 @@ namespace WindowsCompanion.Core.Tests;
 /// Everything here is driven by handshakes and invariants rather than by
 /// sleeping and hoping, so a slow machine makes these tests slower, not flaky.
 /// </summary>
+[Collection(AsyncLifecycleCollection.Name)]
 public class SensorLifecycleTests
 {
     private static readonly TimeSpan Never = TimeSpan.FromMinutes(10);

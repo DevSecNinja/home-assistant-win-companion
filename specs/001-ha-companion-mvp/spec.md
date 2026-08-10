@@ -139,7 +139,10 @@ appears with the title and message.
 - **FR-005**: The app MUST automatically reconnect on subsequent launches without
   re-authenticating, by refreshing the stored refresh token.
 - **FR-006**: The app MUST run in the background with a system tray icon that
-  provides at least: show/hide window, connection status, and exit.
+  provides at least: show/hide window, connection status, and exit. Exit MUST
+  remove the tray icon, close the window, stop background reporting, and terminate
+  the process gracefully. Windows Restart Manager MUST be able to request that same
+  graceful shutdown during installed upgrades and uninstalls.
 - **FR-007**: The app MUST register the PC with Home Assistant as a mobile_app
   device via the native app registration endpoint on first successful connection.
 - **FR-008**: The app MUST register and periodically update at least a battery-level

@@ -65,6 +65,16 @@ public static class WindowsLifecycleMessages
         _ => null
     };
 
+    /// <summary>
+    /// True only after Restart Manager has committed to closing the application.
+    /// <c>WM_QUERYENDSESSION</c> is deliberately excluded: cleanup must wait until
+    /// Windows confirms the session end with a true <c>wParam</c>.
+    /// </summary>
+    public static bool IsRestartManagerShutdown(uint message, nint wParam, nint lParam) =>
+        message == WM_ENDSESSION
+        && wParam != 0
+        && ((long)lParam & ENDSESSION_CLOSEAPP) != 0;
+
     public static LifecycleSignal? MapPowerBroadcast(int eventType) => eventType switch
     {
         PBT_APMSUSPEND => new LifecycleSignal(LifecycleTransition.Sleeping, "Suspend"),
@@ -80,8 +90,14 @@ public static class WindowsLifecycleMessages
     /// is going down - Windows does not say whether it will come back up, so a
     /// restart is indistinguishable from a shutdown here.
     /// </summary>
-    public static LifecycleSignal MapEndSessionFlags(nint flags)
+    public static LifecycleSignal? MapEndSessionFlags(nint flags)
     {
+        // Restart Manager is closing this process to replace application files;
+        // the PC itself is staying up, so this must not become a Home Assistant
+        // "shutting_down" state.
+        if (((long)flags & ENDSESSION_CLOSEAPP) != 0)
+            return null;
+
         var critical = ((long)flags & ENDSESSION_CRITICAL) != 0;
 
         if (((long)flags & ENDSESSION_LOGOFF) != 0)

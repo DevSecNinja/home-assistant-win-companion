@@ -88,6 +88,43 @@ public class LifecycleMessageTests
     }
 
     [Fact]
+    public void Restart_Manager_close_is_recognized_only_after_shutdown_is_confirmed()
+    {
+        var flags = WindowsLifecycleMessages.ENDSESSION_CLOSEAPP;
+
+        Assert.False(WindowsLifecycleMessages.IsRestartManagerShutdown(
+            WindowsLifecycleMessages.WM_QUERYENDSESSION, 0, flags));
+        Assert.False(WindowsLifecycleMessages.IsRestartManagerShutdown(
+            WindowsLifecycleMessages.WM_ENDSESSION, 0, flags));
+        Assert.True(WindowsLifecycleMessages.IsRestartManagerShutdown(
+            WindowsLifecycleMessages.WM_ENDSESSION, 1, flags));
+    }
+
+    [Fact]
+    public void Restart_Manager_close_is_not_reported_as_a_machine_shutdown()
+    {
+        Assert.Null(WindowsLifecycleMessages.MapWindowMessage(
+            WindowsLifecycleMessages.WM_QUERYENDSESSION,
+            0,
+            WindowsLifecycleMessages.ENDSESSION_CLOSEAPP));
+        Assert.Null(WindowsLifecycleMessages.MapWindowMessage(
+            WindowsLifecycleMessages.WM_ENDSESSION,
+            1,
+            WindowsLifecycleMessages.ENDSESSION_CLOSEAPP));
+    }
+
+    [Fact]
+    public void Normal_sign_out_and_machine_shutdown_are_not_installer_close_requests()
+    {
+        Assert.False(WindowsLifecycleMessages.IsRestartManagerShutdown(
+            WindowsLifecycleMessages.WM_ENDSESSION, 1, 0));
+        Assert.False(WindowsLifecycleMessages.IsRestartManagerShutdown(
+            WindowsLifecycleMessages.WM_ENDSESSION,
+            1,
+            unchecked((nint)WindowsLifecycleMessages.ENDSESSION_LOGOFF)));
+    }
+
+    [Fact]
     public void Unrelated_window_messages_are_ignored()
     {
         Assert.Null(WindowsLifecycleMessages.MapWindowMessage(0x0005 /* WM_SIZE */, 0, 0));

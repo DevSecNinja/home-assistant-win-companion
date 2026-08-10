@@ -114,6 +114,29 @@ public static class UpdatePolicy
         return selected;
     }
 
+    public static SemanticVersion? FindLatestStable(
+        IEnumerable<ReleaseCandidate> releases)
+    {
+        ArgumentNullException.ThrowIfNull(releases);
+
+        SemanticVersion? selected = null;
+        foreach (var release in releases)
+        {
+            if (release.IsDraft || release.IsPreRelease
+                || !SemanticVersion.TryParse(release.TagName, out var version)
+                || version!.IsPreRelease
+                || !TryCreateReleasePage(release.PageUrl, release.TagName, out _))
+            {
+                continue;
+            }
+
+            if (selected is null || version > selected)
+                selected = version;
+        }
+
+        return selected;
+    }
+
     private static bool TryCreateReleasePage(string value, string tagName, out Uri? page)
     {
         page = null;
@@ -170,7 +193,8 @@ public sealed record UpdateCheckState(
     SemanticVersion InstalledVersion,
     AvailableUpdate? AvailableUpdate = null,
     string? ErrorMessage = null,
-    long Revision = 0);
+    long Revision = 0,
+    SemanticVersion? LatestKnownStableVersion = null);
 
 /// <summary>
 /// Serializes update checks, cancels superseded work, and publishes only the
@@ -223,6 +247,7 @@ public sealed class StartupUpdateChecker
         CancellationTokenSource checkCancellation;
         long revision;
         AvailableUpdate? knownUpdate;
+        SemanticVersion? knownLatestStableVersion;
         lock (_gate)
         {
             revision = ++_revision;
@@ -231,6 +256,7 @@ public sealed class StartupUpdateChecker
                 CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             _activeCheck = checkCancellation;
             knownUpdate = _state.AvailableUpdate;
+            knownLatestStableVersion = _state.LatestKnownStableVersion;
         }
 
         PublishIfCurrent(
@@ -241,7 +267,8 @@ public sealed class StartupUpdateChecker
                 trigger,
                 _installedVersion,
                 knownUpdate,
-                Revision: revision));
+                Revision: revision,
+                LatestKnownStableVersion: knownLatestStableVersion));
 
         var entered = false;
         try
@@ -257,12 +284,14 @@ public sealed class StartupUpdateChecker
             checkCancellation.Token.ThrowIfCancellationRequested();
 
             var update = UpdatePolicy.FindUpdate(_installedVersion, releases);
+            var latestStableVersion = UpdatePolicy.FindLatestStable(releases);
             var result = new UpdateCheckState(
                 update is null ? UpdateCheckStatus.Current : UpdateCheckStatus.Available,
                 trigger,
                 _installedVersion,
                 update,
-                Revision: revision);
+                Revision: revision,
+                LatestKnownStableVersion: latestStableVersion);
             if (!PublishIfCurrent(revision, checkCancellation, result))
                 throw new OperationCanceledException(checkCancellation.Token);
 
@@ -286,7 +315,8 @@ public sealed class StartupUpdateChecker
                     _installedVersion,
                     knownUpdate,
                     FailureMessage,
-                    revision));
+                    revision,
+                    knownLatestStableVersion));
             throw;
         }
         finally

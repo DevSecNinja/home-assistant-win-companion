@@ -57,6 +57,7 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
     private bool _loadingSensorSettings;
     private bool _loadingStartupSetting;
     private int _connectionActionRunning;
+    private View _sensorReturnView = View.Status;
 
     public ICommand TrayOpenHomeAssistantCommand { get; }
     public ICommand TrayUpdateCommand { get; }
@@ -134,6 +135,7 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
         try
         {
             var resumed = await _controller.TryResumeAsync();
+            _connected = resumed;
             ShowPanel(resumed);
             // Only offered once it is settled that there is no session to resume:
             // starting a demo alongside a connection in flight would make the app
@@ -198,6 +200,15 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
             ? Visibility.Visible
             : Visibility.Collapsed;
         RecheckUpdatesButton.IsEnabled = presentation.IsRecheckEnabled;
+        InstalledVersionText.Text = presentation.InstalledVersionText;
+        LatestVersionText.Text = presentation.LatestVersionText;
+        SettingsUpdateStatusText.Text = presentation.SettingsStatusText;
+        SettingsCheckUpdatesButton.Content = presentation.SettingsCheckLabel;
+        SettingsCheckUpdatesButton.IsEnabled =
+            state.Status != UpdateCheckStatus.Checking;
+        SettingsInstallUpdateButton.Visibility = presentation.IsSettingsInstallVisible
+            ? Visibility.Visible
+            : Visibility.Collapsed;
         if (presentation.IsBannerOpen && messageChanged)
         {
             var peer = FrameworkElementAutomationPeer.FromElement(UpdateBannerMessage)
@@ -276,6 +287,11 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
     private void OnStateChanged(ConnectionState state) =>
         _dispatcher.TryEnqueue(() =>
         {
+            if (state == ConnectionState.Connected)
+                _connected = true;
+            else if (state is ConnectionState.Disconnected or ConnectionState.AuthError)
+                _connected = false;
+
             StatusText.Text = state switch
             {
                 ConnectionState.Connecting => "Connecting…",
@@ -326,6 +342,7 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
         try
         {
             await _controller.SignInAsync(url);
+            _connected = true;
             ApplyDemoChrome();
             ShowPanel(true);
             RefreshBattery();
@@ -369,7 +386,8 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
         _statusTimer.Start();
 
         // Seeing the sensors is the whole point of the demo, so it opens on them.
-        if (await BuildSensorListAsync()) ShowView(View.Settings);
+        _sensorReturnView = View.Status;
+        if (await BuildSensorListAsync()) ShowView(View.Sensors);
     }
 
     private void OnLeaveDemoMode(object sender, RoutedEventArgs e)
@@ -391,10 +409,8 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
 
         var serverActions = demo ? Visibility.Collapsed : Visibility.Visible;
         OpenHomeAssistantButton.Visibility = serverActions;
-        ConnectionButton.Visibility = serverActions;
-        UpdateNowButton.Visibility = serverActions;
-        DisconnectButton.Visibility = serverActions;
-        RemoveServerButton.Visibility = serverActions;
+        ConnectionSettingsSection.Visibility = serverActions;
+        SyncSensorsButton.Visibility = serverActions;
         TrayOpenHomeAssistantItem.Visibility = serverActions;
         TrayDisconnectItem.Visibility = serverActions;
     }
@@ -406,6 +422,7 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
 
         if (Interlocked.Exchange(ref _connectionActionRunning, 1) != 0) return;
 
+        SetSettingsActionBusy(true);
         try
         {
             if (_connected)
@@ -414,32 +431,37 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
                 await _controller.DisconnectAsync();
                 _connected = false;
                 DisconnectButton.Content = "Reconnect";
-                UpdateNowButton.IsEnabled = false;
+                SyncSensorsButton.IsEnabled = false;
+                ChooseSensorsButton.IsEnabled = false;
+                IdleMinutesBox.IsEnabled = false;
                 StatusText.Text = "Disconnected";
+                ShowSettingsActionStatus(
+                    "Connection stopped. Your server and sign-in information were kept.",
+                    true);
             }
             else
             {
-                DisconnectButton.IsEnabled = false;
-                try
-                {
-                    await _controller.ReconnectAsync();
-                    _connected = true;
-                    DisconnectButton.Content = "Disconnect";
-                    UpdateNowButton.IsEnabled = true;
-                    _statusTimer.Start();
-                }
-                finally
-                {
-                    DisconnectButton.IsEnabled = true;
-                }
+                await _controller.ReconnectAsync();
+                _connected = true;
+                DisconnectButton.Content = "Stop connection";
+                SyncSensorsButton.IsEnabled = true;
+                ChooseSensorsButton.IsEnabled = true;
+                IdleMinutesBox.IsEnabled = true;
+                _statusTimer.Start();
+                ShowSettingsActionStatus("Reconnected to Home Assistant.", true);
             }
         }
         catch (OperationCanceledException) when (_exiting)
         {
             // Application shutdown superseded this user action.
         }
+        catch (Exception ex)
+        {
+            ShowSettingsActionStatus("Could not change the connection: " + ex.Message, false);
+        }
         finally
         {
+            SetSettingsActionBusy(false);
             Interlocked.Exchange(ref _connectionActionRunning, 0);
         }
     }
@@ -461,17 +483,34 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
 
         var homeAssistantUrl = _controller.BaseUrl;
         _statusTimer.Stop();
+        SetSettingsActionBusy(true);
         try
         {
             await _controller.RemoveServerAsync();
         }
-        catch
+        catch (Exception ex)
         {
-            // Local state is cleared regardless.
+            _connected = _controller.State
+                is not (ConnectionState.Disconnected or ConnectionState.AuthError);
+            DisconnectButton.Content = _connected ? "Stop connection" : "Reconnect";
+            SyncSensorsButton.IsEnabled = _connected;
+            var catalogAvailable = _controller.Catalog is not null;
+            ChooseSensorsButton.IsEnabled = catalogAvailable;
+            IdleMinutesBox.IsEnabled = catalogAvailable;
+            if (_connected) _statusTimer.Start();
+            else StatusText.Text = "Disconnected";
+            ShowSettingsActionStatus("Could not remove the server: " + ex.Message, false);
+            return;
+        }
+        finally
+        {
+            SetSettingsActionBusy(false);
         }
         _connected = false;
-        DisconnectButton.Content = "Disconnect";
-        UpdateNowButton.IsEnabled = true;
+        DisconnectButton.Content = "Stop connection";
+        SyncSensorsButton.IsEnabled = false;
+        ChooseSensorsButton.IsEnabled = false;
+        IdleMinutesBox.IsEnabled = false;
         // Nothing is connected any more, so the demo becomes available again.
         DemoModeButton.IsEnabled = true;
         ShowView(View.Connect);
@@ -505,15 +544,22 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
 
     private async void OnForcePush(object sender, RoutedEventArgs e)
     {
-        UpdateNowButton.IsEnabled = false;
+        SyncSensorsButton.IsEnabled = false;
+        SetSettingsActionBusy(true);
         try
         {
             await _controller.ForcePushAsync();
             RefreshStatusFields();
+            ShowSettingsActionStatus("Enabled sensor states synced to Home Assistant.", true);
+        }
+        catch (Exception ex)
+        {
+            ShowSettingsActionStatus("Could not sync sensors: " + ex.Message, false);
         }
         finally
         {
-            UpdateNowButton.IsEnabled = true;
+            SetSettingsActionBusy(false);
+            SyncSensorsButton.IsEnabled = _connected;
         }
     }
 
@@ -528,7 +574,8 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
     private void OnCloseConnection(object sender, RoutedEventArgs e)
     {
         RefreshStatusFields();
-        ShowView(View.Status);
+        LoadPreferences();
+        ShowView(View.Preferences);
     }
 
     /// <summary>Fills the connection view from the saved settings.</summary>
@@ -801,8 +848,8 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
         {
             await _controller.SignInAsync(url);
             _connected = true;
-            DisconnectButton.Content = "Disconnect";
-            UpdateNowButton.IsEnabled = true;
+            DisconnectButton.Content = "Stop connection";
+            SyncSensorsButton.IsEnabled = true;
             _statusTimer.Start();
             ShowPanel(true);
             RefreshStatusFields();
@@ -1028,7 +1075,20 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
             _controller.UpdateState.AvailableUpdate?.AvailableVersion);
     }
 
-    private void OnOpenLog(object sender, RoutedEventArgs e) => _controller.OpenLogFile();
+    private void OnOpenLog(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            _controller.OpenLogFile();
+            ShowSettingsActionStatus("Opened the current log file.", true);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException
+                                   or Win32Exception or InvalidOperationException
+                                   or NotSupportedException)
+        {
+            ShowSettingsActionStatus("Could not open the log file: " + ex.Message, false);
+        }
+    }
 
     private void OnOpenLocationSettings(object sender, RoutedEventArgs e) =>
         _controller.OpenLocationSettings();
@@ -1046,13 +1106,14 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
         ShowView(connected ? View.Status : View.Connect);
     }
 
-    private enum View { Connect, Status, Settings, Connection }
+    private enum View { Connect, Status, Preferences, Sensors, Connection }
 
     private void ShowView(View view)
     {
         ConnectPanel.Visibility = view == View.Connect ? Visibility.Visible : Visibility.Collapsed;
         StatusPanel.Visibility = view == View.Status ? Visibility.Visible : Visibility.Collapsed;
-        SettingsPanel.Visibility = view == View.Settings ? Visibility.Visible : Visibility.Collapsed;
+        PreferencesPanel.Visibility = view == View.Preferences ? Visibility.Visible : Visibility.Collapsed;
+        SensorsPanel.Visibility = view == View.Sensors ? Visibility.Visible : Visibility.Collapsed;
         ConnectionPanel.Visibility = view == View.Connection ? Visibility.Visible : Visibility.Collapsed;
 
         if (view == View.Connect)
@@ -1062,16 +1123,48 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
         }
     }
 
-    private async void OnShowSettings(object sender, RoutedEventArgs e)
+    private async void OnShowSensors(object sender, RoutedEventArgs e)
     {
+        _sensorReturnView = View.Status;
         if (await BuildSensorListAsync())
-            ShowView(View.Settings);
+            ShowView(View.Sensors);
     }
 
-    private void OnCloseSettings(object sender, RoutedEventArgs e)
+    private async void OnShowSensorsFromSettings(object sender, RoutedEventArgs e)
+    {
+        _sensorReturnView = View.Preferences;
+        if (await BuildSensorListAsync())
+            ShowView(View.Sensors);
+    }
+
+    private void OnCloseSensors(object sender, RoutedEventArgs e)
     {
         CancelSensorPreviews();
+        ShowView(_sensorReturnView);
+    }
+
+    private void OnShowPreferences(object sender, RoutedEventArgs e)
+    {
+        LoadPreferences();
+        ShowView(View.Preferences);
+    }
+
+    private void OnClosePreferences(object sender, RoutedEventArgs e) =>
         ShowView(View.Status);
+
+    private void LoadPreferences()
+    {
+        RefreshStartupSetting();
+        var catalog = _controller.Catalog;
+        _loadingSensorSettings = true;
+        if (catalog is not null)
+            IdleMinutesBox.Value = Math.Max(1, catalog.Preferences.IdleThresholdSeconds / 60);
+        _loadingSensorSettings = false;
+        IdleMinutesBox.IsEnabled = catalog is not null;
+        ChooseSensorsButton.IsEnabled = catalog is not null;
+        SyncSensorsButton.IsEnabled = _connected;
+        DisconnectButton.Content = _connected ? "Stop connection" : "Reconnect";
+        SettingsActionStatus.Visibility = Visibility.Collapsed;
     }
 
     /// <summary>
@@ -1109,9 +1202,6 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
 
         SensorList.Children.Clear();
         _sensorPreviewTexts.Clear();
-        _loadingSensorSettings = true;
-        IdleMinutesBox.Value = Math.Max(1, catalog.Preferences.IdleThresholdSeconds / 60);
-        _loadingSensorSettings = false;
         foreach (var definition in catalog.Definitions)
         {
             var toggle = new ToggleSwitch
@@ -1575,11 +1665,57 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
 
     private async void OnIdleMinutesChanged(NumberBox sender, NumberBoxValueChangedEventArgs args)
     {
+        if (_loadingSensorSettings) return;
         var catalog = _controller.Catalog;
         if (catalog is null || double.IsNaN(args.NewValue)) return;
 
         catalog.Preferences.IdleThresholdSeconds = (int)Math.Max(1, args.NewValue) * 60;
-        await _controller.ApplySensorChangesAsync();
+        try
+        {
+            await _controller.ApplySensorChangesAsync();
+            ShowSettingsActionStatus(
+                _controller.IsDemoMode
+                    ? "Idle threshold updated for this demo."
+                    : "Idle threshold saved and synced.",
+                true);
+        }
+        catch (Exception ex)
+        {
+            ShowSettingsActionStatus(
+                "The idle threshold was saved, but could not be synced: " + ex.Message,
+                false);
+        }
+    }
+
+    private void SetSettingsActionBusy(bool busy)
+    {
+        SettingsActionProgress.IsActive = busy;
+        SyncSensorsButton.IsEnabled = !busy && _connected;
+        SettingsCheckUpdatesButton.IsEnabled =
+            !busy && _controller.UpdateState.Status != UpdateCheckStatus.Checking;
+        DisconnectButton.IsEnabled = !busy;
+        RemoveServerButton.IsEnabled = !busy;
+        if (busy) ShowSettingsActionStatus("Working…", true);
+    }
+
+    private void ShowSettingsActionStatus(string message, bool positive)
+    {
+        var messageChanged = !string.Equals(
+            SettingsActionStatus.Text,
+            message,
+            StringComparison.Ordinal);
+        SettingsActionStatus.Text = message;
+        SettingsActionStatus.Foreground =
+            (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources[
+                positive ? "SystemFillColorSuccessBrush" : "SystemFillColorCautionBrush"];
+        SettingsActionStatus.Visibility = Visibility.Visible;
+        if (messageChanged)
+        {
+            var peer = FrameworkElementAutomationPeer.FromElement(SettingsActionStatus)
+                       ?? FrameworkElementAutomationPeer.CreatePeerForElement(
+                           SettingsActionStatus);
+            peer?.RaiseAutomationEvent(AutomationEvents.LiveRegionChanged);
+        }
     }
 
     private async void OnFrontmostAppModeChanged(object sender, SelectionChangedEventArgs e)

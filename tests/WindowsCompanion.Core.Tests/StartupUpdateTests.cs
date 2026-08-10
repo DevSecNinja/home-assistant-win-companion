@@ -201,6 +201,24 @@ public class StartupUpdateTests
     }
 
     [Fact]
+    public async Task A_failed_recheck_preserves_the_latest_known_stable_version()
+    {
+        var source = new ScriptedReleaseSource(
+            _ => Task.FromResult(Releases("v1.0.0")),
+            _ => Task.FromException<IReadOnlyList<ReleaseCandidate>>(
+                new HttpRequestException("offline")));
+        var checker = Checker(source);
+
+        await checker.CheckAsync(UpdateCheckTrigger.Automatic);
+        await Assert.ThrowsAsync<HttpRequestException>(
+            () => checker.CheckAsync(UpdateCheckTrigger.User));
+
+        Assert.Equal(
+            "1.0.0",
+            checker.State.LatestKnownStableVersion?.ToString());
+    }
+
+    [Fact]
     public async Task A_new_check_cancels_the_old_one_and_cannot_publish_a_stale_result()
     {
         var firstStarted = new TaskCompletionSource(

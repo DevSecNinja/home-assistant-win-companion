@@ -30,6 +30,26 @@ if (-not (Test-Path $InnoCompiler)) {
 }
 
 $script = Join-Path $repoRoot 'installer\WindowsCompanion.iss'
+$definition = Get-Content $script -Raw
+$requiredDirectives = @(
+    '(?m)^CloseApplications=yes\r?$',
+    '(?m)^CloseApplicationsFilter=\*\.exe,\*\.dll\r?$',
+    '(?m)^RestartApplications=no\r?$',
+    '(?m)^\s+TShutdownResult = \(srCompleted, srDeclined, srFailed\);\r?$',
+    '(?m)^function PrepareToInstall\(var NeedsRestart: Boolean\): String;\r?$',
+    '(?m)^function InitializeUninstall\(\): Boolean;\r?$',
+    '(?m)^\s+if WaitForSingleObject\(ProcessHandle, ShutdownTimeoutMs\) <> WAIT_OBJECT_0 then\r?$',
+    '(?m)^\s+if \(ShutdownResult = srFailed\) and \(not UninstallSilent\) then\r?$'
+)
+foreach ($directive in $requiredDirectives) {
+    if ($definition -notmatch $directive) {
+        throw "Installer definition is missing required graceful-close configuration: $directive"
+    }
+}
+if ($definition -match '(?m)^AppMutex=.*\r?$') {
+    throw 'AppMutex prevents Restart Manager from requesting graceful application shutdown.'
+}
+
 $targets = @(
     @{ Architecture = 'x64'; Runtime = 'win-x64' }
     @{ Architecture = 'arm64'; Runtime = 'win-arm64' }

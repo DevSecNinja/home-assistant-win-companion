@@ -30,18 +30,27 @@ public enum NetworkKind
 /// treated as unidentifiable rather than untrusted.
 /// </param>
 /// <param name="VpnActive">A tunnel adapter is up, so reachability is ambiguous.</param>
+/// <param name="LocalAddresses">
+/// IPv4 and IPv6 addresses on active non-tunnel interfaces. These stay local and
+/// are used only to match user-configured CIDR blocks.
+/// </param>
 public sealed record NetworkContext(
     NetworkKind Kind,
     string? Ssid = null,
     string? Bssid = null,
     bool WirelessIdentityUnavailable = false,
-    bool VpnActive = false)
+    bool VpnActive = false,
+    IReadOnlyList<string>? LocalAddresses = null)
 {
     public static NetworkContext Offline { get; } = new(NetworkKind.Offline);
 
+    public IReadOnlyList<string> Addresses => LocalAddresses ?? [];
+
     /// <summary>True when nothing about this network can be used to identify it.</summary>
     public bool IsIdentifiable =>
-        Kind == NetworkKind.Wired || (Kind == NetworkKind.Wireless && !string.IsNullOrEmpty(Ssid));
+        Addresses.Count > 0
+        || Kind == NetworkKind.Wired
+        || (Kind == NetworkKind.Wireless && !string.IsNullOrEmpty(Ssid));
 }
 
 /// <summary>Supplies the current <see cref="NetworkContext"/> and change notifications.</summary>

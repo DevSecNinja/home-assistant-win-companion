@@ -54,7 +54,8 @@ public sealed record RouteValidationReport(
     string Summary,
     string? InstanceDeviceId = null,
     bool RequiresAcknowledgement = false,
-    bool RequiresSignIn = false)
+    bool RequiresSignIn = false,
+    IReadOnlyList<TrustedNetworkCidrError>? TrustedNetworkErrors = null)
 {
     public RouteValidationEntry? For(RouteKind route) =>
         Entries.FirstOrDefault(e => e.Route == route);
@@ -85,6 +86,17 @@ public static class RouteValidator
 
         if (!draft.UseSeparateUrls)
             return await ValidateSingleAsync(current, draft, probe, ct).ConfigureAwait(false);
+
+        var trustedNetworkValidation = TrustedNetworkCidr.Validate(draft.TrustedNetworks.Cidrs);
+        if (!trustedNetworkValidation.IsValid)
+        {
+            var first = trustedNetworkValidation.Errors[0];
+            return new RouteValidationReport(
+                [],
+                false,
+                $"Trusted network CIDR {first.EntryNumber}: {first.Message}",
+                TrustedNetworkErrors: trustedNetworkValidation.Errors);
+        }
 
         var internalUrl = RouteUrlPolicy.Normalize(draft.InternalUrl, RouteKind.Internal);
         var externalUrl = RouteUrlPolicy.Normalize(draft.ExternalUrl, RouteKind.External);
@@ -289,7 +301,7 @@ public static class RouteValidator
         config.SetRoute(RouteKind.External, report.For(RouteKind.External)?.Url.Url);
         config.UseSeparateUrls = true;
         config.ConnectionMode = draft.Mode;
-        config.TrustedNetworks = draft.TrustedNetworks;
+        config.TrustedNetworks = draft.TrustedNetworks.ValidatedCopy();
         config.RouteAssignmentPending = false;
 
         if (!string.IsNullOrEmpty(report.InstanceDeviceId))

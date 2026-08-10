@@ -180,7 +180,12 @@ public class ServerConfigRouteTests
             ConnectionMode = ConnectionMode.PreferInternal,
             LastSuccessfulRoute = RouteKind.Internal,
             InstanceDeviceId = "dev-9",
-            TrustedNetworks = new TrustedNetworkSettings { Ssids = { "HomeNet" }, TrustWiredNetworks = true }
+            TrustedNetworks = new TrustedNetworkSettings
+            {
+                Cidrs = { "192.168.50.0/24", "fd12:3456::/48" },
+                Ssids = { "HomeNet" },
+                TrustWiredNetworks = true
+            }
         };
 
         var json = JsonSerializer.Serialize(config);
@@ -193,6 +198,7 @@ public class ServerConfigRouteTests
         Assert.Equal(Internal, restored.InternalUrl);
         Assert.Equal(External, restored.ExternalUrl);
         Assert.Equal("dev-9", restored.InstanceDeviceId);
+        Assert.Equal(["192.168.50.0/24", "fd12:3456::/48"], restored.TrustedNetworks.Cidrs);
         Assert.Equal(["HomeNet"], restored.TrustedNetworks.Ssids);
         Assert.True(restored.TrustedNetworks.TrustWiredNetworks);
     }

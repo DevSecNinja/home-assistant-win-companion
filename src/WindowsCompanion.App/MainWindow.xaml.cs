@@ -51,12 +51,14 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
         new(StringComparer.Ordinal);
     private readonly Dictionary<string, TextBlock> _sensorPreviewTexts =
         new(StringComparer.Ordinal);
+    private readonly List<Control> _sensorSettingControls = [];
     private List<string> _trustedSsids = [];
     private List<string> _trustedBssids = [];
     private bool _suppressSeparateUrlsToggle;
     private bool _suppressBssidToggle;
     private bool _loadingSensorSettings;
     private bool _loadingStartupSetting;
+    private bool _settingsActionBusy;
     private int _connectionActionRunning;
     private View _sensorReturnView = View.Status;
 
@@ -213,6 +215,10 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
         RecheckUpdatesButton.IsEnabled = presentation.IsRecheckEnabled;
         InstalledVersionText.Text = presentation.InstalledVersionText;
         LatestVersionText.Text = presentation.LatestVersionText;
+        var settingsUpdateChanged = !string.Equals(
+            SettingsUpdateStatusText.Text,
+            presentation.SettingsStatusText,
+            StringComparison.Ordinal);
         SettingsUpdateStatusText.Text = presentation.SettingsStatusText;
         SettingsCheckUpdatesButton.Content = presentation.SettingsCheckLabel;
         SettingsCheckUpdatesButton.IsEnabled =
@@ -225,6 +231,13 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
             var peer = FrameworkElementAutomationPeer.FromElement(UpdateBannerMessage)
                        ?? FrameworkElementAutomationPeer.CreatePeerForElement(
                            UpdateBannerMessage);
+            peer?.RaiseAutomationEvent(AutomationEvents.LiveRegionChanged);
+        }
+        if (settingsUpdateChanged)
+        {
+            var peer = FrameworkElementAutomationPeer.FromElement(SettingsUpdateStatusText)
+                       ?? FrameworkElementAutomationPeer.CreatePeerForElement(
+                           SettingsUpdateStatusText);
             peer?.RaiseAutomationEvent(AutomationEvents.LiveRegionChanged);
         }
         UpdateHealth();
@@ -468,6 +481,7 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
         }
         catch (Exception ex)
         {
+            ReconcileConnectionControlsAfterFailure();
             ShowSettingsActionStatus("Could not change the connection: " + ex.Message, false);
         }
         finally
@@ -502,15 +516,7 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
         }
         catch (Exception ex)
         {
-            _connected = _controller.State
-                is not (ConnectionState.Disconnected or ConnectionState.AuthError);
-            DisconnectButton.Content = _connected ? "Stop connection" : "Reconnect";
-            SyncSensorsButton.IsEnabled = _connected;
-            var catalogAvailable = _controller.Catalog is not null;
-            ChooseSensorsButton.IsEnabled = catalogAvailable;
-            IdleMinutesBox.IsEnabled = catalogAvailable;
-            if (_connected) _statusTimer.Start();
-            else StatusText.Text = "Disconnected";
+            ReconcileConnectionControlsAfterFailure();
             ShowSettingsActionStatus("Could not remove the server: " + ex.Message, false);
             return;
         }
@@ -1228,6 +1234,7 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
 
         SensorList.Children.Clear();
         _sensorPreviewTexts.Clear();
+        _sensorSettingControls.Clear();
         foreach (var definition in catalog.Definitions)
         {
             var toggle = new ToggleSwitch
@@ -1245,6 +1252,7 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
                 toggle,
                 $"{definition.Name} enabled");
             toggle.Toggled += OnSensorToggled;
+            _sensorSettingControls.Add(toggle);
 
             var heading = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
             heading.Children.Add(new TextBlock { Text = definition.Name, FontWeight = FontWeights.SemiBold });
@@ -1381,6 +1389,7 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
         mode.SelectedIndex =
             catalog.Preferences.FrontmostAppMode == FrontmostAppMode.FullWindowTitle ? 1 : 0;
         mode.SelectionChanged += OnFrontmostAppModeChanged;
+        _sensorSettingControls.Add(mode);
 
         container.Children.Add(mode);
         container.Children.Add(new TextBlock
@@ -1553,7 +1562,8 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
         finally
         {
             EndSensorPreview(uniqueId, previewCancellation);
-            if (ReferenceEquals(catalog, _controller.Catalog)) toggle.IsEnabled = true;
+            if (ReferenceEquals(catalog, _controller.Catalog))
+                toggle.IsEnabled = !_settingsActionBusy;
         }
     }
 
@@ -1715,20 +1725,44 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
         catch (Exception ex)
         {
             ShowSettingsActionStatus(
-                "The idle threshold was saved, but could not be synced: " + ex.Message,
+                "Could not save or sync the idle threshold: " + ex.Message,
                 false);
         }
     }
 
     private void SetSettingsActionBusy(bool busy)
     {
+        _settingsActionBusy = busy;
         SettingsActionProgress.IsActive = busy;
+        var catalogAvailable = !busy && _controller.Catalog is not null;
         SyncSensorsButton.IsEnabled = !busy && _connected;
+        IdleMinutesBox.IsEnabled = catalogAvailable;
+        ChooseSensorsButton.IsEnabled = catalogAvailable;
+        ConnectionButton.IsEnabled = !busy;
+        foreach (var control in _sensorSettingControls)
+            control.IsEnabled = catalogAvailable;
         SettingsCheckUpdatesButton.IsEnabled =
             !busy && _controller.UpdateState.Status != UpdateCheckStatus.Checking;
         DisconnectButton.IsEnabled = !busy;
         RemoveServerButton.IsEnabled = !busy;
         if (busy) ShowSettingsActionStatus("Working…", true);
+    }
+
+    private void ReconcileConnectionControlsAfterFailure()
+    {
+        _connected = _controller.State
+            is not (ConnectionState.Disconnected or ConnectionState.AuthError);
+        DisconnectButton.Content = _connected ? "Stop connection" : "Reconnect";
+        var catalogAvailable = _controller.Catalog is not null;
+        SyncSensorsButton.IsEnabled = _connected;
+        ChooseSensorsButton.IsEnabled = catalogAvailable;
+        IdleMinutesBox.IsEnabled = catalogAvailable;
+        if (_connected) _statusTimer.Start();
+        else
+        {
+            _statusTimer.Stop();
+            StatusText.Text = "Disconnected";
+        }
     }
 
     private void ShowSettingsActionStatus(string message, bool positive)

@@ -84,7 +84,8 @@ one that just works with stock Home Assistant.**
   APNS/FCM equivalent).
 - **Opt-in sensor catalog** — battery, active/idle, screen locked, connection type,
   IPv4/IPv6 address, LAN MAC address, Wi-Fi SSID/BSSID, OS version, PC model, last
-  boot, joined domain/workgroup, display count and resolution, dark mode, locale
+  boot, joined domain/workgroup and Microsoft Entra ID status, display count and
+  resolution, dark mode, locale
   and time zone, system-drive usage, notification/presentation state, microphone
   and camera use, audio output, headset presence, WinGet update count, system
   lifecycle state, and an optional

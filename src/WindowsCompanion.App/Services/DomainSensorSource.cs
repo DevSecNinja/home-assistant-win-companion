@@ -5,16 +5,21 @@ using WindowsCompanion.Core.Sensors;
 namespace WindowsCompanion_App.Services;
 
 /// <summary>
-/// Reports whether this PC is joined to an Active Directory domain or a
-/// workgroup, and its name. Domain membership does not change during a
-/// session, so there is nothing to observe.
+/// Reports whether this PC is joined to an on-premises Active Directory domain
+/// or workgroup, and separately whether it is joined or registered to
+/// Microsoft Entra ID (formerly Azure AD) - a PC can be either, both (hybrid)
+/// or neither. Join status does not change during a session, so there is
+/// nothing to observe.
 /// </summary>
 /// <remarks>
-/// The name comes from <c>NetGetJoinInformation</c>, the documented API for
-/// this question; nothing about the domain controller, forest, or the
-/// machine's AD object is read. A workgroup or domain name can reveal an
-/// organisation's internal naming, so this sensor is off by default like the
-/// other network-identity sensors.
+/// The domain/workgroup name comes from <c>NetGetJoinInformation</c> and the
+/// Entra ID status from <c>NetGetAadJoinInformation</c>, the documented APIs
+/// for these questions. Only the join type and the Entra ID domain name are
+/// read; the join certificate, tenant id, MDM enrollment URLs and the signed-in
+/// user's email are deliberately never touched, since those would leak more
+/// than a sensor state should. A workgroup, domain or Entra ID domain name can
+/// still reveal an organisation's internal naming, so this sensor is off by
+/// default like the other network-identity sensors.
 /// </remarks>
 public sealed class DomainSensorSource : ISensorSource
 {
@@ -25,7 +30,7 @@ public sealed class DomainSensorSource : ISensorSource
         new(
             DomainId,
             "Domain",
-            "The Active Directory domain or workgroup this PC is joined to.",
+            "The Active Directory domain/workgroup and Microsoft Entra ID join status for this PC.",
             SensorPrivacy.Sensitive,
             EnabledByDefault: false,
             ResourceUsage: "Low. Reads this PC's join status once per sync; it does not change "
@@ -36,7 +41,14 @@ public sealed class DomainSensorSource : ISensorSource
     {
         if (!enabled.Contains(DomainId)) return [];
 
-        var (status, name) = Query();
+        var (status, name) = QueryDomain();
+        var (entraJoinType, entraDomain) = QueryEntra();
+
+        var attributes = new Dictionary<string, object>(StringComparer.Ordinal)
+        {
+            ["membership_type"] = DomainMembershipFormatter.DescribeType(status, entraJoinType),
+            ["entra_join_type"] = DomainMembershipFormatter.DescribeEntraJoinType(entraJoinType)
+        };
 
         return
         [
@@ -45,13 +57,10 @@ public sealed class DomainSensorSource : ISensorSource
                 UniqueId = DomainId,
                 Type = "sensor",
                 Name = "Domain",
-                State = DomainMembershipFormatter.DescribeState(status, name),
+                State = DomainMembershipFormatter.DescribeState(status, name, entraJoinType, entraDomain),
                 EntityCategory = "diagnostic",
                 Icon = "mdi:domain",
-                Attributes = new Dictionary<string, object>(StringComparer.Ordinal)
-                {
-                    ["membership_type"] = DomainMembershipFormatter.DescribeType(status)
-                }
+                Attributes = attributes
             }
         ];
     }
@@ -60,7 +69,7 @@ public sealed class DomainSensorSource : ISensorSource
 
     public void Stop() { }
 
-    private static (DomainJoinStatus Status, string? Name) Query()
+    private static (DomainJoinStatus Status, string? Name) QueryDomain()
     {
         IntPtr buffer = IntPtr.Zero;
         try
@@ -85,6 +94,31 @@ public sealed class DomainSensorSource : ISensorSource
         }
     }
 
+    private static (EntraJoinType JoinType, string? IdpDomain) QueryEntra()
+    {
+        IntPtr joinInfo = IntPtr.Zero;
+        try
+        {
+            var result = NetGetAadJoinInformation(null, out joinInfo);
+            if (result != 0 || joinInfo == IntPtr.Zero) return (EntraJoinType.None, null);
+
+            var info = Marshal.PtrToStructure<DsRegJoinInfo>(joinInfo);
+            return (ToEntraJoinType(info.JoinType), info.IdpDomain);
+        }
+        catch (DllNotFoundException)
+        {
+            return (EntraJoinType.None, null);
+        }
+        catch (EntryPointNotFoundException)
+        {
+            return (EntraJoinType.None, null);
+        }
+        finally
+        {
+            if (joinInfo != IntPtr.Zero) NetFreeAadJoinInformation(joinInfo);
+        }
+    }
+
     private static DomainJoinStatus ToDomainJoinStatus(int status) => status switch
     {
         1 => DomainJoinStatus.Unjoined,
@@ -93,10 +127,46 @@ public sealed class DomainSensorSource : ISensorSource
         _ => DomainJoinStatus.Unknown
     };
 
+    private static EntraJoinType ToEntraJoinType(int joinType) => joinType switch
+    {
+        1 => EntraJoinType.Joined,
+        2 => EntraJoinType.Registered,
+        _ => EntraJoinType.None
+    };
+
     [DllImport("netapi32.dll", CharSet = CharSet.Unicode)]
     private static extern int NetGetJoinInformation(
         string? server, out IntPtr domain, out int status);
 
     [DllImport("netapi32.dll")]
     private static extern int NetApiBufferFree(IntPtr buffer);
+
+    [DllImport("netapi32.dll", CharSet = CharSet.Unicode)]
+    private static extern int NetGetAadJoinInformation(string? tenantId, out IntPtr joinInfo);
+
+    [DllImport("netapi32.dll")]
+    private static extern void NetFreeAadJoinInformation(IntPtr joinInfo);
+
+    /// <summary>
+    /// Mirrors the fields of Win32's <c>DSREG_JOIN_INFO</c> that this source
+    /// reads. The certificate, tenant id, join user email and MDM URLs are
+    /// declared only so the struct's layout matches; their values are never
+    /// read or surfaced.
+    /// </summary>
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    private struct DsRegJoinInfo
+    {
+        public int JoinType;
+        public IntPtr JoinCertificate;
+        [MarshalAs(UnmanagedType.LPWStr)] public string? DeviceId;
+        [MarshalAs(UnmanagedType.LPWStr)] public string? IdpDomain;
+        [MarshalAs(UnmanagedType.LPWStr)] public string? TenantId;
+        [MarshalAs(UnmanagedType.LPWStr)] public string? JoinUserEmail;
+        [MarshalAs(UnmanagedType.LPWStr)] public string? TenantDisplayName;
+        [MarshalAs(UnmanagedType.LPWStr)] public string? MdmEnrollmentUrl;
+        [MarshalAs(UnmanagedType.LPWStr)] public string? MdmTermsOfUseUrl;
+        [MarshalAs(UnmanagedType.LPWStr)] public string? MdmComplianceUrl;
+        [MarshalAs(UnmanagedType.LPWStr)] public string? UserSettingSyncUrl;
+        public IntPtr UserInfo;
+    }
 }

@@ -1,7 +1,7 @@
 namespace WindowsCompanion.Core.Sensors;
 
 /// <summary>
-/// Windows reports join status as one of four states from
+/// Windows reports classic on-premises join status as one of four states from
 /// <c>NetGetJoinInformation</c>: unknown, unjoined, workgroup member, or domain
 /// member. This mirrors that enum so the formatting below stays independent of
 /// the P/Invoke call that produces it.
@@ -15,42 +15,93 @@ public enum DomainJoinStatus
 }
 
 /// <summary>
-/// Turns the raw join status and name from <c>NetGetJoinInformation</c> into the
-/// state and "membership type" attribute the domain sensor reports.
+/// Microsoft Entra ID (formerly Azure AD) join status from
+/// <c>NetGetAadJoinInformation</c>, separate from the on-premises status above
+/// because a PC can be Entra-joined, Entra-registered, both (hybrid) or
+/// neither, independently of its classic domain/workgroup membership.
+/// </summary>
+public enum EntraJoinType
+{
+    /// <summary>Not joined or registered to any Microsoft Entra ID tenant.</summary>
+    None,
+
+    /// <summary>A work or school account has been added (Entra-registered).</summary>
+    Registered,
+
+    /// <summary>The device itself is joined to a Microsoft Entra ID tenant.</summary>
+    Joined
+}
+
+/// <summary>
+/// Turns the raw join status from <c>NetGetJoinInformation</c> and
+/// <c>NetGetAadJoinInformation</c> into the state and attributes the domain
+/// sensor reports.
 /// </summary>
 /// <remarks>
-/// The workgroup or domain name is not a unique hardware identifier, but it can
-/// reveal an organisation's internal naming, so the sensor stays off by default
-/// like the other network-identity sensors.
+/// The workgroup, domain or Microsoft Entra ID domain name is not a unique
+/// hardware identifier, but it can reveal an organisation's internal naming, so
+/// the sensor stays off by default like the other network-identity sensors.
 /// </remarks>
 public static class DomainMembershipFormatter
 {
     public const string Unknown = "Unknown";
     public const string NotJoined = "Not joined";
+    public const string EntraJoinedFallback = "Microsoft Entra ID";
 
     public const string TypeDomain = "domain";
     public const string TypeWorkgroup = "workgroup";
+    public const string TypeEntra = "entra";
+    public const string TypeHybrid = "hybrid";
     public const string TypeNone = "none";
 
-    /// <summary>The sensor's state: the domain or workgroup name, or a fallback.</summary>
-    public static string DescribeState(DomainJoinStatus status, string? name)
-    {
-        var cleaned = string.IsNullOrWhiteSpace(name) ? null : name.Trim();
+    public const string EntraJoinTypeNone = "none";
+    public const string EntraJoinTypeRegistered = "registered";
+    public const string EntraJoinTypeJoined = "joined";
 
-        return status switch
-        {
-            DomainJoinStatus.Domain when cleaned is not null => cleaned,
-            DomainJoinStatus.Workgroup when cleaned is not null => cleaned,
-            DomainJoinStatus.Unjoined => NotJoined,
-            _ => Unknown
-        };
+    /// <summary>
+    /// The sensor's state: an on-premises domain name takes priority (a hybrid
+    /// join still names the AD domain a user would recognise), otherwise a
+    /// Microsoft Entra ID join, otherwise the workgroup name, otherwise a
+    /// fallback.
+    /// </summary>
+    public static string DescribeState(
+        DomainJoinStatus status, string? name, EntraJoinType entraJoinType, string? entraDomain)
+    {
+        var cleanedName = Clean(name);
+        var cleanedEntraDomain = Clean(entraDomain);
+
+        if (status == DomainJoinStatus.Domain && cleanedName is not null) return cleanedName;
+        if (entraJoinType == EntraJoinType.Joined) return cleanedEntraDomain ?? EntraJoinedFallback;
+        if (status == DomainJoinStatus.Workgroup && cleanedName is not null) return cleanedName;
+        if (status == DomainJoinStatus.Unjoined) return NotJoined;
+
+        return Unknown;
     }
 
-    /// <summary>The "membership_type" attribute: domain, workgroup, or none.</summary>
-    public static string DescribeType(DomainJoinStatus status) => status switch
+    /// <summary>
+    /// The "membership_type" attribute: domain, entra, hybrid (both), workgroup,
+    /// or none.
+    /// </summary>
+    public static string DescribeType(DomainJoinStatus status, EntraJoinType entraJoinType)
     {
-        DomainJoinStatus.Domain => TypeDomain,
-        DomainJoinStatus.Workgroup => TypeWorkgroup,
-        _ => TypeNone
+        var domainJoined = status == DomainJoinStatus.Domain;
+        var entraJoined = entraJoinType == EntraJoinType.Joined;
+
+        if (domainJoined && entraJoined) return TypeHybrid;
+        if (domainJoined) return TypeDomain;
+        if (entraJoined) return TypeEntra;
+        if (status == DomainJoinStatus.Workgroup) return TypeWorkgroup;
+
+        return TypeNone;
+    }
+
+    /// <summary>The "entra_join_type" attribute: none, registered, or joined.</summary>
+    public static string DescribeEntraJoinType(EntraJoinType entraJoinType) => entraJoinType switch
+    {
+        EntraJoinType.Joined => EntraJoinTypeJoined,
+        EntraJoinType.Registered => EntraJoinTypeRegistered,
+        _ => EntraJoinTypeNone
     };
+
+    private static string? Clean(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }

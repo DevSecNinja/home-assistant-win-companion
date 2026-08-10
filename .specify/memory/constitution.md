@@ -65,7 +65,7 @@ issues.
 
 ## Additional Constraints
 
-- **Technology stack**: C# / .NET 9, Windows App SDK (WinUI 3),
+- **Technology stack**: C# / .NET 10, Windows App SDK (WinUI 3),
   `System.Text.Json`. Target Windows 10 build 19041+ and Windows 11.
 - **Home Assistant integration**: Uses the documented native app integration
   (`/api/mobile_app/registrations`, webhook `register_sensor`/`update_sensor_states`) and

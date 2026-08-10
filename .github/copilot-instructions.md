@@ -2,8 +2,8 @@
 
 ## Build, run, test, and lint
 
-This is a Windows-only .NET 9 / WinUI 3 application. Full app work requires
-Windows, the .NET 9 SDK, the matching Windows SDK, and Windows App Runtime 2.3.
+This is a Windows-only .NET 10 / WinUI 3 application. Full app work requires
+Windows, the .NET 10 SDK, the matching Windows SDK, and Windows App Runtime 2.3.
 
 Use the repository script to build and launch from source:
 

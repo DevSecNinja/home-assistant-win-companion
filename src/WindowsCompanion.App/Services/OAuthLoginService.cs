@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using WindowsCompanion.Core.HomeAssistant;
 using WindowsCompanion.Core.Models;
 
@@ -12,10 +11,12 @@ namespace WindowsCompanion_App.Services;
 public sealed class OAuthLoginService
 {
     private readonly HttpClient _http;
+    private readonly IUriLauncher _uriLauncher;
 
-    public OAuthLoginService(HttpClient http)
+    public OAuthLoginService(HttpClient http, IUriLauncher? uriLauncher = null)
     {
         _http = http ?? throw new ArgumentNullException(nameof(http));
+        _uriLauncher = uriLauncher ?? new ShellUriLauncher();
     }
 
     public async Task<TokenResponse> SignInAsync(string baseUrl, CancellationToken ct = default)
@@ -24,23 +25,34 @@ public sealed class OAuthLoginService
         var authorizeUrl = HaOAuthClient.BuildAuthorizeUrl(
             baseUrl, AppConstants.ClientId, AppConstants.RedirectUri, state);
 
+        using var listenerCancellation = CancellationTokenSource.CreateLinkedTokenSource(ct);
         var listener = new LoopbackOAuthListener();
-        var codeTask = listener.WaitForCodeAsync(AppConstants.LoopbackPort, state, ct);
+        var codeTask = listener.WaitForCodeAsync(
+            AppConstants.LoopbackPort, state, listenerCancellation.Token);
 
-        OpenBrowser(authorizeUrl);
-
-        var code = await codeTask.ConfigureAwait(false);
+        string code;
+        try
+        {
+            await _uriLauncher.LaunchAsync(authorizeUrl, ct).ConfigureAwait(false);
+            code = await codeTask.ConfigureAwait(false);
+        }
+        finally
+        {
+            if (!codeTask.IsCompleted)
+            {
+                listenerCancellation.Cancel();
+                try
+                {
+                    await codeTask.ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (listenerCancellation.IsCancellationRequested)
+                {
+                }
+            }
+        }
 
         var oauth = new HaOAuthClient(_http, baseUrl);
         return await oauth.ExchangeCodeAsync(code, AppConstants.ClientId, ct).ConfigureAwait(false);
     }
 
-    private static void OpenBrowser(Uri uri)
-    {
-        Process.Start(new ProcessStartInfo
-        {
-            FileName = uri.ToString(),
-            UseShellExecute = true
-        });
-    }
 }

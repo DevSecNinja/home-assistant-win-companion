@@ -28,6 +28,7 @@
 
         <tb:TaskbarIcon
             x:Name="TrayIcon"
+            NoLeftClickDelay="True"
             ToolTipText="Windows Companion for Home Assistant"
             IconSource="Assets/AppIcon.ico"
             DoubleClickCommand="{x:Bind TrayShowWindowCommand}">
@@ -35,19 +36,22 @@
                 <MenuFlyout>
                     <MenuFlyoutItem
                         x:Name="TrayOpenHomeAssistantItem"
+                        AutomationProperties.AutomationId="Tray.OpenHomeAssistant"
                         Text="Open Home Assistant"
                         Command="{x:Bind TrayOpenHomeAssistantCommand}" />
                     <MenuFlyoutItem
                         x:Name="TrayUpdateItem"
+                        AutomationProperties.AutomationId="Tray.Update"
                         Text="Check for updates…"
                         Command="{x:Bind TrayUpdateCommand}" />
-                    <MenuFlyoutItem Text="Show Companion" Command="{x:Bind TrayShowWindowCommand}" />
+                    <MenuFlyoutItem AutomationProperties.AutomationId="Tray.Show" Text="Show Companion" Command="{x:Bind TrayShowWindowCommand}" />
                     <MenuFlyoutSeparator />
                     <MenuFlyoutItem
                         x:Name="TrayDisconnectItem"
+                        AutomationProperties.AutomationId="Tray.Disconnect"
                         Text="Disconnect"
                         Command="{x:Bind TrayDisconnectCommand}" />
-                    <MenuFlyoutItem Text="Exit" Command="{x:Bind TrayExitCommand}" />
+                    <MenuFlyoutItem AutomationProperties.AutomationId="Tray.Exit" Text="Exit" Command="{x:Bind TrayExitCommand}" />
                 </MenuFlyout>
             </tb:TaskbarIcon.ContextFlyout>
         </tb:TaskbarIcon>
@@ -107,17 +111,20 @@
                 Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
             <TextBox
                 x:Name="UrlBox"
+                AutomationProperties.AutomationId="Connect.Url"
                 Header="Home Assistant URL"
                 PlaceholderText="https://ha.example.com"
                 KeyDown="OnUrlBoxKeyDown" />
             <Button
                 x:Name="SignInButton"
+                AutomationProperties.AutomationId="Connect.SignIn"
                 Content="Sign in"
                 Style="{StaticResource AccentButtonStyle}"
                 Click="OnSignIn" />
             <ProgressRing x:Name="SignInProgress" IsActive="False" Width="24" Height="24" HorizontalAlignment="Left" />
             <TextBlock
                 x:Name="ConnectError"
+                AutomationProperties.AutomationId="Connect.Error"
                 Foreground="{ThemeResource SystemFillColorCriticalBrush}"
                 TextWrapping="Wrap"
                 Visibility="Collapsed" />
@@ -147,7 +154,7 @@
             <TextBlock Text="Windows Companion for Home Assistant" Style="{StaticResource SubtitleTextBlockStyle}" />
             <StackPanel Orientation="Horizontal" Spacing="8">
                 <TextBlock Text="Server:" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                <TextBlock x:Name="ServerText" Text="—" TextTrimming="CharacterEllipsis" />
+                <TextBlock x:Name="ServerText" AutomationProperties.AutomationId="Status.Server" Text="—" TextTrimming="CharacterEllipsis" />
             </StackPanel>
             <StackPanel Orientation="Horizontal" Spacing="8">
                 <TextBlock Text="Address in use:" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
@@ -155,11 +162,11 @@
             </StackPanel>
             <StackPanel Orientation="Horizontal" Spacing="8">
                 <TextBlock Text="Status:" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                <TextBlock x:Name="StatusText" Text="Connecting…" FontWeight="SemiBold" />
+                <TextBlock x:Name="StatusText" AutomationProperties.AutomationId="Status.Connection" Text="Connecting…" FontWeight="SemiBold" />
             </StackPanel>
             <StackPanel Orientation="Horizontal" Spacing="8">
                 <TextBlock Text="Health:" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                <TextBlock x:Name="HealthText" Text="—" FontWeight="SemiBold" TextWrapping="Wrap" />
+                <TextBlock x:Name="HealthText" AutomationProperties.AutomationId="Status.Health" Text="—" FontWeight="SemiBold" TextWrapping="Wrap" />
             </StackPanel>
             <StackPanel Orientation="Horizontal" Spacing="8">
                 <TextBlock Text="Battery:" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
@@ -170,9 +177,11 @@
                 <TextBlock x:Name="LastUpdateText" Text="—" />
             </StackPanel>
             <Button x:Name="OpenHomeAssistantButton" Content="Open Home Assistant" Click="OnOpenHomeAssistant" HorizontalAlignment="Stretch" />
-            <Button Content="Sensors" Click="OnShowSensors" HorizontalAlignment="Stretch" />
-            <Button Content="Settings" Click="OnShowPreferences" HorizontalAlignment="Stretch"
-                    AutomationProperties.Name="Open Settings" />
+            <Button AutomationProperties.AutomationId="Status.OpenSensors"
+                    Content="Sensors" Click="OnShowSensors" HorizontalAlignment="Stretch" />
+            <Button AutomationProperties.AutomationId="Status.OpenSettings"
+                    AutomationProperties.Name="Open Settings"
+                    Content="Settings" Click="OnShowPreferences" HorizontalAlignment="Stretch" />
         </StackPanel>
 
         <!-- Application settings view -->
@@ -234,6 +243,7 @@
                             Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                         <Button
                             x:Name="SyncSensorsButton"
+                            AutomationProperties.AutomationId="Settings.SyncSensors"
                             Content="Sync sensors now"
                             Click="OnForcePush"
                             HorizontalAlignment="Stretch" />
@@ -251,6 +261,7 @@
                             FontSize="12"
                             Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                         <Button x:Name="DisconnectButton" Content="Stop connection"
+                                AutomationProperties.AutomationId="Settings.Disconnect"
                                 Click="OnDisconnect" HorizontalAlignment="Stretch" />
                         <TextBlock
                             Text="Removing the server signs out, deletes its saved configuration from this PC, and requires a new sign-in."
@@ -259,6 +270,7 @@
                             Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                         <Button
                             x:Name="RemoveServerButton"
+                            AutomationProperties.AutomationId="Settings.RemoveServer"
                             Content="Remove server…"
                             Click="OnRemoveServer"
                             HorizontalAlignment="Stretch"
@@ -304,10 +316,12 @@
                               AutomationProperties.Name="Settings action in progress" />
                 <TextBlock
                     x:Name="SettingsActionStatus"
+                    AutomationProperties.AutomationId="Settings.ActionStatus"
                     TextWrapping="Wrap"
                     AutomationProperties.LiveSetting="Polite"
                     Visibility="Collapsed" />
-                <Button Content="Back" Click="OnClosePreferences" HorizontalAlignment="Stretch" />
+                <Button AutomationProperties.AutomationId="Settings.Back"
+                        Content="Back" Click="OnClosePreferences" HorizontalAlignment="Stretch" />
             </StackPanel>
         </Grid>
 
@@ -470,7 +484,7 @@
             </StackPanel>
 
             <ScrollViewer Grid.Row="1" Padding="24,0,24,0">
-                <StackPanel x:Name="SensorList" Spacing="4" />
+                <StackPanel x:Name="SensorList" AutomationProperties.AutomationId="Sensors.List" Spacing="4" />
             </ScrollViewer>
 
             <StackPanel Grid.Row="2" Padding="24,8,24,20" Spacing="12">
@@ -478,7 +492,8 @@
                     Content="Open Windows Location settings"
                     Click="OnOpenLocationSettings"
                     HorizontalAlignment="Stretch" />
-                <Button Content="Back" Click="OnCloseSensors" HorizontalAlignment="Stretch" />
+                <Button AutomationProperties.AutomationId="Sensors.Save"
+                        Content="Back" Click="OnCloseSensors" HorizontalAlignment="Stretch" />
             </StackPanel>
         </Grid>
     </Grid>

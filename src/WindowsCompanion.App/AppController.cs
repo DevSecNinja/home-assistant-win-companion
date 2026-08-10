@@ -1,4 +1,5 @@
 using WindowsCompanion.Core.App;
+using WindowsCompanion.Core.Abstractions;
 using WindowsCompanion.Core.HomeAssistant;
 using WindowsCompanion.Core.Lifecycle;
 using WindowsCompanion.Core.Models;
@@ -26,22 +27,26 @@ public sealed class AppController : IAsyncDisposable
     /// </summary>
     private static readonly TimeSpan FinalLifecyclePushTimeout = TimeSpan.FromSeconds(2);
 
-    private readonly HttpClient _http = new();
+    private readonly HttpClient _http;
+    private readonly ISecretStore _secrets;
     private readonly HttpClient _updateHttp;
-    private readonly WindowsSecretStore _secrets = new();
+    private readonly IUpdateNotificationSink _updateNotifications;
+    private readonly bool _enableStartupUpdates;
     private readonly SessionStore _settings;
-    private readonly WindowsSystemStatusProvider _status = new();
-    private readonly ToastNotifier _toasts = new();
-    private readonly PowerShellWinGetUpdateProvider _winGetUpdates;
+    private readonly ISystemStatusProvider _status;
+    private readonly INotificationSink _notifications;
+    private readonly IWinGetUpdateProvider _winGetUpdates;
+    private readonly IUriLauncher _uriLauncher;
     private readonly OAuthLoginService _login;
-    private readonly WindowsNetworkContextProvider _network = new();
+    private readonly INetworkContextProvider _network;
     private readonly ConnectionLifecycle _lifecycle;
-    private readonly ILoggerFactory _loggerFactory =
-        LoggerFactory.Create(builder =>
-        {
-            builder.AddProvider(new FileLoggerProvider(LogLevel.Debug));
-            builder.SetMinimumLevel(LogLevel.Debug);
-        });
+    private readonly ILoggerFactory _loggerFactory;
+    private readonly Func<IHaSocket> _webSocketFactory;
+    private readonly Func<ServerConfig, LifecycleCoordinator, ILifecycleSignalSource,
+        IReadOnlyList<ISensorSource>> _sensorSourceFactory;
+    private readonly Func<ILifecycleJournal> _lifecycleJournalFactory;
+    private readonly Func<ILifecycleSignalSource> _lifecycleSignalSourceFactory;
+    private readonly IReadOnlyList<object> _ownedDependencies;
 
     private readonly HttpRouteProbe _probe;
     private readonly StartupUpdateService _startupUpdates;
@@ -58,12 +63,32 @@ public sealed class AppController : IAsyncDisposable
     private Task? _updateCheckTask;
     private int _updateCheckStarted;
 
-    public AppController()
+    public AppController() : this(AppControllerDependencies.CreateProduction())
     {
-        _winGetUpdates = new PowerShellWinGetUpdateProvider(
-            _loggerFactory.CreateLogger<PowerShellWinGetUpdateProvider>());
+    }
+
+    internal AppController(AppControllerDependencies dependencies)
+    {
+        ArgumentNullException.ThrowIfNull(dependencies);
+
+        _http = dependencies.HttpClient.Value;
+        _secrets = dependencies.SecretStore.Value;
+        _status = dependencies.SystemStatus.Value;
+        _notifications = dependencies.NotificationSink.Value;
+        _winGetUpdates = dependencies.WinGetUpdates.Value;
+        _uriLauncher = dependencies.UriLauncher.Value;
+        _network = dependencies.Network.Value;
+        _loggerFactory = dependencies.LoggerFactory.Value;
+        _webSocketFactory = dependencies.WebSocketFactory;
+        _sensorSourceFactory = dependencies.SensorSourceFactory;
+        _lifecycleJournalFactory = dependencies.LifecycleJournalFactory;
+        _lifecycleSignalSourceFactory = dependencies.LifecycleSignalSourceFactory;
+        _ownedDependencies = dependencies.OwnedValues().ToArray();
+        _updateHttp = dependencies.UpdateHttpClient?.Value ?? _http;
+        _updateNotifications = dependencies.UpdateNotificationSink?.Value
+            ?? new NoOpUpdateNotificationSink();
+        _enableStartupUpdates = dependencies.EnableStartupUpdates;
         var installedBuild = InstalledBuildResolver.Current();
-        _updateHttp = GitHubReleaseClient.CreateHttpClient();
         _startupUpdates = new StartupUpdateService(
             installedBuild,
             new GitHubReleaseClient(
@@ -72,8 +97,8 @@ public sealed class AppController : IAsyncDisposable
             new UpdateNotificationSink(NotifyUpdateAvailable),
             _loggerFactory.CreateLogger<StartupUpdateService>());
         _startupUpdates.StateChanged += OnUpdateStateChanged;
-        _login = new OAuthLoginService(_http);
-        _settings = new SessionStore(new SettingsStore(), _secrets);
+        _login = new OAuthLoginService(_http, _uriLauncher);
+        _settings = new SessionStore(dependencies.SettingsStore.Value, _secrets);
         _lifecycle = new ConnectionLifecycle(_loggerFactory.CreateLogger<ConnectionLifecycle>());
         _probe = new HttpRouteProbe(
             _http,
@@ -90,6 +115,7 @@ public sealed class AppController : IAsyncDisposable
     /// </summary>
     public void StartUpdateCheck()
     {
+        if (!_enableStartupUpdates) return;
         if (Interlocked.Exchange(ref _updateCheckStarted, 1) != 0) return;
         _updateCheckTask = _startupUpdates.CheckAsync(
             UpdateCheckTrigger.Automatic,
@@ -99,6 +125,7 @@ public sealed class AppController : IAsyncDisposable
     /// <summary>Starts a fresh user-visible check, cancelling an older lookup.</summary>
     public void CheckForUpdates()
     {
+        if (!_enableStartupUpdates) return;
         if (_updateCheckCancellation.IsCancellationRequested) return;
         _updateCheckTask = _startupUpdates.CheckAsync(
             UpdateCheckTrigger.User,
@@ -118,7 +145,7 @@ public sealed class AppController : IAsyncDisposable
         // in-app banner therefore remain available if the notification fails.
         try
         {
-            _toasts.Show(update);
+            _updateNotifications.Show(update);
         }
         catch (Exception ex)
         {
@@ -206,11 +233,7 @@ public sealed class AppController : IAsyncDisposable
     }
 
     public void OpenLocationSettings() =>
-        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-        {
-            FileName = "ms-settings:privacy-location",
-            UseShellExecute = true
-        });
+        _ = _uriLauncher.LaunchAsync(new Uri("ms-settings:privacy-location"));
 
     /// <summary>Persists the current sensor choices and pushes them immediately.</summary>
     public async Task ApplySensorChangesAsync()
@@ -242,7 +265,11 @@ public sealed class AppController : IAsyncDisposable
             throw new InvalidOperationException("Demo mode is only available while disconnected.");
 
         var preferences = new SensorPreferences();
-        var demo = new DemoSession(CreateSensorSources(preferences, CreateLifecycleCoordinator()), preferences);
+        var config = new ServerConfig { Sensors = preferences };
+        var lifecycle = CreateLifecycleCoordinator();
+        var demo = new DemoSession(
+            _sensorSourceFactory(config, lifecycle, _lifecycleSignalSourceFactory()),
+            preferences);
         _demo = demo;
         _catalog = demo.Catalog;
     }
@@ -281,6 +308,13 @@ public sealed class AppController : IAsyncDisposable
         : IUpdateNotificationSink
     {
         public void Show(AvailableUpdate update) => notify(update);
+    }
+
+    private sealed class NoOpUpdateNotificationSink : IUpdateNotificationSink
+    {
+        public void Show(AvailableUpdate update)
+        {
+        }
     }
 
     /// <summary>Resumes a previously saved session, if one exists and is usable.</summary>
@@ -586,11 +620,7 @@ public sealed class AppController : IAsyncDisposable
     {
         var url = BaseUrl;
         if (string.IsNullOrEmpty(url)) return;
-        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-        {
-            FileName = url,
-            UseShellExecute = true
-        });
+        _ = _uriLauncher.LaunchAsync(new Uri(url));
     }
 
     public SystemStatus GetSystemStatus() => _status.GetStatus();
@@ -650,20 +680,23 @@ public sealed class AppController : IAsyncDisposable
         await LearnInstanceIdentityAsync(client, config, ct).ConfigureAwait(false);
 
         var ws = new HaWebSocketClient(
-            () => new ClientWebSocketAdapter(), url, tokenManager, config.WebhookId!,
+            _webSocketFactory, url, tokenManager, config.WebhookId!,
             _loggerFactory.CreateLogger<HaWebSocketClient>());
 
         // The connection does not exist yet, and the lifecycle source has to be part
         // of the catalog that the connection will read from, so the final push is
         // resolved lazily rather than captured.
         ConnectionManager? live = null;
+        // Named for the machine's power lifecycle, not the connection lifecycle
+        // gate in _lifecycle. A new one is built per connection and released by
+        // the catalog's Stop, so a route switch does not leak its signal hooks.
         var systemLifecycle = CreateLifecycleCoordinator(
             finalPush: token => live is null
                 ? Task.FromResult(false)
                 : live.SyncNowAsync(SensorReadContext.LifecycleTransition, token));
 
         var catalog = new SensorCatalog(
-            CreateSensorSources(config.Sensors, systemLifecycle),
+            _sensorSourceFactory(config, systemLifecycle, _lifecycleSignalSourceFactory()),
             config.Sensors);
         _catalog = catalog;
 
@@ -676,7 +709,7 @@ public sealed class AppController : IAsyncDisposable
             log: _loggerFactory.CreateLogger<ConnectionManager>(),
             route: _supervisor?.ActiveRoute);
         connection.StateChanged += s => StateChanged?.Invoke(s);
-        connection.NotificationReceived += n => _toasts.Show(n);
+        connection.NotificationReceived += n => _notifications.Show(n);
         connection.RouteUnhealthy += _ => RequestRouteEvaluation(RouteTrigger.ConnectionFailed);
 
         // Only a batch Home Assistant actually accepted counts as delivery; anything
@@ -729,7 +762,7 @@ public sealed class AppController : IAsyncDisposable
     /// </summary>
     private LifecycleCoordinator CreateLifecycleCoordinator(
         Func<CancellationToken, Task<bool>>? finalPush = null) =>
-        new(new FileLifecycleJournal(),
+        new(_lifecycleJournalFactory(),
             finalPush,
             finalPushTimeout: FinalLifecyclePushTimeout,
             log: _loggerFactory.CreateLogger<LifecycleCoordinator>());
@@ -1002,9 +1035,19 @@ public sealed class AppController : IAsyncDisposable
         finally
         {
             _updateCheckCancellation.Dispose();
-            _updateHttp.Dispose();
             _lifecycle.Dispose();
-            _http.Dispose();
+            foreach (var dependency in _ownedDependencies.Reverse())
+            {
+                switch (dependency)
+                {
+                    case IAsyncDisposable asyncDisposable:
+                        await asyncDisposable.DisposeAsync().ConfigureAwait(false);
+                        break;
+                    case IDisposable disposable:
+                        disposable.Dispose();
+                        break;
+                }
+            }
         }
     }
 }

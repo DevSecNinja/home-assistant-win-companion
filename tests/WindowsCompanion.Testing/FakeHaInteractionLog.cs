@@ -25,19 +25,21 @@ public sealed class FakeHaInteractionLog
         string outcome = "Success",
         string? correlationId = null)
     {
-        var interaction = new FakeHaInteraction(
-            Interlocked.Increment(ref _sequence),
-            DateTimeOffset.UtcNow,
-            kind,
-            method,
-            Redact(pathOrMessageType),
-            correlationId,
-            Sanitize(payload),
-            outcome);
-
+        var sanitizedPath = Redact(pathOrMessageType);
+        var sanitizedPayload = Sanitize(payload);
+        FakeHaInteraction interaction;
         List<Waiter> completed;
         lock (_gate)
         {
+            interaction = new FakeHaInteraction(
+                ++_sequence,
+                DateTimeOffset.UtcNow,
+                kind,
+                method,
+                sanitizedPath,
+                correlationId,
+                sanitizedPayload,
+                outcome);
             _interactions.Add(interaction);
             completed = _waiters
                 .Where(waiter => interaction.Sequence > waiter.AfterSequence

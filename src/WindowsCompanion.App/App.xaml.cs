@@ -18,13 +18,6 @@ public partial class App : Application
     private const string InstanceMutexName = @"Local\WindowsCompanion.Instance";
     private static string ShutdownSignalName =>
         $@"Local\WindowsCompanion.Shutdown.{Environment.ProcessId}";
-    private static readonly ILoggerFactory AppLoggerFactory =
-        LoggerFactory.Create(builder =>
-        {
-            builder.AddProvider(new FileLoggerProvider(LogLevel.Debug));
-            builder.SetMinimumLevel(LogLevel.Debug);
-        });
-
     private Window? _window;
     private DispatcherQueue? _dispatcher;
     private EventWaitHandle? _shutdownSignal;
@@ -32,7 +25,8 @@ public partial class App : Application
     private Mutex? _instanceMutex;
     private bool _notificationsRegistered;
     private int _shutdownStarted;
-    private readonly ILogger<App> _log = AppLoggerFactory.CreateLogger<App>();
+    private readonly ILoggerFactory _appLoggerFactory;
+    private readonly ILogger<App> _log;
 
     /// <summary>Shared coordinator for the OAuth session and Home Assistant connection.</summary>
     public static AppController Controller { get; private set; } = null!;
@@ -48,18 +42,31 @@ public partial class App : Application
     {
 #if DEBUG
         TestLaunchOptions = TestAppLaunchOptions.Parse(Environment.GetCommandLineArgs());
+        _appLoggerFactory = TestLaunchOptions is null
+            ? CreateProductionLoggerFactory()
+            : TestAppComposition.CreateLoggerFactory(TestLaunchOptions);
+        _log = _appLoggerFactory.CreateLogger<App>();
         Controller = TestLaunchOptions is null
             ? new AppController()
-            : TestAppComposition.Create(TestLaunchOptions);
+            : TestAppComposition.Create(TestLaunchOptions, _appLoggerFactory);
         _instanceMutex = new Mutex(
             initiallyOwned: false,
             TestLaunchOptions?.MutexName ?? InstanceMutexName);
 #else
+        _appLoggerFactory = CreateProductionLoggerFactory();
+        _log = _appLoggerFactory.CreateLogger<App>();
         Controller = new AppController();
         _instanceMutex = new Mutex(initiallyOwned: false, InstanceMutexName);
 #endif
         InitializeComponent();
     }
+
+    private static ILoggerFactory CreateProductionLoggerFactory() =>
+        LoggerFactory.Create(builder =>
+        {
+            builder.AddProvider(new FileLoggerProvider(LogLevel.Debug));
+            builder.SetMinimumLevel(LogLevel.Debug);
+        });
 
     /// <summary>
     /// Invoked when the application is launched.
@@ -176,6 +183,10 @@ public partial class App : Application
         catch (Exception ex)
         {
             _log.LogCritical(ex, "Final application shutdown on the UI thread failed.");
+        }
+        finally
+        {
+            _appLoggerFactory.Dispose();
         }
     }
 

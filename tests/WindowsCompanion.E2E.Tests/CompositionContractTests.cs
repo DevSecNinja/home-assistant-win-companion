@@ -116,8 +116,29 @@ public sealed class CompositionContractTests
         Assert.Equal(scenario.RefreshToken, tokens.RefreshToken);
     }
 
+    [Fact]
+    public async Task Demo_mode_uses_the_injected_sensor_factory()
+    {
+        var sensorFactoryUsed = false;
+        var dependencies = CreateDependencies(
+            new OwnedDependency<IUriLauncher>(new TrackingLauncher(), true),
+            (_, _, _) =>
+            {
+                sensorFactoryUsed = true;
+                return [];
+            });
+        await using var controller = new AppController(dependencies);
+
+        controller.EnterDemoMode();
+
+        Assert.True(sensorFactoryUsed);
+        controller.ExitDemoMode();
+    }
+
     private static AppControllerDependencies CreateDependencies(
-        OwnedDependency<IUriLauncher> launcher)
+        OwnedDependency<IUriLauncher> launcher,
+        Func<ServerConfig, LifecycleCoordinator, ILifecycleSignalSource,
+            IReadOnlyList<ISensorSource>>? sensorSourceFactory = null)
     {
         var settingsPath = Path.Combine(
             AppContext.BaseDirectory,
@@ -137,7 +158,8 @@ public sealed class CompositionContractTests
             Network = new(new FixedNetwork()),
             LoggerFactory = new(NullLoggerFactory.Instance),
             WebSocketFactory = static () => throw new InvalidOperationException("Not used."),
-            SensorSourceFactory = static (_, _, _) => [],
+            SensorSourceFactory = sensorSourceFactory
+                ?? ((_, _, _) => Array.Empty<ISensorSource>()),
             LifecycleJournalFactory = static () => new MemoryLifecycleJournal(),
             LifecycleSignalSourceFactory = static () => new NoOpLifecycleSignals()
         };

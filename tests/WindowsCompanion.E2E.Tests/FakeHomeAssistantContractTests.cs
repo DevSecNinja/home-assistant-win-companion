@@ -12,6 +12,25 @@ namespace WindowsCompanion.E2E.Tests;
 public sealed class FakeHomeAssistantContractTests
 {
     [Fact]
+    public void Concurrent_interactions_keep_sequence_and_observation_order_aligned()
+    {
+        var scenario = new FakeHaScenario("interaction-order");
+
+        Parallel.For(
+            0,
+            100,
+            index => scenario.Interactions.Record(
+                FakeHaInteractionKind.Api,
+                "GET",
+                $"/api/{index}"));
+
+        var sequences = scenario.Interactions.Snapshot()
+            .Select(interaction => interaction.Sequence)
+            .ToArray();
+        Assert.Equal(Enumerable.Range(1, 100).Select(value => (long)value), sequences);
+    }
+
+    [Fact]
     public async Task Healthy_oauth_rest_and_webhook_sequence_matches_production_clients()
     {
         await using var scenario = await FakeHaScenario.StartAsync("healthy-http");
@@ -88,6 +107,10 @@ public sealed class FakeHomeAssistantContractTests
         var exception = await Assert.ThrowsAsync<HomeAssistantRejectedException>(
             () => client.UpdateSensorsAsync(registration.WebhookId, [sensor]));
         Assert.False(exception.SensorsUnregistered);
+        Assert.Contains(
+            scenario.Interactions.Snapshot(),
+            interaction => interaction.PathOrMessageType == "update_sensor_states"
+                           && interaction.Outcome == "Rejected");
 
         scenario.Faults.UnknownWebhook = true;
         Assert.Null(await client.GetInstanceInfoAsync(registration.WebhookId));

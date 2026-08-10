@@ -14,17 +14,23 @@ namespace WindowsCompanion_App;
 
 internal static class TestAppComposition
 {
-    internal static AppController Create(TestAppLaunchOptions options)
+    internal static ILoggerFactory CreateLoggerFactory(TestAppLaunchOptions options) =>
+        LoggerFactory.Create(builder =>
+        {
+            builder.AddProvider(new TestProfileLoggerProvider(options.SettingsDirectory));
+            builder.SetMinimumLevel(LogLevel.Debug);
+        });
+
+    internal static AppController Create(
+        TestAppLaunchOptions options,
+        ILoggerFactory? loggerFactory = null)
     {
         var status = new FixedSystemStatusProvider();
         var launcher = options.AutoAuthorize
             ? (IUriLauncher)new LoopbackFollowingUriLauncher(options.ServerUrl)
             : new LoopbackShellUriLauncher(options.ServerUrl);
-        var loggerFactory = LoggerFactory.Create(builder =>
-        {
-            builder.AddProvider(new TestProfileLoggerProvider(options.SettingsDirectory));
-            builder.SetMinimumLevel(LogLevel.Debug);
-        });
+        var ownsLoggerFactory = loggerFactory is null;
+        loggerFactory ??= CreateLoggerFactory(options);
 
         return new AppController(new AppControllerDependencies
         {
@@ -38,7 +44,7 @@ internal static class TestAppComposition
             WinGetUpdates = new(new NoOpWinGetUpdateProvider(), true),
             UriLauncher = new(launcher, true),
             Network = new(new OfflineNetworkContextProvider(), true),
-            LoggerFactory = new(loggerFactory, true),
+            LoggerFactory = new(loggerFactory, ownsLoggerFactory),
             WebSocketFactory = static () => new ClientWebSocketAdapter(),
             SensorSourceFactory = (_, _, _) => [new BatterySensorSource(status)],
             LifecycleJournalFactory = () => new FileLifecycleJournal(

@@ -27,6 +27,13 @@ Hosted Windows CI:
 Prior runtime validation passed 24 journey and foundation tests. No authoritative
 duration was retained, so timing and repeatability goals remain CI-owned.
 
+For a focused CI or trusted diagnostic run:
+
+```powershell
+.\scripts\test.ps1 -EndToEnd `
+  -Filter "FullyQualifiedName~ConnectionJourneyTests"
+```
+
 ## Native UI validation
 
 The rendered UI workflow targets a self-hosted runner with the labels `windows`,
@@ -45,6 +52,13 @@ converted into a pass or driven with screen coordinates.
 The interactive workflow explicitly enables notification and tray capability
 probes. Raw screenshots are not retained because rendered pixels may contain
 sensitive values that cannot be reliably redacted.
+
+To select one rendered scenario on the trusted interactive runner:
+
+```powershell
+.\scripts\test.ps1 -Ui `
+  -Filter "FullyQualifiedName~ConnectUiTests.Sign_in_reaches_connected_status"
+```
 
 This repository is public. Never allow unreviewed fork pull-request code to run on
 the persistent self-hosted runner. The checked-in UI workflow runs only for trusted

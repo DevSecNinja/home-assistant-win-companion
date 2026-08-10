@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using System.Reflection.Metadata;
+using System.Reflection.PortableExecutable;
 using System.Runtime.ExceptionServices;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -494,8 +496,14 @@ internal sealed class UiScenarioFixture : IAsyncDisposable
         if (!string.IsNullOrWhiteSpace(configured))
         {
             var fullPath = Path.GetFullPath(configured);
-            if (File.Exists(fullPath)) return fullPath;
-            throw new FileNotFoundException("WINDOWS_COMPANION_UI_APP does not exist.", fullPath);
+            if (!File.Exists(fullPath))
+                throw new FileNotFoundException("WINDOWS_COMPANION_UI_APP does not exist.", fullPath);
+            if (!SupportsTestProfile(fullPath))
+            {
+                throw new InvalidOperationException(
+                    "WINDOWS_COMPANION_UI_APP must reference a Debug build with the test-profile contract.");
+            }
+            return fullPath;
         }
 
         var architecture = RuntimeInformation.ProcessArchitecture == Architecture.Arm64
@@ -509,12 +517,38 @@ internal sealed class UiScenarioFixture : IAsyncDisposable
                     StringSplitOptions.RemoveEmptyEntries)
                     .Contains("Debug", StringComparer.OrdinalIgnoreCase))
                 .Where(path => path.Contains(architecture, StringComparison.OrdinalIgnoreCase))
+                .Where(SupportsTestProfile)
                 .OrderByDescending(File.GetLastWriteTimeUtc)
                 .FirstOrDefault()
             : null;
         return candidate ?? throw new FileNotFoundException(
             $"A Debug {architecture} WindowsCompanion.exe build is required. "
             + "Set WINDOWS_COMPANION_UI_APP to its full path.");
+    }
+
+    private static bool SupportsTestProfile(string applicationPath)
+    {
+        var assemblyPath = Path.Combine(
+            Path.GetDirectoryName(applicationPath)!,
+            "WindowsCompanion.dll");
+        if (!File.Exists(assemblyPath)) return false;
+
+        try
+        {
+            using var stream = File.OpenRead(assemblyPath);
+            using var pe = new PEReader(stream);
+            if (!pe.HasMetadata) return false;
+            var metadata = pe.GetMetadataReader();
+            return metadata.TypeDefinitions
+                .Select(metadata.GetTypeDefinition)
+                .Any(type =>
+                    metadata.GetString(type.Namespace) == "WindowsCompanion_App"
+                    && metadata.GetString(type.Name) == "TestAppLaunchOptions");
+        }
+        catch (Exception exception) when (exception is BadImageFormatException or IOException)
+        {
+            return false;
+        }
     }
 
     private static string FindRepositoryRoot()

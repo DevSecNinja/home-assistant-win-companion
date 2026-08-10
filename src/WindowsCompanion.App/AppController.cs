@@ -264,7 +264,11 @@ public sealed class AppController : IAsyncDisposable
             throw new InvalidOperationException("Demo mode is only available while disconnected.");
 
         var preferences = new SensorPreferences();
-        var demo = new DemoSession(CreateSensorSources(preferences, CreateLifecycleCoordinator()), preferences);
+        var config = new ServerConfig { Sensors = preferences };
+        var lifecycle = CreateLifecycleCoordinator();
+        var demo = new DemoSession(
+            _sensorSourceFactory(config, lifecycle, _lifecycleSignalSourceFactory()),
+            preferences);
         _demo = demo;
         _catalog = demo.Catalog;
     }
@@ -684,8 +688,7 @@ public sealed class AppController : IAsyncDisposable
         // Named for the machine's power lifecycle, not the connection lifecycle
         // gate in _lifecycle. A new one is built per connection and released by
         // the catalog's Stop, so a route switch does not leak its signal hooks.
-        var systemLifecycle = new LifecycleCoordinator(
-            _lifecycleJournalFactory(),
+        var systemLifecycle = CreateLifecycleCoordinator(
             finalPush: token => live is null
                 ? Task.FromResult(false)
                 : live.SyncNowAsync(SensorReadContext.LifecycleTransition, token));

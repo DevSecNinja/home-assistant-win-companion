@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Http.Headers;
 using System.Net.WebSockets;
 using System.Text.Json;
 using Microsoft.AspNetCore.Builder;
@@ -43,18 +44,34 @@ public sealed class FakeHomeAssistantServer : IAsyncDisposable
 
         var app = builder.Build();
         var server = new FakeHomeAssistantServer(scenario, app);
-        server.MapEndpoints();
-        await app.StartAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            server.MapEndpoints();
+            await app.StartAsync(cancellationToken).ConfigureAwait(false);
 
-        var addresses = app.Services
-            .GetRequiredService<IServer>()
-            .Features
-            .Get<IServerAddressesFeature>()
-            ?.Addresses;
-        var address = addresses?.SingleOrDefault()
-                      ?? throw new InvalidOperationException("Kestrel did not expose its loopback address.");
-        scenario.BaseUrl = new Uri(address.EndsWith('/') ? address : address + "/");
-        return server;
+            var addresses = app.Services
+                .GetRequiredService<IServer>()
+                .Features
+                .Get<IServerAddressesFeature>()
+                ?.Addresses;
+            var address = addresses?.SingleOrDefault()
+                          ?? throw new InvalidOperationException(
+                              "Kestrel did not expose its loopback address.");
+            scenario.BaseUrl = new Uri(address.EndsWith('/') ? address : address + "/");
+            return server;
+        }
+        catch
+        {
+            try
+            {
+                await server.DisposeAsync().ConfigureAwait(false);
+            }
+            catch
+            {
+                // Preserve the startup failure.
+            }
+            throw;
+        }
     }
 
     /// <summary>Sends a notification to each subscribed WebSocket client.</summary>
@@ -369,26 +386,28 @@ public sealed class FakeHomeAssistantServer : IAsyncDisposable
         var type = root.TryGetProperty("type", out var typeElement)
             ? typeElement.GetString()
             : null;
-        _scenario.Interactions.Record(
-            FakeHaInteractionKind.Webhook,
-            "POST",
-            type ?? "unknown",
-            root);
-
-        return type switch
+        switch (type)
         {
-            "update_registration" => Results.Json(new { }),
-            "register_sensor" => RegisterSensor(root),
-            "update_sensor_states" => UpdateSensorStates(root),
-            "get_config" => Results.Json(new
-            {
-                hass_device_id = _scenario.InstanceDeviceId,
-                version = "2026.8.0-test",
-                remote_ui_url = (string?)null,
-                cloudhook_url = (string?)null
-            }),
-            _ => Results.BadRequest(new { error = "unknown_webhook_command" })
-        };
+            case "update_registration":
+                RecordWebhook(type, root, "Success");
+                return Results.Json(new { });
+            case "register_sensor":
+                return RegisterSensor(root);
+            case "update_sensor_states":
+                return UpdateSensorStates(root);
+            case "get_config":
+                RecordWebhook(type, root, "Success");
+                return Results.Json(new
+                {
+                    hass_device_id = _scenario.InstanceDeviceId,
+                    version = "2026.8.0-test",
+                    remote_ui_url = (string?)null,
+                    cloudhook_url = (string?)null
+                });
+            default:
+                RecordWebhook(type ?? "unknown", root, "Rejected");
+                return Results.BadRequest(new { error = "unknown_webhook_command" });
+        }
     }
 
     private async Task WebSocketAsync(HttpContext context)
@@ -410,9 +429,13 @@ public sealed class FakeHomeAssistantServer : IAsyncDisposable
         if (!root.TryGetProperty("data", out var data)
             || !data.TryGetProperty("unique_id", out var uniqueIdElement)
             || string.IsNullOrWhiteSpace(uniqueIdElement.GetString()))
+        {
+            RecordWebhook("register_sensor", root, "Rejected");
             return Results.BadRequest(new { error = "unique_id_required" });
+        }
 
         _scenario.State.RegisteredSensors[uniqueIdElement.GetString()!] = data.Clone();
+        RecordWebhook("register_sensor", root, "Success");
         return Results.Json(new { });
     }
 
@@ -420,9 +443,13 @@ public sealed class FakeHomeAssistantServer : IAsyncDisposable
     {
         if (!root.TryGetProperty("data", out var data)
             || data.ValueKind != JsonValueKind.Array)
+        {
+            RecordWebhook("update_sensor_states", root, "Rejected");
             return Results.BadRequest(new { error = "sensor_array_required" });
+        }
 
         var results = new Dictionary<string, object>(StringComparer.Ordinal);
+        var rejected = false;
         foreach (var sensor in data.EnumerateArray())
         {
             var uniqueId = sensor.TryGetProperty("unique_id", out var id)
@@ -435,6 +462,7 @@ public sealed class FakeHomeAssistantServer : IAsyncDisposable
                     _scenario.Faults.RejectSensorUniqueId,
                     StringComparison.Ordinal))
             {
+                rejected = true;
                 results[uniqueId] = new
                 {
                     success = false,
@@ -443,6 +471,7 @@ public sealed class FakeHomeAssistantServer : IAsyncDisposable
             }
             else if (!_scenario.State.RegisteredSensors.ContainsKey(uniqueId))
             {
+                rejected = true;
                 results[uniqueId] = new
                 {
                     success = false,
@@ -453,6 +482,7 @@ public sealed class FakeHomeAssistantServer : IAsyncDisposable
                      .TryGetProperty("disabled", out var disabled)
                      && disabled.ValueKind == JsonValueKind.True)
             {
+                rejected = true;
                 results[uniqueId] = new
                 {
                     success = false,
@@ -466,8 +496,23 @@ public sealed class FakeHomeAssistantServer : IAsyncDisposable
             }
         }
 
+        RecordWebhook(
+            "update_sensor_states",
+            root,
+            rejected ? "Rejected" : "Success");
         return Results.Json(results);
     }
+
+    private void RecordWebhook(
+        string type,
+        JsonElement payload,
+        string outcome) =>
+        _scenario.Interactions.Record(
+            FakeHaInteractionKind.Webhook,
+            "POST",
+            type,
+            payload,
+            outcome);
 
     private async Task<bool> AuthorizeApiAsync(HttpContext context)
     {
@@ -475,10 +520,12 @@ public sealed class FakeHomeAssistantServer : IAsyncDisposable
             .WaitIfHeldAsync(FakeHaFaultPoint.Api, context.RequestAborted)
             .ConfigureAwait(false);
         var authorization = context.Request.Headers.Authorization.ToString();
-        return string.Equals(
-            authorization,
-            $"Bearer {_scenario.AccessToken}",
-            StringComparison.Ordinal);
+        return AuthenticationHeaderValue.TryParse(authorization, out var header)
+               && string.Equals(header.Scheme, "Bearer", StringComparison.OrdinalIgnoreCase)
+               && string.Equals(
+                   header.Parameter,
+                   _scenario.AccessToken,
+                   StringComparison.Ordinal);
     }
 
     /// <inheritdoc />

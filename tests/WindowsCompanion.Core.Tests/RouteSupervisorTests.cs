@@ -62,6 +62,26 @@ public class RouteSupervisorTests
     private static NetworkContext Cafe => new(NetworkKind.Wireless, "CafeGuest");
 
     [Fact]
+    public void Duplicate_adapter_snapshots_are_the_same_routing_profile()
+    {
+        var first = new NetworkContext(
+            NetworkKind.Wireless,
+            "HomeNet",
+            "AA:BB:CC:DD:EE:FF",
+            VpnActive: true,
+            LocalAddresses: ["192.0.2.20", "2001:db8::20"]);
+        var duplicate = first with
+        {
+            Bssid = "aa:bb:cc:dd:ee:ff",
+            LocalAddresses = ["2001:db8::20", "192.0.2.20"]
+        };
+
+        Assert.True(first.HasSameRoutingProfile(duplicate));
+        Assert.False(first.HasSameRoutingProfile(duplicate with { Ssid = "OtherNet" }));
+        Assert.False(first.HasSameRoutingProfile(duplicate with { Kind = NetworkKind.Offline }));
+    }
+
+    [Fact]
     public async Task Startup_on_a_trusted_network_activates_the_internal_address()
     {
         var config = Config();

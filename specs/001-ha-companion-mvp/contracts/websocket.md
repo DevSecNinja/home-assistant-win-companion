@@ -71,8 +71,21 @@ and the channel must be re-established.
 
 - Send periodic `{ "id": n, "type": "ping" }`; expect `{ "type": "pong" }`.
 - On socket close/error or missed pong -> transition to `Reconnecting` and
-  reconnect with exponential backoff, then re-auth and re-open the push channel.
+  reconnect with exponential backoff (1, 2, 4, 8... seconds, capped at 60
+  seconds) plus 0-20% positive jitter, then re-auth and re-open the push channel.
+- A socket that closes before 30 authenticated seconds does not reset the
+  progression. This prevents a server or intermediary that accepts and immediately
+  closes connections from holding the client at the shortest retry interval.
+- An explicit user retry or a meaningful Windows network-profile change may bypass
+  one pending delay. Duplicate events coalesce and never start a parallel attempt.
+- While Windows reports no usable network, retry waits are five minutes. Returning
+  online bypasses that wait once.
 - `auth_invalid` -> terminal `AuthError` (stop retrying; prompt re-auth).
+
+Sensor delivery has its own single-flight loop. Failed periodic pushes back off
+from the normal sync interval to a 15 minute cap. Change-driven pushes coalesce
+while healthy and do not queue during an outage. Shutdown, disconnect, route
+switches and server removal cancel both loops and their pending waits.
 
 ## Notes
 

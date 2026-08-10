@@ -170,14 +170,21 @@ addresses are connected simultaneously.
 ## Failover and flap protection
 
 - `ConnectionManager` raises `RouteUnhealthy` after two consecutive sync failures
-  or from the second WebSocket reconnect attempt.
+  or from the second WebSocket reconnect attempt. Each source raises once per
+  outage rather than on every later retry, bounding route probes when neither
+  address is reachable.
 - Network changes are debounced for 5 seconds, because a transition produces a
   burst of events and a captive portal answers before it lets anything through.
+  Snapshots with the same routing profile coalesce even when Windows supplies new
+  adapter-list instances.
 - A freshly activated route is protected by a 2 minute cooldown against network
   changes and periodic checks. A real `ConnectionFailed` bypasses the cooldown,
   so a genuinely broken route still fails over immediately.
 - Unattended evaluations are floored at 30 seconds apart.
 - There is no background polling of either server. Evaluation is event-driven.
+- A meaningful online network change or explicit refresh can bypass one pending
+  connection delay after route evaluation. Duplicate events cannot accumulate
+  bypasses or create another lifecycle transition.
 
 A switch only happens after a candidate has *proved* it is usable and is the same
 instance. The REST and WebSocket clients are then rebuilt on the new address,
@@ -209,6 +216,10 @@ progress may well have settled it.
 `BuildAndStartAsync` additionally tears down any live connection before building,
 so no path can leave two `ConnectionManager`s — and two WebSocket sessions, sensor
 sync loops and notification subscriptions — running invisibly alongside each other.
+Each manager itself owns exactly one WebSocket attempt loop and one serialized
+sensor loop. Early socket closes continue the bounded backoff until a connection
+has remained authenticated for 30 seconds; teardown cancels the attempt, delay and
+coalesced signals before the lifecycle lease is released.
 
 ## Migration
 

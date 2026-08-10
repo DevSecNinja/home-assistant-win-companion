@@ -58,6 +58,7 @@ public sealed class AppController : IAsyncDisposable
     private DemoSession? _demo;
     private RouteSupervisor? _supervisor;
     private CancellationTokenSource? _networkSettle;
+    private NetworkContext? _lastNetwork;
     private int _disposeStarted;
     private Task? _updateCheckTask;
     private int _updateCheckStarted;
@@ -499,6 +500,7 @@ public sealed class AppController : IAsyncDisposable
     public async Task RefreshRouteAsync(CancellationToken ct = default)
     {
         await EvaluateRouteAsync(RouteTrigger.UserRequested, ct).ConfigureAwait(false);
+        _connection?.RequestImmediateRetry();
         RouteChanged?.Invoke();
     }
 
@@ -715,10 +717,13 @@ public sealed class AppController : IAsyncDisposable
         connection.SyncSucceeded += _ => systemLifecycle.ReportDelivered();
         live = connection;
         _connection = connection;
+        var network = _network.GetCurrent();
+        _lastNetwork = network;
+        connection.SetNetworkAvailable(network.Kind != NetworkKind.Offline);
         connection.Start();
 
         // Sources push immediately on change; steady state stays at one batch per sync.
-        catalog.Start(() => _ = connection.SyncNowAsync());
+        catalog.Start(() => connection.RequestSync());
     }
 
     private string ActiveUrl(ServerConfig config) => _supervisor?.ActiveUrl ?? config.BaseUrl;
@@ -846,22 +851,40 @@ public sealed class AppController : IAsyncDisposable
         // Let the network settle first: a transition produces a burst of events,
         // and a captive portal answers before it lets anything through.
         var settle = new CancellationTokenSource();
-        Interlocked.Exchange(ref _networkSettle, settle)?.Cancel();
+        var previous = Interlocked.Exchange(ref _networkSettle, settle);
+        previous?.Cancel();
+        if (Volatile.Read(ref _disposeStarted) != 0) settle.Cancel();
 
-        _ = Task.Run(async () =>
+        _ = SettleNetworkChangeAsync(settle);
+    }
+
+    private async Task SettleNetworkChangeAsync(CancellationTokenSource settle)
+    {
+        try
         {
-            try
-            {
-                await Task.Delay(NetworkSettleDelay, settle.Token).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException)
-            {
-                return;
-            }
+            await Task.Delay(NetworkSettleDelay, settle.Token).ConfigureAwait(false);
+            var network = _network.GetCurrent();
+            var previous = _lastNetwork;
+            if (previous is not null && previous.HasSameRoutingProfile(network)) return;
 
-            await EvaluateRouteAsync(RouteTrigger.NetworkChanged, CancellationToken.None)
-                .ConfigureAwait(false);
-        });
+            _lastNetwork = network;
+            await EvaluateRouteAsync(RouteTrigger.NetworkChanged, settle.Token).ConfigureAwait(false);
+            settle.Token.ThrowIfCancellationRequested();
+
+            var connection = _connection;
+            if (connection is null) return;
+            var available = network.Kind != NetworkKind.Offline;
+            connection.SetNetworkAvailable(available);
+            if (available) connection.RequestImmediateRetry();
+        }
+        catch (OperationCanceledException) when (settle.IsCancellationRequested)
+        {
+        }
+        finally
+        {
+            Interlocked.CompareExchange(ref _networkSettle, null, settle);
+            settle.Dispose();
+        }
     }
 
     private void RequestRouteEvaluation(RouteTrigger trigger) =>
@@ -999,9 +1022,8 @@ public sealed class AppController : IAsyncDisposable
             _startupUpdates.StateChanged -= OnUpdateStateChanged;
             _network.NetworkChanged -= OnNetworkChanged;
             _network.Stop();
-            _networkSettle?.Cancel();
-            _networkSettle?.Dispose();
-            _networkSettle = null;
+            Interlocked.Exchange(ref _networkSettle, null)?.Cancel();
+            _lastNetwork = null;
 
             using (await _lifecycle.AcquireAsync(LifecycleIntent.Stop).ConfigureAwait(false))
             {

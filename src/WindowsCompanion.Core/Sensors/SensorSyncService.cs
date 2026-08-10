@@ -134,7 +134,8 @@ public sealed class SensorSyncService
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             // A restarted HA may have forgotten our sensors; force re-registration next cycle.
-            _log.LogWarning(ex, "Sensor update failed; will re-register on next sync.");
+            _log.LogDebug("Sensor update failed; registrations will be refreshed on the next sync "
+                          + "({ErrorType}).", ex.GetType().Name);
             _registered.Clear();
             _persist?.Invoke();
             throw;

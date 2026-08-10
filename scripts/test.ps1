@@ -1,7 +1,7 @@
 #!/usr/bin/env pwsh
 <#
 .SYNOPSIS
-    Runs the Core tests and optionally enforces coverage thresholds.
+    Runs the Core and App-boundary tests and optionally enforces Core coverage thresholds.
 #>
 [CmdletBinding()]
 param(
@@ -17,20 +17,23 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
-$project = Join-Path $repoRoot 'tests\WindowsCompanion.Core.Tests\WindowsCompanion.Core.Tests.csproj'
+$coreProject = Join-Path $repoRoot 'tests\WindowsCompanion.Core.Tests\WindowsCompanion.Core.Tests.csproj'
+$appProject = Join-Path $repoRoot 'tests\WindowsCompanion.App.Tests\WindowsCompanion.App.Tests.csproj'
 $dotnet = (Get-Command dotnet -ErrorAction SilentlyContinue)?.Source
 if (-not $dotnet) { $dotnet = 'C:\Program Files\dotnet\dotnet.exe' }
 if (-not (Test-Path $dotnet)) { throw 'Could not find dotnet. Install the .NET 10 SDK.' }
 
 $arguments = @(
     'test'
-    $project
+    $coreProject
     '--nologo'
 )
 
 if (-not $Coverage) {
     & $dotnet @arguments
-    if ($LASTEXITCODE -ne 0) { throw 'Tests failed.' }
+    if ($LASTEXITCODE -ne 0) { throw 'Core tests failed.' }
+    & $dotnet test $appProject --nologo
+    if ($LASTEXITCODE -ne 0) { throw 'App-boundary tests failed.' }
     return
 }
 
@@ -68,3 +71,6 @@ if ($branchCoverage -lt $MinimumBranchCoverage) {
     throw ('Branch coverage {0:N2}% is below the {1:N2}% threshold.' -f
         $branchCoverage, $MinimumBranchCoverage)
 }
+
+& $dotnet test $appProject --nologo
+if ($LASTEXITCODE -ne 0) { throw 'App-boundary tests failed.' }

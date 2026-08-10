@@ -36,6 +36,11 @@
                         x:Name="TrayOpenHomeAssistantItem"
                         Text="Open Home Assistant"
                         Command="{x:Bind TrayOpenHomeAssistantCommand}" />
+                    <MenuFlyoutItem
+                        x:Name="TrayViewReleaseItem"
+                        Text="View available update"
+                        Visibility="Collapsed"
+                        Command="{x:Bind TrayViewReleaseCommand}" />
                     <MenuFlyoutItem Text="Show Companion" Command="{x:Bind TrayShowWindowCommand}" />
                     <MenuFlyoutSeparator />
                     <MenuFlyoutItem
@@ -47,17 +52,29 @@
             </tb:TaskbarIcon.ContextFlyout>
         </tb:TaskbarIcon>
 
-        <InfoBar
-            x:Name="DemoBanner"
-            Grid.Row="1"
-            Margin="24,4,24,0"
-            Severity="Warning"
-            IsOpen="False"
-            IsClosable="False">
-            <InfoBar.ActionButton>
-                <Button Content="Leave demo mode" Click="OnLeaveDemoMode" />
-            </InfoBar.ActionButton>
-        </InfoBar>
+        <StackPanel Grid.Row="1">
+            <InfoBar
+                x:Name="DemoBanner"
+                Margin="24,4,24,0"
+                Severity="Warning"
+                IsOpen="False"
+                IsClosable="False">
+                <InfoBar.ActionButton>
+                    <Button Content="Leave demo mode" Click="OnLeaveDemoMode" />
+                </InfoBar.ActionButton>
+            </InfoBar>
+            <InfoBar
+                x:Name="UpdateBanner"
+                Margin="24,4,24,0"
+                Title="Update available"
+                Severity="Informational"
+                IsOpen="False"
+                IsClosable="False">
+                <InfoBar.ActionButton>
+                    <Button Content="View release" Click="OnViewRelease" />
+                </InfoBar.ActionButton>
+            </InfoBar>
+        </StackPanel>
 
         <!-- Connect view -->
         <StackPanel

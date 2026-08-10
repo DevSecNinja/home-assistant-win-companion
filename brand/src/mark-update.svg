@@ -1,0 +1,19 @@
+<!--
+  Update-available variant of the application mark.
+  The companion circle grows, turns alert red and carries a hand-drawn white 1.
+  Generated UpdateIcon.ico is produced by brand/build-assets.mjs.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <mask id="update-halo">
+      <rect width="256" height="256" fill="#ffffff" />
+      <circle cx="176" cy="79" r="68" fill="#000000" />
+    </mask>
+  </defs>
+  <g mask="url(#update-halo)">
+    <path d="M 32 99 L 32 83 A 24 24 0 0 1 56 59 L 200 59 A 24 24 0 0 1 224 83 L 224 99 Z" fill="#2DD4BF" />
+    <path d="M 32 115 L 224 115 L 224 195 A 24 24 0 0 1 200 219 L 56 219 A 24 24 0 0 1 32 195 Z" fill="#2DD4BF" />
+  </g>
+  <circle cx="176" cy="79" r="56" fill="#E5484D" />
+  <path d="M 158 66 L 174 54 L 184 54 L 184 98 L 198 98 L 198 108 L 158 108 L 158 98 L 172 98 L 172 68 L 164 74 Z" fill="#FFFFFF" />
+</svg>

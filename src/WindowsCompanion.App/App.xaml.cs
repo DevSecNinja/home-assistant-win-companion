@@ -56,6 +56,7 @@ public partial class App : Application
         // Register for Windows toast notifications (works unpackaged).
         AppNotificationManager.Default.Register();
         _notificationsRegistered = true;
+        Controller.StartUpdateCheck();
 
         var startupLaunch = StartupCommand.IsStartupLaunch(Environment.GetCommandLineArgs());
         var startHidden = startupLaunch && Controller.HasSavedSession;

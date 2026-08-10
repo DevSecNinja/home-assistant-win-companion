@@ -29,7 +29,10 @@ public enum EntraJoinType
     Registered,
 
     /// <summary>The device itself is joined to a Microsoft Entra ID tenant.</summary>
-    Joined
+    Joined,
+
+    /// <summary>The Entra ID join query failed, so the actual status is unavailable.</summary>
+    Unknown
 }
 
 /// <summary>
@@ -53,10 +56,12 @@ public static class DomainMembershipFormatter
     public const string TypeEntra = "entra";
     public const string TypeHybrid = "hybrid";
     public const string TypeNone = "none";
+    public const string TypeUnknown = "unknown";
 
     public const string EntraJoinTypeNone = "none";
     public const string EntraJoinTypeRegistered = "registered";
     public const string EntraJoinTypeJoined = "joined";
+    public const string EntraJoinTypeUnknown = "unknown";
 
     /// <summary>
     /// The sensor's state: an on-premises domain name takes priority (a hybrid
@@ -80,7 +85,8 @@ public static class DomainMembershipFormatter
 
     /// <summary>
     /// The "membership_type" attribute: domain, entra, hybrid (both), workgroup,
-    /// or none.
+    /// none, or unknown if the Entra ID query failed and there is no confirmed
+    /// on-premises domain/workgroup membership to fall back on.
     /// </summary>
     public static string DescribeType(DomainJoinStatus status, EntraJoinType entraJoinType)
     {
@@ -91,15 +97,17 @@ public static class DomainMembershipFormatter
         if (domainJoined) return TypeDomain;
         if (entraJoined) return TypeEntra;
         if (status == DomainJoinStatus.Workgroup) return TypeWorkgroup;
+        if (status == DomainJoinStatus.Unjoined && entraJoinType == EntraJoinType.Unknown) return TypeUnknown;
 
         return TypeNone;
     }
 
-    /// <summary>The "entra_join_type" attribute: none, registered, or joined.</summary>
+    /// <summary>The "entra_join_type" attribute: none, registered, joined, or unknown.</summary>
     public static string DescribeEntraJoinType(EntraJoinType entraJoinType) => entraJoinType switch
     {
         EntraJoinType.Joined => EntraJoinTypeJoined,
         EntraJoinType.Registered => EntraJoinTypeRegistered,
+        EntraJoinType.Unknown => EntraJoinTypeUnknown,
         _ => EntraJoinTypeNone
     };
 

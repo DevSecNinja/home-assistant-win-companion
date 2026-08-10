@@ -25,6 +25,13 @@ public sealed class DomainSensorSource : ISensorSource
 {
     public const string DomainId = "domain";
 
+    private readonly SensorPreferences _preferences;
+
+    public DomainSensorSource(SensorPreferences preferences)
+    {
+        _preferences = preferences ?? throw new ArgumentNullException(nameof(preferences));
+    }
+
     public IReadOnlyList<SensorDefinition> Definitions { get; } =
     [
         new(
@@ -65,6 +72,21 @@ public sealed class DomainSensorSource : ISensorSource
         ];
     }
 
+    public ValueTask<IReadOnlyList<Sensor>> PreviewAsync(
+        IReadOnlySet<string> requested,
+        CancellationToken cancellationToken = default)
+    {
+        if (!Definitions.Any(_preferences.IsEnabled))
+        {
+            return ValueTask.FromResult<IReadOnlyList<Sensor>>(
+            [
+                new() { UniqueId = DomainId, Name = "Domain", State = "Enable to read domain join status" }
+            ]);
+        }
+
+        return ValueTask.FromResult(Read(requested, new SensorReadContext("Preview")));
+    }
+
     public void Start(Action onChanged) { }
 
     public void Stop() { }
@@ -100,18 +122,19 @@ public sealed class DomainSensorSource : ISensorSource
         try
         {
             var result = NetGetAadJoinInformation(null, out joinInfo);
-            if (result != 0 || joinInfo == IntPtr.Zero) return (EntraJoinType.None, null);
+            if (result != 0) return (EntraJoinType.Unknown, null);
+            if (joinInfo == IntPtr.Zero) return (EntraJoinType.None, null);
 
             var info = Marshal.PtrToStructure<DsRegJoinInfo>(joinInfo);
             return (ToEntraJoinType(info.JoinType), info.IdpDomain);
         }
         catch (DllNotFoundException)
         {
-            return (EntraJoinType.None, null);
+            return (EntraJoinType.Unknown, null);
         }
         catch (EntryPointNotFoundException)
         {
-            return (EntraJoinType.None, null);
+            return (EntraJoinType.Unknown, null);
         }
         finally
         {
@@ -158,15 +181,15 @@ public sealed class DomainSensorSource : ISensorSource
     {
         public int JoinType;
         public IntPtr JoinCertificate;
-        [MarshalAs(UnmanagedType.LPWStr)] public string? DeviceId;
+        public IntPtr DeviceId;
         [MarshalAs(UnmanagedType.LPWStr)] public string? IdpDomain;
-        [MarshalAs(UnmanagedType.LPWStr)] public string? TenantId;
-        [MarshalAs(UnmanagedType.LPWStr)] public string? JoinUserEmail;
-        [MarshalAs(UnmanagedType.LPWStr)] public string? TenantDisplayName;
-        [MarshalAs(UnmanagedType.LPWStr)] public string? MdmEnrollmentUrl;
-        [MarshalAs(UnmanagedType.LPWStr)] public string? MdmTermsOfUseUrl;
-        [MarshalAs(UnmanagedType.LPWStr)] public string? MdmComplianceUrl;
-        [MarshalAs(UnmanagedType.LPWStr)] public string? UserSettingSyncUrl;
+        public IntPtr TenantId;
+        public IntPtr JoinUserEmail;
+        public IntPtr TenantDisplayName;
+        public IntPtr MdmEnrollmentUrl;
+        public IntPtr MdmTermsOfUseUrl;
+        public IntPtr MdmComplianceUrl;
+        public IntPtr UserSettingSyncUrl;
         public IntPtr UserInfo;
     }
 }

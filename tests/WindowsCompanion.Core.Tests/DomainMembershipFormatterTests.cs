@@ -100,6 +100,8 @@ public class DomainMembershipFormatterTests
     [InlineData(DomainJoinStatus.Unjoined, EntraJoinType.Joined, DomainMembershipFormatter.TypeEntra)]
     [InlineData(DomainJoinStatus.Unjoined, EntraJoinType.Registered, DomainMembershipFormatter.TypeNone)]
     [InlineData(DomainJoinStatus.Domain, EntraJoinType.Joined, DomainMembershipFormatter.TypeHybrid)]
+    [InlineData(DomainJoinStatus.Unjoined, EntraJoinType.Unknown, DomainMembershipFormatter.TypeUnknown)]
+    [InlineData(DomainJoinStatus.Domain, EntraJoinType.Unknown, DomainMembershipFormatter.TypeDomain)]
     public void Membership_type_attribute_matches_the_join_status(
         DomainJoinStatus status, EntraJoinType entraJoinType, string expected)
     {
@@ -110,6 +112,7 @@ public class DomainMembershipFormatterTests
     [InlineData(EntraJoinType.None, DomainMembershipFormatter.EntraJoinTypeNone)]
     [InlineData(EntraJoinType.Registered, DomainMembershipFormatter.EntraJoinTypeRegistered)]
     [InlineData(EntraJoinType.Joined, DomainMembershipFormatter.EntraJoinTypeJoined)]
+    [InlineData(EntraJoinType.Unknown, DomainMembershipFormatter.EntraJoinTypeUnknown)]
     public void Entra_join_type_attribute_matches_the_join_status(EntraJoinType entraJoinType, string expected)
     {
         Assert.Equal(expected, DomainMembershipFormatter.DescribeEntraJoinType(entraJoinType));

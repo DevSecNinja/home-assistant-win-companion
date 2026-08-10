@@ -10,13 +10,22 @@ public enum StartupRegistrationState
     NeedsRepair
 }
 
-public sealed class WindowsStartupRegistration
+public interface IStartupRegistration
+{
+    bool IsSupported { get; }
+    StartupRegistrationState GetState();
+    void SetEnabled(bool enabled);
+}
+
+public sealed class WindowsStartupRegistration : IStartupRegistration
 {
     private const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
     private const string ValueName = "WindowsCompanion";
 
     /// <summary>Value name used before the product rename.</summary>
     private const string LegacyValueName = "HaCompanion";
+
+    public bool IsSupported => true;
 
     public string ExpectedCommand
     {
@@ -57,5 +66,14 @@ public sealed class WindowsStartupRegistration
             key.SetValue(ValueName, ExpectedCommand, RegistryValueKind.String);
         else
             key.DeleteValue(ValueName, throwOnMissingValue: false);
+    }
+}
+
+internal sealed class DisabledStartupRegistration : IStartupRegistration
+{
+    public bool IsSupported => false;
+    public StartupRegistrationState GetState() => StartupRegistrationState.Disabled;
+    public void SetEnabled(bool enabled)
+    {
     }
 }

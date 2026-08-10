@@ -159,11 +159,24 @@ Assistant; package names and versions remain in the local preview.
 
 .\scripts\test.ps1
 .\scripts\test.ps1 -Coverage
+.\scripts\test.ps1 -EndToEnd
+.\scripts\test.ps1 -Ui
 ```
 
 Coverage is measured for `WindowsCompanion.Core` only. The current gates are 85% line
-and 70% branch coverage; the WinUI/P/Invoke shell remains intentionally thin and
-outside the unit-test project.
+and 70% branch coverage. End-to-end tests use a scenario-scoped loopback Home
+Assistant substitute, synthetic credentials, and the real OAuth, REST, webhook,
+WebSocket, persistence, and connection stack; no Home Assistant installation or
+account is required.
+
+Native UI tests launch the unpackaged WinUI application and require an unlocked
+interactive Windows desktop. Hosted CI compiles this suite but does not claim to
+execute rendered UI. Trusted main builds and manual runs execute it sequentially
+on a self-hosted runner labelled `windows`, `x64`, and `interactive`. See
+[`specs/010-mocked-ha-e2e-testing/quickstart.md`](specs/010-mocked-ha-e2e-testing/quickstart.md)
+for focused filters, diagnostics, runner constraints, and security boundaries.
+Ten-pass repeatability runs are kept out of the PR gate and run from the scheduled
+or manually dispatched **Extended tests** workflow.
 
 `scripts/run.ps1` builds and then launches exactly what it just built. That matters:
 a solution build and a project build otherwise select different platforms and write

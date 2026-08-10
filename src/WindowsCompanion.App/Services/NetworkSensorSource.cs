@@ -374,13 +374,14 @@ public sealed class NetworkSensorSource : ISensorSource
             try
             {
                 var properties = adapter.GetIPProperties();
-                var gateways = properties.GatewayAddresses
-                    .Where(gateway => gateway.Address is not null && !IsUnspecified(gateway.Address))
-                    .ToList();
-                hasGateway = gateways.Count > 0;
-
                 if (includeGatewayAddress)
-                    gatewayAddress = gateways.FirstOrDefault()?.Address.ToString();
+                {
+                    gatewayAddress = properties.GatewayAddresses
+                        .Select(gateway => gateway.Address)
+                        .FirstOrDefault(address => address is not null && !IsUnspecified(address))
+                        ?.ToString();
+                    hasGateway = gatewayAddress is not null;
+                }
 
                 if (includeDnsServers)
                 {

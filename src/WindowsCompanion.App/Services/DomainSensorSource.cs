@@ -17,7 +17,7 @@ namespace WindowsCompanion_App.Services;
 /// for these questions. Only the join type and the Entra tenant display name are
 /// read; the join certificate, tenant id, MDM enrollment URLs and the signed-in
 /// user's email are deliberately never touched, since those would leak more
-/// than a sensor state should. A workgroup, domain or Entra ID domain name can
+/// than a sensor state should. A workgroup, domain or Entra tenant display name can
 /// still reveal an organisation's internal naming, so this sensor is off by
 /// default like the other network-identity sensors.
 /// </remarks>

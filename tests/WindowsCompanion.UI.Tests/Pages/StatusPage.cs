@@ -24,10 +24,8 @@ internal sealed class StatusPage(Window window)
             },
             $"Connection state did not become '{expected}'.");
 
-    internal void UpdateNow() => Button("Status.UpdateNow").Invoke();
-    internal void DisconnectOrReconnect() => Button("Status.Disconnect").Invoke();
     internal void OpenSensors() => Button("Status.OpenSensors").Invoke();
-    internal void RemoveServer() => Button("Status.RemoveServer").Invoke();
+    internal void OpenSettings() => Button("Status.OpenSettings").Invoke();
 
     internal void ConfirmDialog() => Button("Dialog.Primary").Invoke();
     internal void DismissDialog() => Button("Dialog.Cancel").Invoke();

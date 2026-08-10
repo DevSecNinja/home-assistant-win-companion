@@ -23,7 +23,8 @@ public sealed partial class MainWindow
     private void OnCloseConnection(object sender, RoutedEventArgs e)
     {
         RefreshStatusFields();
-        ShowView(View.Status);
+        LoadPreferences();
+        ShowView(View.Preferences);
     }
 
     /// <summary>Fills the connection view from the saved settings.</summary>
@@ -298,7 +299,7 @@ public sealed partial class MainWindow
             await _controller.SignInAsync(url);
             _connected = true;
             DisconnectButton.Content = "Disconnect";
-            UpdateNowButton.IsEnabled = true;
+            SyncSensorsButton.IsEnabled = true;
             _statusTimer.Start();
             ShowPanel(true);
             RefreshStatusFields();

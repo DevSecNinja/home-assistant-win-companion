@@ -15,11 +15,14 @@ public sealed class FailureUiTests
             {
                 await ConnectAsync(fixture);
                 var status = new StatusPage(fixture.Window);
+                status.OpenSettings();
+                var settings = new SettingsPage(fixture.Window);
+                settings.WaitUntilVisible();
 
-                status.RemoveServer();
+                settings.RemoveServer();
                 status.DismissDialog();
-                status.WaitForConnection("Connected");
-                status.RemoveServer();
+                settings.WaitUntilVisible();
+                settings.RemoveServer();
                 status.ConfirmDialog();
                 new ConnectPage(fixture.Window).WaitUntilVisible();
 

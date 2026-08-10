@@ -93,6 +93,29 @@ public class StartupUpdateTests
             update.ReleasePage.AbsoluteUri);
     }
 
+    [Fact]
+    public void Latest_stable_uses_only_the_highest_trusted_release()
+    {
+        var releases = ReleaseCatalogParser.Parse(
+            """
+            [
+              {"tag_name":"v9.0.0","draft":true,"prerelease":false,"html_url":"https://github.com/DevSecNinja/home-assistant-win-companion/releases/tag/v9.0.0"},
+              {"tag_name":"v8.0.0","draft":false,"prerelease":true,"html_url":"https://github.com/DevSecNinja/home-assistant-win-companion/releases/tag/v8.0.0"},
+              {"tag_name":"v7.0.0-beta.1","draft":false,"prerelease":false,"html_url":"https://github.com/DevSecNinja/home-assistant-win-companion/releases/tag/v7.0.0-beta.1"},
+              {"tag_name":"not-a-version","draft":false,"prerelease":false,"html_url":"https://github.com/DevSecNinja/home-assistant-win-companion/releases/tag/not-a-version"},
+              {"tag_name":"v6.0.0","draft":false,"prerelease":false,"html_url":"http://github.com/DevSecNinja/home-assistant-win-companion/releases/tag/v6.0.0"},
+              {"tag_name":"v5.0.0","draft":false,"prerelease":false,"html_url":"https://example.invalid/DevSecNinja/home-assistant-win-companion/releases/tag/v5.0.0"},
+              {"tag_name":"v4.0.0","draft":false,"prerelease":false,"html_url":"https://github.com/DevSecNinja/home-assistant-win-companion/releases/tag/v3.0.0"},
+              {"tag_name":"v1.3.0","draft":false,"prerelease":false,"html_url":"https://github.com/DevSecNinja/home-assistant-win-companion/releases/tag/v1.3.0"},
+              {"tag_name":"v1.4.0","draft":false,"prerelease":false,"html_url":"https://github.com/DevSecNinja/home-assistant-win-companion/releases/tag/v1.4.0"}
+            ]
+            """);
+
+        var latest = UpdatePolicy.FindLatestStable(releases);
+
+        Assert.Equal("1.4.0", latest?.ToString());
+    }
+
     [Theory]
     [InlineData("1.4.0")]
     [InlineData("2.0.0")]
@@ -198,6 +221,24 @@ public class StartupUpdateTests
         Assert.Equal(UpdateCheckStatus.Error, checker.State.Status);
         Assert.Equal("2.0.0", checker.State.AvailableUpdate?.AvailableVersion.ToString());
         Assert.Contains("try again", checker.State.ErrorMessage, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task A_failed_recheck_preserves_the_latest_known_stable_version()
+    {
+        var source = new ScriptedReleaseSource(
+            _ => Task.FromResult(Releases("v1.0.0")),
+            _ => Task.FromException<IReadOnlyList<ReleaseCandidate>>(
+                new HttpRequestException("offline")));
+        var checker = Checker(source);
+
+        await checker.CheckAsync(UpdateCheckTrigger.Automatic);
+        await Assert.ThrowsAsync<HttpRequestException>(
+            () => checker.CheckAsync(UpdateCheckTrigger.User));
+
+        Assert.Equal(
+            "1.0.0",
+            checker.State.LatestKnownStableVersion?.ToString());
     }
 
     [Fact]

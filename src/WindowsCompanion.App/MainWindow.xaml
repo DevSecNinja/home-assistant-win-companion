@@ -176,30 +176,154 @@
                 <TextBlock Text="Last update:" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                 <TextBlock x:Name="LastUpdateText" Text="—" />
             </StackPanel>
-            <ToggleSwitch
-                x:Name="StartWithWindowsToggle"
-                Header="Start with Windows"
-                OnContent="On"
-                OffContent="Off"
-                Toggled="OnStartWithWindowsToggled" />
-            <TextBlock
-                x:Name="StartupStatusText"
-                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                TextWrapping="Wrap" />
             <Button x:Name="OpenHomeAssistantButton" Content="Open Home Assistant" Click="OnOpenHomeAssistant" HorizontalAlignment="Stretch" />
-            <Button x:Name="ConnectionButton" Content="Connection…" Click="OnShowConnection" HorizontalAlignment="Stretch" />
-            <Button x:Name="UpdateNowButton" AutomationProperties.AutomationId="Status.UpdateNow" Content="Update now" Click="OnForcePush" HorizontalAlignment="Stretch" />
-            <Button AutomationProperties.AutomationId="Status.OpenSensors" Content="Sensors…" Click="OnShowSettings" HorizontalAlignment="Stretch" />
-            <Button x:Name="DisconnectButton" AutomationProperties.AutomationId="Status.Disconnect" Content="Disconnect" Click="OnDisconnect" HorizontalAlignment="Stretch" />
-            <Button Content="Open log file" Click="OnOpenLog" HorizontalAlignment="Stretch" />
-            <Button
-                AutomationProperties.AutomationId="Status.RemoveServer"
-                x:Name="RemoveServerButton"
-                Content="Remove server…"
-                Click="OnRemoveServer"
-                HorizontalAlignment="Stretch"
-                Foreground="{ThemeResource SystemFillColorCriticalBrush}" />
+            <Button AutomationProperties.AutomationId="Status.OpenSensors"
+                    Content="Sensors" Click="OnShowSensors" HorizontalAlignment="Stretch" />
+            <Button AutomationProperties.AutomationId="Status.OpenSettings"
+                    AutomationProperties.Name="Open Settings"
+                    Content="Settings" Click="OnShowPreferences" HorizontalAlignment="Stretch" />
         </StackPanel>
+
+        <!-- Application settings view -->
+        <Grid x:Name="PreferencesPanel" Grid.Row="2" Visibility="Collapsed">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <StackPanel Grid.Row="0" Padding="24,16,24,8" Spacing="4">
+                <TextBlock Text="Settings" Style="{StaticResource SubtitleTextBlockStyle}" />
+                <TextBlock
+                    Text="Configure how the companion behaves and manage its connection to Home Assistant."
+                    TextWrapping="Wrap"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+            </StackPanel>
+
+            <ScrollViewer Grid.Row="1" Padding="24,0,24,0">
+                <StackPanel Spacing="20">
+                    <StackPanel Spacing="10">
+                        <TextBlock Text="General" FontWeight="SemiBold" />
+                        <ToggleSwitch
+                            x:Name="StartWithWindowsToggle"
+                            Header="Start with Windows"
+                            OnContent="On"
+                            OffContent="Off"
+                            Toggled="OnStartWithWindowsToggled" />
+                        <TextBlock
+                            x:Name="StartupStatusText"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            TextWrapping="Wrap" />
+                        <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+                            <TextBlock Text="Idle after" VerticalAlignment="Center" />
+                            <NumberBox
+                                x:Name="IdleMinutesBox"
+                                Minimum="1"
+                                Maximum="240"
+                                SpinButtonPlacementMode="Compact"
+                                Width="120"
+                                AutomationProperties.Name="Idle threshold in minutes"
+                                ValueChanged="OnIdleMinutesChanged" />
+                            <TextBlock Text="minutes without input" VerticalAlignment="Center"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        </StackPanel>
+                        <TextBlock
+                            Text="This only controls when the Active sensor reports idle. It does not lock or put this PC to sleep."
+                            TextWrapping="Wrap"
+                            FontSize="12"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    </StackPanel>
+
+                    <StackPanel Spacing="10">
+                        <TextBlock Text="Sensors" FontWeight="SemiBold" />
+                        <TextBlock
+                            Text="Send the latest states for every enabled sensor to Home Assistant immediately."
+                            TextWrapping="Wrap"
+                            FontSize="12"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        <Button
+                            x:Name="SyncSensorsButton"
+                            AutomationProperties.AutomationId="Settings.SyncSensors"
+                            Content="Sync sensors now"
+                            Click="OnForcePush"
+                            HorizontalAlignment="Stretch" />
+                        <Button x:Name="ChooseSensorsButton" Content="Choose sensors"
+                                Click="OnShowSensorsFromSettings" HorizontalAlignment="Stretch" />
+                    </StackPanel>
+
+                    <StackPanel x:Name="ConnectionSettingsSection" Spacing="10">
+                        <TextBlock Text="Connection" FontWeight="SemiBold" />
+                        <Button x:Name="ConnectionButton" Content="Connection settings"
+                                Click="OnShowConnection" HorizontalAlignment="Stretch" />
+                        <TextBlock
+                            Text="Stopping the connection pauses reporting until you reconnect. It keeps your server and sign-in information."
+                            TextWrapping="Wrap"
+                            FontSize="12"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        <Button x:Name="DisconnectButton" Content="Stop connection"
+                                AutomationProperties.AutomationId="Settings.Disconnect"
+                                Click="OnDisconnect" HorizontalAlignment="Stretch" />
+                        <TextBlock
+                            Text="Removing the server signs out, deletes its saved configuration from this PC, and requires a new sign-in."
+                            TextWrapping="Wrap"
+                            FontSize="12"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        <Button
+                            x:Name="RemoveServerButton"
+                            AutomationProperties.AutomationId="Settings.RemoveServer"
+                            Content="Remove server…"
+                            Click="OnRemoveServer"
+                            HorizontalAlignment="Stretch"
+                            Foreground="{ThemeResource SystemFillColorCriticalBrush}" />
+                    </StackPanel>
+
+                    <StackPanel Spacing="10">
+                        <TextBlock Text="About &amp; updates" FontWeight="SemiBold" />
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <TextBlock Text="Installed version:"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                            <TextBlock x:Name="InstalledVersionText" Text="—" />
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <TextBlock Text="Latest stable version:"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                            <TextBlock x:Name="LatestVersionText" Text="Not checked" />
+                        </StackPanel>
+                        <TextBlock
+                            x:Name="SettingsUpdateStatusText"
+                            TextWrapping="Wrap"
+                            AutomationProperties.LiveSetting="Polite"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        <Button
+                            x:Name="SettingsCheckUpdatesButton"
+                            Content="Check for updates"
+                            Click="OnRecheckUpdates"
+                            HorizontalAlignment="Stretch" />
+                        <Button
+                            x:Name="SettingsInstallUpdateButton"
+                            Content="Install update…"
+                            Click="OnViewRelease"
+                            Visibility="Collapsed"
+                            HorizontalAlignment="Stretch" />
+                        <Button Content="Open log file" Click="OnOpenLog" HorizontalAlignment="Stretch" />
+                    </StackPanel>
+                </StackPanel>
+            </ScrollViewer>
+
+            <StackPanel Grid.Row="2" Padding="24,8,24,20" Spacing="8">
+                <ProgressRing x:Name="SettingsActionProgress" IsActive="False"
+                              Width="20" Height="20" HorizontalAlignment="Left"
+                              AutomationProperties.Name="Settings action in progress" />
+                <TextBlock
+                    x:Name="SettingsActionStatus"
+                    AutomationProperties.AutomationId="Settings.ActionStatus"
+                    TextWrapping="Wrap"
+                    AutomationProperties.LiveSetting="Polite"
+                    Visibility="Collapsed" />
+                <Button AutomationProperties.AutomationId="Settings.Back"
+                        Content="Back" Click="OnClosePreferences" HorizontalAlignment="Stretch" />
+            </StackPanel>
+        </Grid>
 
         <!-- Connection settings view -->
         <Grid x:Name="ConnectionPanel" Grid.Row="2" Visibility="Collapsed">
@@ -344,7 +468,7 @@
         </Grid>
 
         <!-- Sensor settings view -->
-        <Grid x:Name="SettingsPanel" Grid.Row="2" Visibility="Collapsed">
+        <Grid x:Name="SensorsPanel" Grid.Row="2" Visibility="Collapsed">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
@@ -364,23 +488,12 @@
             </ScrollViewer>
 
             <StackPanel Grid.Row="2" Padding="24,8,24,20" Spacing="12">
-                <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
-                    <TextBlock Text="Idle after" VerticalAlignment="Center" />
-                    <NumberBox
-                        x:Name="IdleMinutesBox"
-                        Minimum="1"
-                        Maximum="240"
-                        SpinButtonPlacementMode="Compact"
-                        Width="120"
-                        ValueChanged="OnIdleMinutesChanged" />
-                    <TextBlock Text="minutes without input" VerticalAlignment="Center"
-                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                </StackPanel>
                 <Button
                     Content="Open Windows Location settings"
                     Click="OnOpenLocationSettings"
                     HorizontalAlignment="Stretch" />
-                <Button AutomationProperties.AutomationId="Sensors.Save" Content="Back" Click="OnCloseSettings" HorizontalAlignment="Stretch" />
+                <Button AutomationProperties.AutomationId="Sensors.Save"
+                        Content="Back" Click="OnCloseSensors" HorizontalAlignment="Stretch" />
             </StackPanel>
         </Grid>
     </Grid>

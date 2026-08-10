@@ -24,6 +24,7 @@ public class UpdateUiTests
         Assert.False(presentation.IsReleaseActionVisible);
         Assert.Equal(status != UpdateCheckStatus.Idle, presentation.IsRecheckVisible);
         Assert.Equal(recheckEnabled, presentation.IsRecheckEnabled);
+        Assert.Equal("1.0.0", presentation.InstalledVersionText);
     }
 
     [Fact]
@@ -63,6 +64,36 @@ public class UpdateUiTests
         Assert.True(presentation.IsReleaseActionVisible);
         Assert.True(presentation.IsRecheckVisible);
         Assert.True(presentation.IsRecheckEnabled);
+        Assert.Equal("2.0.0", presentation.LatestVersionText);
+        Assert.Equal("Version 2.0.0 is available.", presentation.SettingsStatusText);
+        Assert.Equal("Recheck for updates", presentation.SettingsCheckLabel);
+        Assert.True(presentation.IsSettingsInstallVisible);
+    }
+
+    [Fact]
+    public void Current_release_is_the_latest_known_stable_version()
+    {
+        var presentation = UpdateStatusPresentation.Create(
+            State(UpdateCheckStatus.Current, UpdateCheckTrigger.User));
+
+        Assert.Equal("1.0.0", presentation.InstalledVersionText);
+        Assert.Equal("1.0.0", presentation.LatestVersionText);
+        Assert.Equal("You're up to date.", presentation.SettingsStatusText);
+        Assert.False(presentation.IsSettingsInstallVisible);
+    }
+
+    [Fact]
+    public void Failed_recheck_keeps_the_latest_known_stable_version()
+    {
+        var presentation = UpdateStatusPresentation.Create(
+            State(UpdateCheckStatus.Error, UpdateCheckTrigger.User) with
+            {
+                LatestKnownStableVersion = Version("1.0.0"),
+                ErrorMessage = "Offline."
+            });
+
+        Assert.Equal("1.0.0", presentation.LatestVersionText);
+        Assert.Equal("Offline.", presentation.SettingsStatusText);
     }
 
     [Fact]

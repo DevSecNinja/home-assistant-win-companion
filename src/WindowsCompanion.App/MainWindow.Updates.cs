@@ -46,11 +46,31 @@ public sealed partial class MainWindow
             ? Visibility.Visible
             : Visibility.Collapsed;
         RecheckUpdatesButton.IsEnabled = presentation.IsRecheckEnabled;
+        InstalledVersionText.Text = presentation.InstalledVersionText;
+        LatestVersionText.Text = presentation.LatestVersionText;
+        var settingsUpdateChanged = !string.Equals(
+            SettingsUpdateStatusText.Text,
+            presentation.SettingsStatusText,
+            StringComparison.Ordinal);
+        SettingsUpdateStatusText.Text = presentation.SettingsStatusText;
+        SettingsCheckUpdatesButton.Content = presentation.SettingsCheckLabel;
+        SettingsCheckUpdatesButton.IsEnabled =
+            state.Status != UpdateCheckStatus.Checking;
+        SettingsInstallUpdateButton.Visibility = presentation.IsSettingsInstallVisible
+            ? Visibility.Visible
+            : Visibility.Collapsed;
         if (presentation.IsBannerOpen && messageChanged)
         {
             var peer = FrameworkElementAutomationPeer.FromElement(UpdateBannerMessage)
                        ?? FrameworkElementAutomationPeer.CreatePeerForElement(
                            UpdateBannerMessage);
+            peer?.RaiseAutomationEvent(AutomationEvents.LiveRegionChanged);
+        }
+        if (settingsUpdateChanged)
+        {
+            var peer = FrameworkElementAutomationPeer.FromElement(SettingsUpdateStatusText)
+                       ?? FrameworkElementAutomationPeer.CreatePeerForElement(
+                           SettingsUpdateStatusText);
             peer?.RaiseAutomationEvent(AutomationEvents.LiveRegionChanged);
         }
         UpdateHealth();

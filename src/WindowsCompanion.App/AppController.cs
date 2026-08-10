@@ -558,8 +558,11 @@ public sealed class AppController : IAsyncDisposable
         }
     }
 
-    /// <summary>Resumes reporting after a <see cref="DisconnectAsync"/>.</summary>
-    public Task ReconnectAsync(CancellationToken ct = default) => TryResumeAsync(ct);
+    /// <summary>
+    /// Resumes reporting after a <see cref="DisconnectAsync"/> and returns whether
+    /// a saved session was available and rebuilt successfully.
+    /// </summary>
+    public Task<bool> ReconnectAsync(CancellationToken ct = default) => TryResumeAsync(ct);
 
     /// <summary>Pushes all enabled sensors right now, on the user's command.</summary>
     public async Task ForcePushAsync()

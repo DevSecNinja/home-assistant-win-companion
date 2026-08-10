@@ -16,9 +16,16 @@ public sealed class StatusUiTests
                 await ConnectAsync(fixture);
                 var status = new StatusPage(fixture.Window);
 
-                status.DisconnectOrReconnect();
+                status.OpenSettings();
+                var settings = new SettingsPage(fixture.Window);
+                settings.WaitUntilVisible();
+                settings.DisconnectOrReconnect();
+                settings.Back();
                 status.WaitForConnection("Disconnected");
-                status.DisconnectOrReconnect();
+                status.OpenSettings();
+                settings.WaitUntilVisible();
+                settings.DisconnectOrReconnect();
+                settings.Back();
                 status.WaitForConnection("Connected");
 
                 var registrationCount = fixture.Scenario.State.Registrations.Count;

@@ -35,7 +35,10 @@ public sealed class SensorUiTests
                 sensors.Save();
 
                 sequence = fixture.Scenario.Interactions.Snapshot().Last().Sequence;
-                status.UpdateNow();
+                status.OpenSettings();
+                var settings = new SettingsPage(fixture.Window);
+                settings.WaitUntilVisible();
+                settings.SyncSensors();
                 await fixture.Scenario.Interactions.WaitForAsync(
                     interaction => interaction.PathOrMessageType == "update_sensor_states",
                     TimeSpan.FromSeconds(20),

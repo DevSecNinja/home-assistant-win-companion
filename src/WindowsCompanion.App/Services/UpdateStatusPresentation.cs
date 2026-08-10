@@ -17,7 +17,12 @@ internal sealed record UpdateStatusPresentation(
     bool IsBannerOpen,
     bool IsReleaseActionVisible,
     bool IsRecheckVisible,
-    bool IsRecheckEnabled)
+    bool IsRecheckEnabled,
+    string InstalledVersionText,
+    string LatestVersionText,
+    string SettingsStatusText,
+    string SettingsCheckLabel,
+    bool IsSettingsInstallVisible)
 {
     internal static UpdateStatusPresentation Create(
         UpdateCheckState state,
@@ -58,6 +63,18 @@ internal sealed record UpdateStatusPresentation(
         };
         var userVisible = state.Trigger == UpdateCheckTrigger.User
             && status != UpdateCheckStatus.Idle;
+        var latestVersion = state.LatestKnownStableVersion
+            ?? update?.AvailableVersion
+            ?? (status == UpdateCheckStatus.Current ? state.InstalledVersion : null);
+        var settingsStatus = status switch
+        {
+            UpdateCheckStatus.Checking => "Checking for the latest stable release…",
+            UpdateCheckStatus.Current => "You're up to date.",
+            UpdateCheckStatus.Available when update is not null =>
+                $"Version {update.AvailableVersion} is available.",
+            UpdateCheckStatus.Error => state.ErrorMessage ?? "The update check failed.",
+            _ => "Updates have not been checked yet."
+        };
 
         return new(
             update is null ? "Check for updates…" : "Install update…",
@@ -67,6 +84,11 @@ internal sealed record UpdateStatusPresentation(
             status == UpdateCheckStatus.Available || userVisible,
             update is not null,
             status != UpdateCheckStatus.Idle,
-            status is not (UpdateCheckStatus.Idle or UpdateCheckStatus.Checking));
+            status is not (UpdateCheckStatus.Idle or UpdateCheckStatus.Checking),
+            state.InstalledVersion.ToString(),
+            latestVersion?.ToString() ?? "Not checked",
+            settingsStatus,
+            status == UpdateCheckStatus.Idle ? "Check for updates" : "Recheck for updates",
+            update is not null);
     }
 }

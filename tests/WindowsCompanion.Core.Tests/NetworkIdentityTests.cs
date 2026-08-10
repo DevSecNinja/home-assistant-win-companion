@@ -12,9 +12,11 @@ public class NetworkIdentityTests
         Ipv6AddressInfo[]? ipv6 = null,
         byte[]? mac = null,
         bool isVirtual = false,
-        string description = "Intel Ethernet Connection") =>
+        string description = "Intel Ethernet Connection",
+        byte[]? permanentMac = null) =>
         new(id, description, NetworkAdapterKind.Wired, isUp, isVirtual, hasGateway,
-            ipv4 ?? ["192.168.1.20"], ipv6 ?? [], mac ?? [0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF]);
+            ipv4 ?? ["192.168.1.20"], ipv6 ?? [], mac ?? [0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF],
+            PermanentPhysicalAddress: permanentMac ?? mac ?? [0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF]);
 
     private static NetworkAdapterSnapshot WiFi(
         string id = "wlan",
@@ -22,9 +24,11 @@ public class NetworkIdentityTests
         bool hasGateway = true,
         string[]? ipv4 = null,
         Ipv6AddressInfo[]? ipv6 = null,
-        byte[]? mac = null) =>
+        byte[]? mac = null,
+        byte[]? permanentMac = null) =>
         new(id, "Intel Wi-Fi 6 AX201", NetworkAdapterKind.Wireless, isUp, false, hasGateway,
-            ipv4 ?? ["192.168.1.30"], ipv6 ?? [], mac ?? [0x11, 0x22, 0x33, 0x44, 0x55, 0x66]);
+            ipv4 ?? ["192.168.1.30"], ipv6 ?? [], mac ?? [0x11, 0x22, 0x33, 0x44, 0x55, 0x66],
+            PermanentPhysicalAddress: permanentMac ?? mac ?? [0x11, 0x22, 0x33, 0x44, 0x55, 0x66]);
 
     private static NetworkAdapterSnapshot Vpn(
         string id = "vpn",
@@ -166,6 +170,33 @@ public class NetworkIdentityTests
                 WiFi(mac: [0x11, 0x22, 0x33, 0x44, 0x55, 0x66], isUp: false)
             ],
             routeLocalIpv4: "192.168.1.20");
+
+        Assert.Equal("AA:BB:CC:DD:EE:FF", identity.LanMacAddress);
+        Assert.Equal("11:22:33:44:55:66", identity.WlanMacAddress);
+    }
+
+    [Fact]
+    public void Reports_permanent_mac_separately_from_the_current_randomized_address()
+    {
+        var identity = NetworkIdentity.From(
+            [
+                WiFi(
+                    mac: [0x02, 0x22, 0x33, 0x44, 0x55, 0x66],
+                    permanentMac: [0x11, 0x22, 0x33, 0x44, 0x55, 0x66])
+            ]);
+
+        Assert.Equal("02:22:33:44:55:66", identity.MacAddress);
+        Assert.Equal("11:22:33:44:55:66", identity.WlanMacAddress);
+    }
+
+    [Fact]
+    public void Reports_permanent_mac_for_disconnected_adapters()
+    {
+        var identity = NetworkIdentity.From(
+            [
+                Ethernet(isUp: false),
+                WiFi(isUp: false)
+            ]);
 
         Assert.Equal("AA:BB:CC:DD:EE:FF", identity.LanMacAddress);
         Assert.Equal("11:22:33:44:55:66", identity.WlanMacAddress);

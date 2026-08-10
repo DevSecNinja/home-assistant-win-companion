@@ -39,16 +39,28 @@ public sealed record NetworkIdentity(
         if (adapters is null || adapters.Count == 0) return NotConnected;
 
         var connectionType = NetworkClassifier.ClassifyAdapters(adapters);
+        var lanMacAddress =
+            SelectMac(adapters, NetworkAdapterKind.Wired) ?? NetworkClassifier.NotConnected;
+        var wlanMacAddress =
+            SelectMac(adapters, NetworkAdapterKind.Wireless) ?? NetworkClassifier.NotConnected;
         var active = NetworkAdapterSelector.SelectActive(adapters, routeLocalIpv4, routeLocalIpv6);
-        if (active is null) return NotConnected with { ConnectionType = connectionType };
+        if (active is null)
+        {
+            return NotConnected with
+            {
+                ConnectionType = connectionType,
+                LanMacAddress = lanMacAddress,
+                WlanMacAddress = wlanMacAddress
+            };
+        }
 
         return new NetworkIdentity(
             connectionType,
             SelectIpv4(active, routeLocalIpv4) ?? NetworkClassifier.NotConnected,
             Ipv6AddressClassifier.SelectPreferred(active.Ipv6) ?? NetworkClassifier.NotConnected,
             MacAddressFormatter.Format(active.PhysicalAddress) ?? NetworkClassifier.NotConnected,
-            SelectMac(adapters, NetworkAdapterKind.Wired) ?? NetworkClassifier.NotConnected,
-            SelectMac(adapters, NetworkAdapterKind.Wireless) ?? NetworkClassifier.NotConnected,
+            lanMacAddress,
+            wlanMacAddress,
             active.GatewayAddress ?? NetworkClassifier.NotConnected,
             SelectDns(active) ?? NetworkClassifier.NotConnected);
     }
@@ -67,7 +79,7 @@ public sealed record NetworkIdentity(
 
         foreach (var candidate in candidates)
         {
-            var formatted = MacAddressFormatter.Format(candidate.PhysicalAddress);
+            var formatted = MacAddressFormatter.Format(candidate.PermanentPhysicalAddress);
             if (formatted is not null) return formatted;
         }
 

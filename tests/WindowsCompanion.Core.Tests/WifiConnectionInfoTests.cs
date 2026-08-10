@@ -40,6 +40,13 @@ public class WifiConnectionInfoTests
         Assert.Equal(expected, WifiSecurityClassifier.Describe(authAlgorithm));
 
     [Fact]
+    public void Distinguishes_open_system_wep_from_shared_key_wep()
+    {
+        Assert.Equal("Open System (WEP)", WifiSecurityClassifier.Describe(1, cipherAlgorithm: 1));
+        Assert.Equal("Shared Key (WEP)", WifiSecurityClassifier.Describe(2, cipherAlgorithm: 1));
+    }
+
+    [Fact]
     public void Reports_unknown_for_an_unrecognised_auth_algorithm() =>
         Assert.Null(WifiSecurityClassifier.Describe(9999));
 

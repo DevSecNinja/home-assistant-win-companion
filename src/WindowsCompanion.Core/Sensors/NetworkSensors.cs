@@ -5,16 +5,36 @@ namespace WindowsCompanion.Core.Sensors;
 /// cheap but reading addresses and hardware addresses is collection of identifying
 /// data, so the scope is decided from what the user has actually switched on.
 /// </summary>
+[Flags]
 public enum NetworkCaptureScope
 {
     /// <summary>Nothing is enabled: do not enumerate anything at all.</summary>
-    None,
+    None = 0,
 
     /// <summary>Adapter kinds only. No address and no hardware address is read.</summary>
-    ConnectionTypeOnly,
+    ConnectionTypeOnly = 1 << 0,
 
-    /// <summary>Addresses, hardware address and route resolution are needed.</summary>
-    Full
+    /// <summary>IP addresses and route resolution are needed.</summary>
+    IpAddresses = 1 << 1,
+
+    /// <summary>The active adapter's current hardware address is needed.</summary>
+    CurrentPhysicalAddress = 1 << 2,
+
+    /// <summary>The active adapter's default gateway address is needed.</summary>
+    GatewayAddress = 1 << 3,
+
+    /// <summary>The active adapter's DNS resolver addresses are needed.</summary>
+    DnsServers = 1 << 4,
+
+    /// <summary>The wired adapter's permanent hardware address is needed.</summary>
+    LanPermanentAddress = 1 << 5,
+
+    /// <summary>The wireless adapter's permanent hardware address is needed.</summary>
+    WlanPermanentAddress = 1 << 6,
+
+    /// <summary>All network sensor fields may be collected.</summary>
+    Full = ConnectionTypeOnly | IpAddresses | CurrentPhysicalAddress | GatewayAddress
+           | DnsServers | LanPermanentAddress | WlanPermanentAddress
 }
 
 /// <summary>
@@ -47,9 +67,29 @@ public static class NetworkSensors
     public static NetworkCaptureScope ScopeFor(IReadOnlySet<string>? enabled)
     {
         if (enabled is null || enabled.Count == 0) return NetworkCaptureScope.None;
-        if (IdentifierIds.Any(enabled.Contains)) return NetworkCaptureScope.Full;
-        return enabled.Contains(ConnectionTypeId)
+
+        var scope = enabled.Contains(ConnectionTypeId)
             ? NetworkCaptureScope.ConnectionTypeOnly
             : NetworkCaptureScope.None;
+
+        if (enabled.Contains(IpAddressId) || enabled.Contains(Ipv6AddressId))
+            scope |= NetworkCaptureScope.IpAddresses;
+
+        if (enabled.Contains(MacAddressId))
+            scope |= NetworkCaptureScope.IpAddresses | NetworkCaptureScope.CurrentPhysicalAddress;
+
+        if (enabled.Contains(LanMacAddressId))
+            scope |= NetworkCaptureScope.LanPermanentAddress;
+
+        if (enabled.Contains(WlanMacAddressId))
+            scope |= NetworkCaptureScope.WlanPermanentAddress;
+
+        if (enabled.Contains(GatewayAddressId))
+            scope |= NetworkCaptureScope.IpAddresses | NetworkCaptureScope.GatewayAddress;
+
+        if (enabled.Contains(DnsServersId))
+            scope |= NetworkCaptureScope.IpAddresses | NetworkCaptureScope.DnsServers;
+
+        return scope;
     }
 }

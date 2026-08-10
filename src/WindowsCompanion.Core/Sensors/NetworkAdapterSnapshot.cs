@@ -53,7 +53,8 @@ public sealed record NetworkAdapterSnapshot(
     IReadOnlyList<Ipv6AddressInfo>? Ipv6Addresses = null,
     IReadOnlyList<byte>? PhysicalAddress = null,
     string? GatewayAddress = null,
-    IReadOnlyList<string>? DnsAddresses = null)
+    IReadOnlyList<string>? DnsAddresses = null,
+    IReadOnlyList<byte>? PermanentPhysicalAddress = null)
 {
     public IReadOnlyList<string> Ipv4 => Ipv4Addresses ?? [];
 

@@ -95,9 +95,8 @@ public sealed class NetworkSensorSource : ISensorSource
         new(
             WlanMacAddressId,
             "WLAN MAC Address",
-            "The hardware address currently used by this PC's Wi-Fi adapter. If "
-            + "Windows' MAC randomization is on for the network, this reflects the "
-            + "randomized address rather than the factory one.",
+            "The permanent hardware address of this PC's Wi-Fi adapter, separate "
+            + "from any randomized address Windows uses for the current network.",
             SensorPrivacy.Sensitive,
             EnabledByDefault: false,
             ResourceUsage: "Low. Reads the address from this PC only after a network change. It "
@@ -276,22 +275,22 @@ public sealed class NetworkSensorSource : ISensorSource
 
     /// <summary>
     /// Takes one snapshot of the machine's adapters and reduces it to sensor states.
-    /// Outside <see cref="NetworkCaptureScope.Full"/> no address, hardware address or
-    /// route is read at all, so a disabled sensor collects nothing.
+    /// The scope independently gates IP, current/permanent MAC, gateway and DNS
+    /// fields, so enabling one sensitive sensor never collects another's value.
     /// </summary>
     private static NetworkIdentity Capture(NetworkCaptureScope scope)
     {
         if (scope == NetworkCaptureScope.None) return NetworkIdentity.NotConnected;
 
-        var includeIdentifiers = scope == NetworkCaptureScope.Full;
+        var includeIpAddresses = scope.HasFlag(NetworkCaptureScope.IpAddresses);
 
         try
         {
             var adapters = NetworkInterface.GetAllNetworkInterfaces()
-                .Select(adapter => Describe(adapter, includeIdentifiers))
+                .Select(adapter => Describe(adapter, scope))
                 .ToList();
 
-            if (!includeIdentifiers)
+            if (scope == NetworkCaptureScope.ConnectionTypeOnly)
             {
                 return NetworkIdentity.NotConnected with
                 {
@@ -301,8 +300,8 @@ public sealed class NetworkSensorSource : ISensorSource
 
             return NetworkIdentity.From(
                 adapters,
-                ResolveRoute(AddressFamily.InterNetwork),
-                ResolveRoute(AddressFamily.InterNetworkV6));
+                includeIpAddresses ? ResolveRoute(AddressFamily.InterNetwork) : null,
+                includeIpAddresses ? ResolveRoute(AddressFamily.InterNetworkV6) : null);
         }
         catch (NetworkInformationException)
         {
@@ -310,7 +309,9 @@ public sealed class NetworkSensorSource : ISensorSource
         }
     }
 
-    private static NetworkAdapterSnapshot Describe(NetworkInterface adapter, bool includeIdentifiers)
+    private static NetworkAdapterSnapshot Describe(
+        NetworkInterface adapter,
+        NetworkCaptureScope scope)
     {
         var kind = adapter.NetworkInterfaceType switch
         {
@@ -327,49 +328,72 @@ public sealed class NetworkSensorSource : ISensorSource
         var isVirtual = NetworkAdapterSelector.LooksVirtual(adapter.Description)
                         || NetworkAdapterSelector.LooksVirtual(adapter.Name);
 
-        if (!includeIdentifiers)
+        if (scope == NetworkCaptureScope.ConnectionTypeOnly)
             return new NetworkAdapterSnapshot(adapter.Id, adapter.Description, kind, isUp, isVirtual);
 
+        var includeIpAddresses = scope.HasFlag(NetworkCaptureScope.IpAddresses);
+        var includeCurrentPhysicalAddress =
+            scope.HasFlag(NetworkCaptureScope.CurrentPhysicalAddress);
+        var includePermanentPhysicalAddress =
+            !isVirtual
+            && (kind == NetworkAdapterKind.Wired
+                    && scope.HasFlag(NetworkCaptureScope.LanPermanentAddress)
+                || kind == NetworkAdapterKind.Wireless
+                    && scope.HasFlag(NetworkCaptureScope.WlanPermanentAddress));
+        var includeGatewayAddress = scope.HasFlag(NetworkCaptureScope.GatewayAddress);
+        var includeDnsServers = scope.HasFlag(NetworkCaptureScope.DnsServers);
         var ipv4 = new List<string>();
         var ipv6 = new List<Ipv6AddressInfo>();
         var hasGateway = false;
         string? gatewayAddress = null;
         var dns = new List<string>();
 
-        try
+        if (includeIpAddresses || includeGatewayAddress || includeDnsServers)
         {
-            var properties = adapter.GetIPProperties();
-            var gateways = properties.GatewayAddresses
-                .Where(gateway => gateway.Address is not null && !IsUnspecified(gateway.Address))
-                .ToList();
-            hasGateway = gateways.Count > 0;
-            gatewayAddress = gateways.FirstOrDefault()?.Address.ToString();
-            dns = properties.DnsAddresses
-                .Where(address => !IsUnspecified(address))
-                .Select(address => address.ToString())
-                .ToList();
-
-            foreach (var unicast in properties.UnicastAddresses)
+            try
             {
-                if (unicast.Address.AddressFamily == AddressFamily.InterNetwork)
+                var properties = adapter.GetIPProperties();
+                var gateways = properties.GatewayAddresses
+                    .Where(gateway => gateway.Address is not null && !IsUnspecified(gateway.Address))
+                    .ToList();
+                hasGateway = gateways.Count > 0;
+
+                if (includeGatewayAddress)
+                    gatewayAddress = gateways.FirstOrDefault()?.Address.ToString();
+
+                if (includeDnsServers)
                 {
-                    ipv4.Add(unicast.Address.ToString());
+                    dns = properties.DnsAddresses
+                        .Where(address => !IsUnspecified(address))
+                        .Select(address => address.ToString())
+                        .ToList();
                 }
-                else if (unicast.Address.AddressFamily == AddressFamily.InterNetworkV6)
+
+                if (includeIpAddresses)
                 {
-                    ipv6.Add(new Ipv6AddressInfo(
-                        unicast.Address.ToString(),
-                        StateOf(unicast),
-                        OriginOf(unicast)));
+                    foreach (var unicast in properties.UnicastAddresses)
+                    {
+                        if (unicast.Address.AddressFamily == AddressFamily.InterNetwork)
+                        {
+                            ipv4.Add(unicast.Address.ToString());
+                        }
+                        else if (unicast.Address.AddressFamily == AddressFamily.InterNetworkV6)
+                        {
+                            ipv6.Add(new Ipv6AddressInfo(
+                                unicast.Address.ToString(),
+                                StateOf(unicast),
+                                OriginOf(unicast)));
+                        }
+                    }
                 }
             }
-        }
-        catch (NetworkInformationException)
-        {
-            // An adapter can disappear mid-enumeration; describe it without addresses.
-        }
-        catch (PlatformNotSupportedException)
-        {
+            catch (NetworkInformationException)
+            {
+                // An adapter can disappear mid-enumeration; describe it without addresses.
+            }
+            catch (PlatformNotSupportedException)
+            {
+            }
         }
 
         return new NetworkAdapterSnapshot(
@@ -381,9 +405,12 @@ public sealed class NetworkSensorSource : ISensorSource
             hasGateway,
             ipv4,
             ipv6,
-            PhysicalAddressOf(adapter),
+            includeCurrentPhysicalAddress ? PhysicalAddressOf(adapter) : null,
             gatewayAddress,
-            dns);
+            dns,
+            includePermanentPhysicalAddress
+                ? WindowsNetworkInterfaceIdentity.PermanentPhysicalAddressOf(adapter.Id)
+                : null);
     }
 
     private static bool IsUnspecified(IPAddress address) =>

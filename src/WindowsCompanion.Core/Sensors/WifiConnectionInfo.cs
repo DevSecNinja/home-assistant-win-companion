@@ -26,7 +26,7 @@ public static class WifiSecurityClassifier
     /// </summary>
     public static string? Describe(int authAlgorithm, int? cipherAlgorithm = null) => authAlgorithm switch
     {
-        1 => cipherAlgorithm is null or CipherAlgorithmNone ? "Open" : "Shared Key (WEP)",
+        1 => cipherAlgorithm is null or CipherAlgorithmNone ? "Open" : "Open System (WEP)",
         2 => "Shared Key (WEP)",
         3 => "WPA-Enterprise",
         4 => "WPA-Personal",

@@ -66,7 +66,15 @@ public sealed class WifiSensorSource : ISensorSource
     public IReadOnlyList<Sensor> Read(
         IReadOnlySet<string> enabled, SensorReadContext context)
     {
-        var info = ReadConnection();
+        if (!enabled.Contains(SsidId)
+            && !enabled.Contains(BssidId)
+            && !enabled.Contains(SecurityId)
+            && !enabled.Contains(RandomMacId))
+        {
+            return [];
+        }
+
+        var info = ReadConnection(enabled.Contains(RandomMacId));
         var sensors = new List<Sensor>();
 
         if (enabled.Contains(SsidId))
@@ -166,7 +174,7 @@ public sealed class WifiSensorSource : ISensorSource
 
     private void OnNetworkChanged(object? sender, EventArgs e) => _onChanged?.Invoke();
 
-    internal static WifiConnectionInfo ReadConnection()
+    internal static WifiConnectionInfo ReadConnection(bool includeRandomMac = false)
     {
         var result = WlanOpenHandle(2, 0, out _, out var client);
         if (result != 0) return new(WifiConnectionStatus.Unavailable);
@@ -213,14 +221,26 @@ public sealed class WifiSensorSource : ISensorSource
                             connection.Association.Dot11Ssid.Ssid,
                             0,
                             length);
+                        bool? macRandomizationEnabled = null;
+                        string? currentMacAddress = null;
+                        if (includeRandomMac)
+                        {
+                            macRandomizationEnabled = IsMacRandomizationEnabled(
+                                client,
+                                item.InterfaceGuid,
+                                connection.ProfileName);
+                            if (macRandomizationEnabled == true)
+                                currentMacAddress = CurrentMacAddress(item.InterfaceGuid);
+                        }
+
                         return new(
                             WifiConnectionStatus.Connected,
                             ssid,
                             connection.Association.Dot11Bssid,
                             connection.Security.AuthAlgorithm,
                             connection.Security.CipherAlgorithm,
-                            IsMacRandomizationEnabled(client, item.InterfaceGuid, connection.ProfileName),
-                            CurrentMacAddress(item.InterfaceGuid));
+                            macRandomizationEnabled,
+                            currentMacAddress);
                     }
                     finally
                     {
@@ -265,7 +285,12 @@ public sealed class WifiSensorSource : ISensorSource
                 .FirstOrDefault(e => e.Name.LocalName == "enableRandomization");
             if (element is null) return null;
 
-            return element.Value.Trim() is "1" or "true";
+            return element.Value.Trim().ToLowerInvariant() switch
+            {
+                "1" or "true" => true,
+                "0" or "false" => false,
+                _ => null
+            };
         }
         catch (Exception ex) when (ex is System.Xml.XmlException or FormatException)
         {

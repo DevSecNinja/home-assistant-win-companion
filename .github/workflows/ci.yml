@@ -59,6 +59,10 @@ jobs:
         run: >-
           dotnet restore tests\WindowsCompanion.Core.Tests\WindowsCompanion.Core.Tests.csproj
           --nologo
+      - name: Restore App-boundary tests
+        run: >-
+          dotnet restore tests\WindowsCompanion.App.Tests\WindowsCompanion.App.Tests.csproj
+          --nologo
       - name: Build Windows app
         run: >-
           dotnet build src\WindowsCompanion.App\WindowsCompanion.App.csproj -c Release
@@ -92,6 +96,11 @@ jobs:
         run: >-
           dotnet test tests\WindowsCompanion.Core.Tests\WindowsCompanion.Core.Tests.csproj -c Release --no-restore --logger "trx;LogFileName=test-results.trx"
           --results-directory TestResults --nologo
+      - name: Run App-boundary tests
+        id: app-tests
+        run: >-
+          dotnet test tests\WindowsCompanion.App.Tests\WindowsCompanion.App.Tests.csproj -c Release --no-restore --logger "trx;LogFileName=app-test-results.trx"
+          --results-directory AppTestResults --nologo
       - name: Publish test summary
         if: ${{ always() }}
         shell: pwsh
@@ -112,10 +121,12 @@ jobs:
             "| $($counters.total) | $($counters.passed) | $($counters.failed) | $($counters.notExecuted) |"
           ) >> $env:GITHUB_STEP_SUMMARY
       - name: Upload test results
-        if: ${{ always() && steps.tests.outcome != 'skipped' }}
+        if: ${{ always() && (steps.tests.outcome != 'skipped' || steps.app-tests.outcome != 'skipped') }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: test-results
-          path: TestResults\*.trx
+          path: |
+            TestResults\*.trx
+            AppTestResults\*.trx
           if-no-files-found: error
           retention-days: 14

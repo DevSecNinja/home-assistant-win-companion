@@ -17,6 +17,7 @@ $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $project = Join-Path $repoRoot 'src\WindowsCompanion.App\WindowsCompanion.App.csproj'
 $tests = Join-Path $repoRoot 'tests\WindowsCompanion.Core.Tests\WindowsCompanion.Core.Tests.csproj'
+$appTests = Join-Path $repoRoot 'tests\WindowsCompanion.App.Tests\WindowsCompanion.App.Tests.csproj'
 if (-not $OutputDirectory) {
     $OutputDirectory = Join-Path $repoRoot "artifacts\release\$Version"
 } elseif (-not [System.IO.Path]::IsPathRooted($OutputDirectory)) {
@@ -35,6 +36,9 @@ if (Test-Path $OutputDirectory) {
 Write-Host 'Running Core tests...' -ForegroundColor Cyan
 & $dotnet test $tests -c Release --nologo
 if ($LASTEXITCODE -ne 0) { throw 'Tests failed.' }
+Write-Host 'Running App-boundary tests...' -ForegroundColor Cyan
+& $dotnet test $appTests -c Release --nologo
+if ($LASTEXITCODE -ne 0) { throw 'App-boundary tests failed.' }
 
 $targets = @(
     @{ Platform = 'x64'; Runtime = 'win-x64' }
@@ -55,6 +59,7 @@ foreach ($target in $targets) {
         -r $runtime `
         --self-contained true `
         -p:Version=$Version `
+        -p:OfficialBuild=true `
         -p:PublishDir=$publishDirectory `
         --nologo
     if ($LASTEXITCODE -ne 0) { throw "Publish failed for $runtime." }

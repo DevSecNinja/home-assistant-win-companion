@@ -3,6 +3,7 @@ using WindowsCompanion.Core.HomeAssistant;
 using WindowsCompanion.Core.Lifecycle;
 using WindowsCompanion.Core.Models;
 using WindowsCompanion.Core.Sensors;
+using WindowsCompanion.Core.Updates;
 using WindowsCompanion_App.Services;
 using Microsoft.Extensions.Logging;
 
@@ -26,6 +27,7 @@ public sealed class AppController : IAsyncDisposable
     private static readonly TimeSpan FinalLifecyclePushTimeout = TimeSpan.FromSeconds(2);
 
     private readonly HttpClient _http = new();
+    private readonly HttpClient _updateHttp;
     private readonly WindowsSecretStore _secrets = new();
     private readonly SessionStore _settings;
     private readonly WindowsSystemStatusProvider _status = new();
@@ -42,6 +44,8 @@ public sealed class AppController : IAsyncDisposable
         });
 
     private readonly HttpRouteProbe _probe;
+    private readonly StartupUpdateService _startupUpdates;
+    private readonly CancellationTokenSource _updateCheckCancellation = new();
 
     private ServerConfig? _config;
     private ConnectionManager? _connection;
@@ -50,9 +54,21 @@ public sealed class AppController : IAsyncDisposable
     private RouteSupervisor? _supervisor;
     private CancellationTokenSource? _networkSettle;
     private int _disposeStarted;
+    private Task? _updateCheckTask;
+    private int _updateCheckStarted;
+    private AvailableUpdate? _availableUpdate;
 
     public AppController()
     {
+        var installedBuild = InstalledBuildResolver.Current();
+        _updateHttp = GitHubReleaseClient.CreateHttpClient();
+        _startupUpdates = new StartupUpdateService(
+            installedBuild,
+            new GitHubReleaseClient(
+                _updateHttp,
+                installedBuild.Version?.ToString() ?? "source"),
+            new UpdateNotificationSink(NotifyUpdateAvailable),
+            _loggerFactory.CreateLogger<StartupUpdateService>());
         _login = new OAuthLoginService(_http);
         _settings = new SessionStore(new SettingsStore(), _secrets);
         _lifecycle = new ConnectionLifecycle(_loggerFactory.CreateLogger<ConnectionLifecycle>());
@@ -63,6 +79,37 @@ public sealed class AppController : IAsyncDisposable
             log: _loggerFactory.CreateLogger<HttpRouteProbe>());
         _network.NetworkChanged += OnNetworkChanged;
         _network.Start();
+    }
+
+    /// <summary>
+    /// Starts the one best-effort release lookup for this process without delaying
+    /// window creation or Home Assistant connection work.
+    /// </summary>
+    public void StartUpdateCheck()
+    {
+        if (Interlocked.Exchange(ref _updateCheckStarted, 1) != 0) return;
+        _updateCheckTask = _startupUpdates.CheckAsync(_updateCheckCancellation.Token);
+    }
+
+    /// <summary>The release announced during this process, if any.</summary>
+    public AvailableUpdate? AvailableUpdate => Volatile.Read(ref _availableUpdate);
+
+    /// <summary>Raised after the update toast is shown so the tray can show its badge.</summary>
+    public event Action<AvailableUpdate>? UpdateAvailable;
+
+    private void NotifyUpdateAvailable(AvailableUpdate update)
+    {
+        Volatile.Write(ref _availableUpdate, update);
+        try
+        {
+            _toasts.Show(update);
+        }
+        finally
+        {
+            // The tray badge and window banner remain useful even if the Windows
+            // notification platform rejects this individual toast.
+            UpdateAvailable?.Invoke(update);
+        }
     }
 
     public ConnectionState State => _connection?.State ?? ConnectionState.Disconnected;
@@ -212,6 +259,12 @@ public sealed class AppController : IAsyncDisposable
 
     /// <summary>Raised when routing changes, so the UI can refresh its labels.</summary>
     public event Action? RouteChanged;
+
+    private sealed class UpdateNotificationSink(Action<AvailableUpdate> notify)
+        : IUpdateNotificationSink
+    {
+        public void Show(AvailableUpdate update) => notify(update);
+    }
 
     /// <summary>Resumes a previously saved session, if one exists and is usable.</summary>
     /// <remarks>
@@ -889,6 +942,10 @@ public sealed class AppController : IAsyncDisposable
 
         try
         {
+            await _updateCheckCancellation.CancelAsync().ConfigureAwait(false);
+            if (_updateCheckTask is not null)
+                await _updateCheckTask.ConfigureAwait(false);
+
             _network.NetworkChanged -= OnNetworkChanged;
             _network.Stop();
             _networkSettle?.Cancel();
@@ -904,6 +961,8 @@ public sealed class AppController : IAsyncDisposable
         }
         finally
         {
+            _updateCheckCancellation.Dispose();
+            _updateHttp.Dispose();
             _lifecycle.Dispose();
             _http.Dispose();
         }

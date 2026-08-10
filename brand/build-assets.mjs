@@ -128,6 +128,8 @@ async function onCanvas(svg, width, height, coverage, background = null) {
 
 const markSvg = await readMaster('mark.svg');
 const mark16Svg = await readMaster('mark-16.svg');
+const updateMarkSvg = await readMaster('mark-update.svg');
+const updateMark16Svg = await readMaster('mark-update-16.svg');
 
 // ---------------------------------------------------------------------------
 // Windows application icon
@@ -206,19 +208,27 @@ function encodeIco(entries) {
   return Buffer.concat([directory, ...entries.map((entry) => entry.payload)]);
 }
 
-console.log('Windows application icon');
-const icoEntries = [];
-for (const size of ICO_SIZES) {
-  const svg = size === 16 ? mark16Svg : markSvg;
-  const png = await render(svg, size);
-  if (size >= ICO_PNG_FROM) {
-    icoEntries.push({ size, payload: png });
-  } else {
-    const rgba = await sharp(png).ensureAlpha().raw().toBuffer();
-    icoEntries.push({ size, payload: encodeIcoDib(rgba, size) });
+async function buildIco(fullSvg, hintedSvg) {
+  const entries = [];
+  for (const size of ICO_SIZES) {
+    const svg = size === 16 ? hintedSvg : fullSvg;
+    const png = await render(svg, size);
+    if (size >= ICO_PNG_FROM) {
+      entries.push({ size, payload: png });
+    } else {
+      const rgba = await sharp(png).ensureAlpha().raw().toBuffer();
+      entries.push({ size, payload: encodeIcoDib(rgba, size) });
+    }
   }
+  return encodeIco(entries);
 }
-await emit(path.join(APP_ASSETS, 'AppIcon.ico'), encodeIco(icoEntries));
+
+console.log('Windows application icons');
+await emit(path.join(APP_ASSETS, 'AppIcon.ico'), await buildIco(markSvg, mark16Svg));
+await emit(
+  path.join(APP_ASSETS, 'UpdateIcon.ico'),
+  await buildIco(updateMarkSvg, updateMark16Svg),
+);
 
 // ---------------------------------------------------------------------------
 // Windows packaging assets

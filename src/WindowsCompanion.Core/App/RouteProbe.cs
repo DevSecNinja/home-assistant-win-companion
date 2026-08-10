@@ -184,8 +184,8 @@ public sealed class HttpRouteProbe : IRouteProbe
         }
         catch (HttpRequestException ex)
         {
-            _log.LogDebug("The {Route} address could not be reached: {Reason}.",
-                route, ex.Message);
+            _log.LogDebug("The {Route} address could not be reached ({ErrorType}).",
+                route, ex.GetType().Name);
             return new RouteProbeResult(route, RouteProbeStatus.Unreachable,
                 Message: "The address could not be reached from this network.");
         }
@@ -193,8 +193,8 @@ public sealed class HttpRouteProbe : IRouteProbe
         {
             // Something is listening but is not an HTTP server. Treat it as a
             // dead address rather than letting the raw transport error escape.
-            _log.LogDebug("The {Route} address did not speak HTTP: {Reason}.",
-                route, ex.Message);
+            _log.LogDebug("The {Route} address did not speak HTTP ({ErrorType}).",
+                route, ex.GetType().Name);
             return new RouteProbeResult(route, RouteProbeStatus.NotHomeAssistant,
                 Message: "The address did not speak the HTTP protocol expected by "
                          + "Home Assistant.");

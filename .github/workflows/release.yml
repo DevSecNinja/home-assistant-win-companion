@@ -234,8 +234,8 @@ jobs:
 
           Download the setup package matching your PC:
 
-          - **x64** (Intel/AMD): \`WindowsCompanion-${VERSION}-win-x64-setup.zip\`
-          - **ARM64**: \`WindowsCompanion-${VERSION}-win-arm64-setup.zip\`
+          - **x64** (Intel/AMD): [WindowsCompanion-${VERSION}-win-x64-setup.zip](https://github.com/${REPO}/releases/download/${TAG}/WindowsCompanion-${VERSION}-win-x64-setup.zip)
+          - **ARM64**: [WindowsCompanion-${VERSION}-win-arm64-setup.zip](https://github.com/${REPO}/releases/download/${TAG}/WindowsCompanion-${VERSION}-win-arm64-setup.zip)
 
           Extract the setup folder and run its setup executable. It installs per-user
           without administrator rights and adds Start Menu and Apps & Features entries.

@@ -21,6 +21,9 @@ param(
     [ValidateRange(1, 10)]
     [int]$RepeatCount = 1,
 
+    [ValidateSet('quiet', 'minimal', 'normal', 'detailed')]
+    [string]$Verbosity = 'normal',
+
     [ValidateRange(0, 100)]
     [double]$MinimumLineCoverage = 85,
 
@@ -70,7 +73,13 @@ function Invoke-TestProject {
         [string[]]$AdditionalArguments = @()
     )
 
-    $arguments = @('test', $Project, '--nologo')
+    $arguments = @(
+        'test'
+        $Project
+        '--nologo'
+        '--logger'
+        "console;verbosity=$Verbosity"
+    )
     if ($Configuration) { $arguments += @('-c', $Configuration) }
     if ($Filter) { $arguments += @('--filter', $Filter) }
     if ($ResultsDirectory) {

@@ -93,6 +93,7 @@ jobs:
         run: >-
           dotnet test tests\WindowsCompanion.E2E.Tests\WindowsCompanion.E2E.Tests.csproj -c Release
           -p:Platform=x64 -p:PublishReadyToRun=false -r win-x64 --no-restore
+          --logger "console;verbosity=detailed"
           --logger "trx;LogFileName=e2e-test-results.trx"
           --results-directory TestResults --nologo
       - name: Run Debug launch-profile safety tests
@@ -100,6 +101,7 @@ jobs:
           dotnet test tests\WindowsCompanion.E2E.Tests\WindowsCompanion.E2E.Tests.csproj -c Debug
           -p:Platform=x64 -r win-x64 --no-restore
           --filter "FullyQualifiedName~TestAppLaunchOptionsTests"
+          --logger "console;verbosity=detailed"
           --logger "trx;LogFileName=launch-profile-test-results.trx"
           --results-directory TestResults --nologo
       - name: Compile UI tests

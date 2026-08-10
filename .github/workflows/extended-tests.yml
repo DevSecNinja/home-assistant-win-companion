@@ -27,7 +27,7 @@ jobs:
         id: e2e-tests
         shell: pwsh
         run: >-
-          .\scripts\test.ps1 -EndToEnd -RepeatCount 10
+          .\scripts\test.ps1 -EndToEnd -RepeatCount 10 -Verbosity detailed
           -ResultsDirectory TestResults
       - name: Upload E2E results
         if: ${{ always() && steps.e2e-tests.outcome != 'skipped' }}
@@ -63,7 +63,7 @@ jobs:
         id: ui-tests
         shell: pwsh
         run: >-
-          .\scripts\test.ps1 -Ui -RepeatCount 10
+          .\scripts\test.ps1 -Ui -RepeatCount 10 -Verbosity detailed
           -ResultsDirectory TestResults
       - name: Upload UI results
         if: ${{ always() && steps.ui-tests.outcome != 'skipped' }}

@@ -50,7 +50,7 @@ jobs:
       - name: Set up .NET
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
-          dotnet-version: 9.0.x
+          dotnet-version: 10.0.x
       - name: Restore Windows app
         run: >-
           dotnet restore src\WindowsCompanion.App\WindowsCompanion.App.csproj
@@ -68,7 +68,7 @@ jobs:
         with:
           name: unsigned-windows-x64-${{ github.sha }}
           path: >-
-            src\WindowsCompanion.App\bin\x64\Release\net9.0-windows10.0.26100.0\win-x64\**
+            src\WindowsCompanion.App\bin\x64\Release\net10.0-windows10.0.26100.0\win-x64\**
           if-no-files-found: error
           retention-days: 14
       - name: Restore Windows ARM64 app
@@ -84,7 +84,7 @@ jobs:
         with:
           name: unsigned-windows-arm64-${{ github.sha }}
           path: >-
-            src\WindowsCompanion.App\bin\ARM64\Release\net9.0-windows10.0.26100.0\win-arm64\**
+            src\WindowsCompanion.App\bin\ARM64\Release\net10.0-windows10.0.26100.0\win-arm64\**
           if-no-files-found: error
           retention-days: 14
       - name: Run core tests

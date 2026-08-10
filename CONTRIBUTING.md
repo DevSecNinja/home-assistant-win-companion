@@ -5,7 +5,7 @@
 This is a native Windows desktop application, not a cross-platform .NET project.
 Use Windows 10 or 11 with:
 
-- The .NET 9 SDK.
+- The .NET 10 SDK.
 - The Windows SDK required by the app target framework.
 - Windows App Runtime 2.3.
 - Visual Studio 2022, Rider, or another editor capable of building WinUI 3.

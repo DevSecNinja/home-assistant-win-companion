@@ -20,7 +20,7 @@ the Open Home Foundation, Nabu Casa, or the Home Assistant project.
 - A Home Assistant instance with the built-in `mobile_app` integration.
 
 Versioned Releases are self-contained and do not require a separate .NET install.
-Source builds and CI test artifacts require the .NET 9 Desktop Runtime.
+Source builds and CI test artifacts require the .NET 10 Desktop Runtime.
 
 If Windows App Runtime is missing, the application exits during startup, commonly
 with `REGDB_E_CLASSNOTREG`.

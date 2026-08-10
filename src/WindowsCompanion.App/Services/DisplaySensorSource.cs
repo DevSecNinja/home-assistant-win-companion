@@ -22,12 +22,19 @@ namespace WindowsCompanion_App.Services;
 /// </remarks>
 public sealed class DisplaySensorSource : ISensorSource
 {
-    public const string DisplayCountId = "displays_count";
-    public const string DisplayResolutionId = "display_resolution";
+    public const string DisplayCountId = DisplayCapturePolicy.DisplayCountId;
+    public const string DisplayResolutionId = DisplayCapturePolicy.DisplayResolutionId;
 
-    private readonly ChangeGate<string> _summary = new(string.Empty);
+    private readonly SensorPreferences _preferences;
+    private readonly DisplayObservationGate _observations;
     private Action? _onChanged;
     private bool _observing;
+
+    public DisplaySensorSource(SensorPreferences preferences)
+    {
+        _preferences = preferences ?? throw new ArgumentNullException(nameof(preferences));
+        _observations = new DisplayObservationGate(CountDisplays, Enumerate);
+    }
 
     public IReadOnlyList<SensorDefinition> Definitions { get; } =
     [
@@ -37,7 +44,7 @@ public sealed class DisplaySensorSource : ISensorSource
             "How many displays are currently active on this PC.",
             SensorPrivacy.Benign,
             EnabledByDefault: true,
-            ResourceUsage: "Low. Does not check repeatedly. Reads display details and sends an "
+            ResourceUsage: "Low. Does not check repeatedly. Counts active displays and sends an "
                            + "extra update only when Windows reports a display change.",
             AutomationIdea: "When a second display connects, activate the office work scene."),
         new(
@@ -62,10 +69,8 @@ public sealed class DisplaySensorSource : ISensorSource
         // where the resolution sensor is off) never collects them at all.
         if (enabled.Contains(DisplayResolutionId))
         {
-            var displays = Enumerate();
+            var displays = _observations.CaptureDetails();
             var summary = DisplaySummary.Describe(displays);
-            _summary.Seed(summary);
-
             var count = DisplaySummary.Count(displays);
 
             if (enabled.Contains(DisplayCountId))
@@ -95,7 +100,7 @@ public sealed class DisplaySensorSource : ISensorSource
         }
         else if (enabled.Contains(DisplayCountId))
         {
-            var count = CountDisplays();
+            var count = _observations.CaptureCount();
             readings.Add(new Sensor
             {
                 UniqueId = DisplayCountId,
@@ -142,7 +147,7 @@ public sealed class DisplaySensorSource : ISensorSource
         _onChanged = onChanged;
         if (_observing) return;
 
-        _summary.Seed(DisplaySummary.Describe(Enumerate()));
+        _observations.Seed(DisplayCapturePolicy.For(EnabledIds()));
         SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;
         _observing = true;
     }
@@ -161,9 +166,15 @@ public sealed class DisplaySensorSource : ISensorSource
     /// </summary>
     private void OnDisplaySettingsChanged(object? sender, EventArgs e)
     {
-        if (_summary.TryUpdate(DisplaySummary.Describe(Enumerate())))
+        if (_observations.TryUpdate(DisplayCapturePolicy.For(EnabledIds())))
             _onChanged?.Invoke();
     }
+
+    private IReadOnlySet<string> EnabledIds() =>
+        Definitions
+            .Where(_preferences.IsEnabled)
+            .Select(definition => definition.UniqueId)
+            .ToHashSet(StringComparer.Ordinal);
 
     /// <summary>
     /// One pass over the active monitors: mode and DPI from the monitor APIs,

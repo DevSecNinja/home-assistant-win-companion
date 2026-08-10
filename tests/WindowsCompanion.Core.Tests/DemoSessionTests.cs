@@ -84,6 +84,20 @@ public class DemoSessionTests
         Assert.Equal(1, source.ReadCount);
     }
 
+    [Fact]
+    public async Task An_enabled_refreshable_sensor_is_refreshed_without_starting_its_poller()
+    {
+        var source = new RefreshableSource();
+        var demo = new DemoSession([source]);
+        demo.SetSensorEnabled(RefreshableSource.Id, true);
+
+        var preview = await demo.PreviewAsync();
+
+        Assert.Equal("Refreshed", preview[RefreshableSource.Id]);
+        Assert.Equal(1, source.RefreshCount);
+        Assert.Equal(0, source.StartCount);
+    }
+
     private sealed class SensitiveSource : ISensorSource
     {
         public const string Id = "demo_sensitive";
@@ -153,5 +167,36 @@ public class DemoSessionTests
         }
 
         public void Stop() => IsRunning = false;
+    }
+
+    private sealed class RefreshableSource : ISensorSource, IRefreshableSensorSource
+    {
+        public const string Id = "demo_refreshable";
+
+        private string _state = "Checking";
+
+        public int RefreshCount { get; private set; }
+        public int StartCount { get; private set; }
+
+        public IReadOnlyList<SensorDefinition> Definitions { get; } =
+            [new(Id, "Refreshable", "Test sensor.", SensorPrivacy.Sensitive, false)];
+
+        public IReadOnlyList<Sensor> Read(IReadOnlySet<string> enabled, SensorReadContext context) =>
+            enabled.Contains(Id)
+                ? [new Sensor { UniqueId = Id, Name = "Refreshable", State = _state }]
+                : [];
+
+        public Task RefreshAsync(CancellationToken cancellationToken = default)
+        {
+            RefreshCount++;
+            _state = "Refreshed";
+            return Task.CompletedTask;
+        }
+
+        public void Start(Action onChanged) => StartCount++;
+
+        public void Stop()
+        {
+        }
     }
 }

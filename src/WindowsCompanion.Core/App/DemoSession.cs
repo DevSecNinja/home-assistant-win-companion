@@ -53,10 +53,16 @@ public sealed class DemoSession
     public void SetSensorEnabled(string uniqueId, bool enabled) =>
         _catalog.SetEnabled(uniqueId, enabled);
 
-    /// <summary>Reads what every sensor would report, locally.</summary>
-    public Task<IReadOnlyDictionary<string, string>> PreviewAsync(
-        CancellationToken cancellationToken = default) =>
-        _catalog.PreviewAsync(cancellationToken);
+    /// <summary>
+    /// Reads what every sensor would report, locally. Expensive sources that the
+    /// user enabled get one explicit refresh without starting their poll loops.
+    /// </summary>
+    public async Task<IReadOnlyDictionary<string, string>> PreviewAsync(
+        CancellationToken cancellationToken = default)
+    {
+        await _catalog.RefreshAsync(cancellationToken).ConfigureAwait(false);
+        return await _catalog.PreviewAsync(cancellationToken).ConfigureAwait(false);
+    }
 
     /// <summary>
     /// Ends the demo. Nothing should be running, so this only releases a source

@@ -109,7 +109,7 @@ $platform = 'x64'
 # dotnet is not always on PATH.
 $dotnet = (Get-Command dotnet -ErrorAction SilentlyContinue)?.Source
 if (-not $dotnet) { $dotnet = 'C:\Program Files\dotnet\dotnet.exe' }
-if (-not (Test-Path $dotnet)) { throw 'Could not find dotnet. Install the .NET 9 SDK.' }
+if (-not (Test-Path $dotnet)) { throw 'Could not find dotnet. Install the .NET 10 SDK.' }
 
 Write-Host "Building ($Configuration|$platform)..." -ForegroundColor Cyan
 & $dotnet build $project -c $Configuration -p:Platform=$platform --nologo

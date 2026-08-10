@@ -58,7 +58,7 @@ is about *fit*, not quality.
 | Extra infrastructure | None | MQTT broker |
 | Notifications | `mobile_app` local push, same as the macOS/iOS apps | MQTT + custom integration; supports images and actionable buttons |
 | Sign-in | OAuth2 in your browser, no token to paste | Long-lived token + MQTT credentials |
-| UI framework | WinUI 3 (Windows App SDK), .NET 9 | WinForms + Syncfusion, .NET 6 |
+| UI framework | WinUI 3 (Windows App SDK), .NET 10 | WinForms + Syncfusion, .NET 6 |
 | Home Assistant UI | Opens your default browser | Built-in WebView |
 | Sensors | Small, curated, opt-in per sensor | ~37 built in |
 | Commands / media player / quick actions | Not offered | Yes |
@@ -84,9 +84,11 @@ one that just works with stock Home Assistant.**
   APNS/FCM equivalent).
 - **Opt-in sensor catalog** — battery, active/idle, screen locked, connection type,
   IPv4/IPv6 address, LAN MAC address, Wi-Fi SSID/BSSID, OS version, PC model, last
-  boot, display count and resolution, dark mode, locale and time zone, system-drive
-  usage, notification/presentation state, microphone and camera use, audio output,
-  headset presence, WinGet update count, system lifecycle state, and an optional
+  boot, joined domain/workgroup and Microsoft Entra ID status, display count and
+  resolution, dark mode, locale
+  and time zone, system-drive usage, notification/presentation state, microphone
+  and camera use, audio output, headset presence, WinGet update count, system
+  lifecycle state, and an optional
   frontmost-app/last-update value. Each sensor can be switched on or off
   individually, shows a local preview, and privacy-sensitive ones are off by
   default. A privacy-sensitive value is only read once you enable that sensor —
@@ -123,8 +125,8 @@ not merely filtered out.
 ## Requirements
 
 - Windows 10 (build 19041+) or Windows 11
-- [.NET 9 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/9.0) to run
-- [.NET 9 SDK](https://dotnet.microsoft.com/download) to build from source
+- [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0) to run
+- [.NET 10 SDK](https://dotnet.microsoft.com/download) to build from source
 - **Windows App Runtime 2.3** — the app ships unpackaged and uses the Windows App SDK
   bootstrapper. Without it the app exits at startup with `REGDB_E_CLASSNOTREG`. The
   MSIX packages ship inside the `Microsoft.WindowsAppSDK.Runtime` NuGet package under

@@ -90,6 +90,15 @@ public sealed class AppController : IAsyncDisposable
     /// <summary>The sensor catalog, once a session exists. Null before sign-in.</summary>
     public SensorCatalog? Catalog => _catalog;
 
+    /// <summary>Reads local previews, refreshing enabled demo-only sources once.</summary>
+    public Task<IReadOnlyDictionary<string, string>> PreviewSensorsAsync(
+        CancellationToken cancellationToken = default) =>
+        _demo is not null
+            ? _demo.PreviewAsync(cancellationToken)
+            : _catalog?.PreviewAsync(cancellationToken)
+              ?? Task.FromResult<IReadOnlyDictionary<string, string>>(
+                  new Dictionary<string, string>(StringComparer.Ordinal));
+
     /// <summary>When sensor states were last pushed to Home Assistant successfully.</summary>
     public DateTimeOffset? LastSyncedAt => _connection?.LastSyncedAt;
 
@@ -623,7 +632,8 @@ public sealed class AppController : IAsyncDisposable
         new NetworkSensorSource(preferences),
         new WifiSensorSource(preferences),
         new SystemSensorSource(),
-        new DisplaySensorSource(),
+        new DomainSensorSource(preferences),
+        new DisplaySensorSource(preferences),
         new WindowsThemeSensorSource(),
         new LocaleSensorSource(),
         new DiskUsageSensorSource(),

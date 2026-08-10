@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.3.0](https://github.com/DevSecNinja/home-assistant-win-companion/compare/v0.2.0...v0.3.0) (2026-08-10)
+
+
+### Features
+
+* add sensor for joined Active Directory domain / workgroup ([#104](https://github.com/DevSecNinja/home-assistant-win-companion/issues/104)) ([f544d65](https://github.com/DevSecNinja/home-assistant-win-companion/commit/f544d6582166c501cc6fa653763b09c7d355f6bc))
+* **deps:** Update dependency coverlet.collector ( 6.0.4 ➔ 10.0.1 ) ([b450fc1](https://github.com/DevSecNinja/home-assistant-win-companion/commit/b450fc154107511421229aad2a4731a570a29628))
+* **deps:** update dependency microsoft.net.test.sdk ( 17.12.0 ➔ 17.14.1 ) [automerge] ([#96](https://github.com/DevSecNinja/home-assistant-win-companion/issues/96)) ([3c55297](https://github.com/DevSecNinja/home-assistant-win-companion/commit/3c55297515aa7ffe4cd624ff0f068c323552cfa8))
+* **deps:** Update dependency Microsoft.NET.Test.Sdk ( 17.14.1 ➔ 18.8.1 ) ([#99](https://github.com/DevSecNinja/home-assistant-win-companion/issues/99)) ([8ce4204](https://github.com/DevSecNinja/home-assistant-win-companion/commit/8ce42043e11b9287ff4a78767bf81df795d0d0ef))
+* **deps:** Update dependency xunit.runner.visualstudio ( 2.8.2 ➔ 3.1.5 ) ([#100](https://github.com/DevSecNinja/home-assistant-win-companion/issues/100)) ([dcaf731](https://github.com/DevSecNinja/home-assistant-win-companion/commit/dcaf731e6e919cbf505d2316c89fa092e388c480))
+* migrate to .NET 10 ([#110](https://github.com/DevSecNinja/home-assistant-win-companion/issues/110)) ([3816786](https://github.com/DevSecNinja/home-assistant-win-companion/commit/381678680a8bb566dab6d36ad8adb55748b410a3))
+* **mise:** update tool zizmor ( 1.26.1 ➔ 1.28.0 ) [automerge] ([#97](https://github.com/DevSecNinja/home-assistant-win-companion/issues/97)) ([99ee342](https://github.com/DevSecNinja/home-assistant-win-companion/commit/99ee342ba260590795df72ce5a1ce01822602435))
+
+
+### Bug Fixes
+
+* **deps:** update dependency coverlet.collector ( 6.0.2 ➔ 6.0.4 ) [automerge] ([#92](https://github.com/DevSecNinja/home-assistant-win-companion/issues/92)) ([c189c28](https://github.com/DevSecNinja/home-assistant-win-companion/commit/c189c28f9b98e4c6c2337a4fd2bea59dfbe274d5))
+* **deps:** update dependency xunit ( 2.9.2 ➔ 2.9.3 ) [automerge] ([#93](https://github.com/DevSecNinja/home-assistant-win-companion/issues/93)) ([f30053e](https://github.com/DevSecNinja/home-assistant-win-companion/commit/f30053e8b7d525d22b2c99eca4c1a7471d5e4905))
+* **github-release:** update release jdx/mise ( v2026.7.12 ➔ v2026.7.14 ) [automerge] ([#88](https://github.com/DevSecNinja/home-assistant-win-companion/issues/88)) ([6a22ad5](https://github.com/DevSecNinja/home-assistant-win-companion/commit/6a22ad5116ae718e1e554bd405988613d8782a64))
+* **mise:** update tool pipx:checkov ( 3.3.6 ➔ 3.3.8 ) [automerge] ([#94](https://github.com/DevSecNinja/home-assistant-win-companion/issues/94)) ([58072bd](https://github.com/DevSecNinja/home-assistant-win-companion/commit/58072bd34e55f15fb253b3df88fcd40b4c2707a4))
+* track Inno Setup compiler pin with Renovate ([d33ef4d](https://github.com/DevSecNinja/home-assistant-win-companion/commit/d33ef4db0b64e9ee40d94ce349fec33f71911b1c))
+
 ## [0.2.0](https://github.com/DevSecNinja/home-assistant-win-companion/compare/v0.1.0...v0.2.0) (2026-08-09)
 
 

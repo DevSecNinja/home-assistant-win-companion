@@ -243,6 +243,8 @@ public sealed partial class MainWindow : Window
         UpdateNowButton.Visibility = serverActions;
         DisconnectButton.Visibility = serverActions;
         RemoveServerButton.Visibility = serverActions;
+        TrayOpenHomeAssistantItem.Visibility = serverActions;
+        TrayDisconnectItem.Visibility = serverActions;
     }
 
     private async void OnDisconnect(object sender, RoutedEventArgs e)
@@ -840,7 +842,7 @@ public sealed partial class MainWindow : Window
         if (catalog is null) return false;
 
         var buildVersion = ++_sensorListBuildVersion;
-        var previews = await catalog.PreviewAsync();
+        var previews = await _controller.PreviewSensorsAsync();
         if (buildVersion != _sensorListBuildVersion
             || !ReferenceEquals(catalog, _controller.Catalog)
             || (!_controller.IsDemoMode
@@ -1151,10 +1153,15 @@ public sealed partial class MainWindow : Window
             var dialog = new ContentDialog
             {
                 XamlRoot = Content.XamlRoot,
-                Title = "Share full window titles?",
+                Title = _controller.IsDemoMode
+                    ? "Show full window titles locally?"
+                    : "Share full window titles?",
                 Content = "Window titles can contain document names, messages, customer names "
-                          + "and complete website titles. This value will be sent to your Home "
-                          + "Assistant server whenever the sensor reports.",
+                          + (_controller.IsDemoMode
+                              ? "and complete website titles. In demo mode, this value is shown "
+                                + "only on this device and is not saved or sent."
+                              : "and complete website titles. This value will be sent to your Home "
+                                + "Assistant server whenever the sensor reports."),
                 PrimaryButtonText = "Use full titles",
                 CloseButtonText = "Keep application names",
                 DefaultButton = ContentDialogButton.Close

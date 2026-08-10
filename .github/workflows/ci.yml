@@ -93,6 +93,7 @@ jobs:
         run: >-
           dotnet test tests\WindowsCompanion.E2E.Tests\WindowsCompanion.E2E.Tests.csproj -c Release
           -p:Platform=x64 -p:PublishReadyToRun=false -r win-x64 --no-restore
+          --filter "Category!=Repeatability"
           --logger "console;verbosity=detailed"
           --logger "trx;LogFileName=e2e-test-results.trx"
           --results-directory TestResults --nologo

@@ -51,6 +51,23 @@ public sealed record NetworkContext(
         Addresses.Count > 0
         || Kind == NetworkKind.Wired
         || (Kind == NetworkKind.Wireless && !string.IsNullOrEmpty(Ssid));
+
+    /// <summary>
+    /// Whether two snapshots describe the same routing profile. Adapter events often
+    /// repeat with a new list instance, which must not count as a new network.
+    /// </summary>
+    public bool HasSameRoutingProfile(NetworkContext other)
+    {
+        ArgumentNullException.ThrowIfNull(other);
+
+        return Kind == other.Kind
+               && string.Equals(Ssid, other.Ssid, StringComparison.Ordinal)
+               && string.Equals(Bssid, other.Bssid, StringComparison.OrdinalIgnoreCase)
+               && WirelessIdentityUnavailable == other.WirelessIdentityUnavailable
+               && VpnActive == other.VpnActive
+               && Addresses.Order(StringComparer.Ordinal)
+                   .SequenceEqual(other.Addresses.Order(StringComparer.Ordinal), StringComparer.Ordinal);
+    }
 }
 
 /// <summary>Supplies the current <see cref="NetworkContext"/> and change notifications.</summary>

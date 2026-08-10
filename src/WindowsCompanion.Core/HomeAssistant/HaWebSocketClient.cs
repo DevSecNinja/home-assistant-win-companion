@@ -23,6 +23,7 @@ public sealed class HaWebSocketClient
     private int _channelId;
 
     public event Action<NotificationMessage>? NotificationReceived;
+    public event Action? Authenticated;
 
     public HaWebSocketClient(
         Func<IHaSocket> socketFactory,
@@ -81,6 +82,7 @@ public sealed class HaWebSocketClient
 
                 case "auth_ok":
                     _log.LogInformation("WebSocket authenticated.");
+                    Authenticated?.Invoke();
                     _channelId = NextId();
                     await SendAsync(socket, new
                     {

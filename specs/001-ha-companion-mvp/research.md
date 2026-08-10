@@ -108,7 +108,13 @@ enabling run-in-background with show/hide/exit and status.
 
 ## Resilience notes
 
-- Reconnect uses exponential backoff (e.g., 1s, 2s, 4s … capped at 60s) with jitter.
+- Reconnect uses exponential backoff (1s, 2s, 4s … capped at 60s) with 0-20%
+  positive jitter. It resets only after 30 authenticated seconds; early clean
+  closes continue the progression.
+- Windows offline state uses a five-minute wait. A user retry or meaningful
+  network-profile change bypasses one wait, with duplicate signals coalesced.
+- Failed periodic sensor pushes back off to a 15-minute cap, and noisy sensor
+  changes do not queue pushes while reporting is already failing.
 - Subscribe to `SystemEvents.PowerModeChanged` / session resume to trigger immediate
   reconnect and a sensor refresh.
 - Auth failures (401/invalid token) transition to an `AuthError` state that stops the

@@ -17,7 +17,7 @@ public sealed class CapabilityUsageSensorSource : ISensorSource
         @"SOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore";
 
     private readonly SensorPreferences _preferences;
-    private readonly Func<string, bool> _readCapability;
+    private readonly Func<string, CancellationToken, bool> _readCapability;
     private readonly SensorPollLoop _loop;
     private readonly ChangeGate<ActivitySnapshot> _activity = new(default);
 
@@ -25,7 +25,7 @@ public sealed class CapabilityUsageSensorSource : ISensorSource
 
     public CapabilityUsageSensorSource(
         SensorPreferences preferences,
-        Func<string, bool>? readCapability = null,
+        Func<string, CancellationToken, bool>? readCapability = null,
         TimeSpan? pollInterval = null)
     {
         _preferences = preferences ?? throw new ArgumentNullException(nameof(preferences));
@@ -58,7 +58,7 @@ public sealed class CapabilityUsageSensorSource : ISensorSource
     public IReadOnlyList<Sensor> Read(
         IReadOnlySet<string> enabled, SensorReadContext context)
     {
-        var snapshot = Capture(enabled);
+        var snapshot = Capture(enabled, CancellationToken.None);
         return Build(snapshot, enabled);
     }
 
@@ -67,7 +67,7 @@ public sealed class CapabilityUsageSensorSource : ISensorSource
         _onChanged = onChanged;
         if (_loop.IsRunning) return;
 
-        _activity.Seed(Capture(EnabledIds()));
+        _activity.Seed(Capture(EnabledIds(), CancellationToken.None));
         _loop.Start();
     }
 
@@ -82,7 +82,9 @@ public sealed class CapabilityUsageSensorSource : ISensorSource
         CancellationToken cancellationToken)
     {
         var enabled = EnabledIds();
-        var current = await Task.Run(() => Capture(enabled), cancellationToken)
+        var current = await Task.Run(
+                () => Capture(enabled, cancellationToken),
+                cancellationToken)
             .ConfigureAwait(false);
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -95,9 +97,15 @@ public sealed class CapabilityUsageSensorSource : ISensorSource
             .Select(definition => definition.UniqueId)
             .ToHashSet(StringComparer.Ordinal);
 
-    private ActivitySnapshot Capture(IReadOnlySet<string> enabled) => new(
-        enabled.Contains(MicrophoneId) ? _readCapability("microphone") : null,
-        enabled.Contains(CameraId) ? _readCapability("webcam") : null);
+    private ActivitySnapshot Capture(
+        IReadOnlySet<string> enabled,
+        CancellationToken cancellationToken) => new(
+        enabled.Contains(MicrophoneId)
+            ? _readCapability("microphone", cancellationToken)
+            : null,
+        enabled.Contains(CameraId)
+            ? _readCapability("webcam", cancellationToken)
+            : null);
 
     private static IReadOnlyList<Sensor> Build(
         ActivitySnapshot snapshot, IReadOnlySet<string> enabled)
@@ -131,22 +139,28 @@ public sealed class CapabilityUsageSensorSource : ISensorSource
         return sensors;
     }
 
-    private static bool IsCapabilityActive(string capability)
+    private static bool IsCapabilityActive(
+        string capability,
+        CancellationToken cancellationToken)
     {
         var stops = new List<long?>();
-        Collect(RegistryHive.CurrentUser, capability, stops);
-        Collect(RegistryHive.LocalMachine, capability, stops);
+        Collect(RegistryHive.CurrentUser, capability, stops, cancellationToken);
+        Collect(RegistryHive.LocalMachine, capability, stops, cancellationToken);
         return CapabilityActivity.IsActive(stops);
     }
 
     private static void Collect(
-        RegistryHive hive, string capability, ICollection<long?> stops)
+        RegistryHive hive,
+        string capability,
+        ICollection<long?> stops,
+        CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         try
         {
             using var root = RegistryKey.OpenBaseKey(hive, RegistryView.Default);
             using var key = root.OpenSubKey($@"{ConsentStore}\{capability}");
-            if (key is not null) CollectRecursively(key, stops);
+            if (key is not null) CollectRecursively(key, stops, cancellationToken);
         }
         catch (UnauthorizedAccessException)
         {
@@ -162,17 +176,23 @@ public sealed class CapabilityUsageSensorSource : ISensorSource
         }
     }
 
-    private static void CollectRecursively(RegistryKey key, ICollection<long?> stops)
+    private static void CollectRecursively(
+        RegistryKey key,
+        ICollection<long?> stops,
+        CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         if (TryReadStop(key.GetValue("LastUsedTimeStop"), out var stop))
             stops.Add(stop);
 
         foreach (var name in key.GetSubKeyNames())
         {
+            cancellationToken.ThrowIfCancellationRequested();
             try
             {
                 using var child = key.OpenSubKey(name);
-                if (child is not null) CollectRecursively(child, stops);
+                if (child is not null)
+                    CollectRecursively(child, stops, cancellationToken);
             }
             catch (UnauthorizedAccessException)
             {

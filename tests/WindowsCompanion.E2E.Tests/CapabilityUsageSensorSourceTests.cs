@@ -52,6 +52,35 @@ public sealed class CapabilityUsageSensorSourceTests
         }
     }
 
+    [Fact]
+    public async Task Disabling_the_last_capability_cancels_collection_and_stops_polling()
+    {
+        var preferences = new SensorPreferences();
+        var probe = new BlockingCapabilityProbe();
+        var source = new CapabilityUsageSensorSource(
+            preferences,
+            probe.Read,
+            TimeSpan.FromMilliseconds(10));
+        var catalog = new SensorCatalog([source], preferences);
+        catalog.Start(() => { });
+
+        try
+        {
+            catalog.SetEnabled(CapabilityUsageSensorSource.MicrophoneId, true);
+            await probe.Entered.Task.WaitAsync(Timeout);
+
+            catalog.SetEnabled(CapabilityUsageSensorSource.MicrophoneId, false);
+
+            await probe.Cancelled.Task.WaitAsync(Timeout);
+            await Task.Delay(100);
+            Assert.Equal(2, Volatile.Read(ref probe.ReadCount));
+        }
+        finally
+        {
+            catalog.Stop();
+        }
+    }
+
     private sealed class CapabilityProbe
     {
         private readonly Channel<bool> _reads = Channel.CreateUnbounded<bool>();
@@ -63,7 +92,7 @@ public sealed class CapabilityUsageSensorSourceTests
             set => Volatile.Write(ref _active, value);
         }
 
-        public bool Read(string capability)
+        public bool Read(string capability, CancellationToken cancellationToken)
         {
             Assert.Equal("microphone", capability);
             _reads.Writer.TryWrite(true);
@@ -72,5 +101,35 @@ public sealed class CapabilityUsageSensorSourceTests
 
         public async Task WaitForReadAsync() =>
             await _reads.Reader.ReadAsync().AsTask().WaitAsync(Timeout);
+    }
+
+    private sealed class BlockingCapabilityProbe
+    {
+        public TaskCompletionSource Entered { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public TaskCompletionSource Cancelled { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public int ReadCount;
+
+        public bool Read(string capability, CancellationToken cancellationToken)
+        {
+            Assert.Equal("microphone", capability);
+            if (Interlocked.Increment(ref ReadCount) == 1) return false;
+
+            Entered.TrySetResult();
+            try
+            {
+                cancellationToken.WaitHandle.WaitOne();
+                cancellationToken.ThrowIfCancellationRequested();
+                return false;
+            }
+            catch (OperationCanceledException)
+            {
+                Cancelled.TrySetResult();
+                throw;
+            }
+        }
     }
 }

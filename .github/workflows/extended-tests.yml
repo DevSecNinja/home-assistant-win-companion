@@ -23,6 +23,34 @@ jobs:
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           dotnet-version: 10.0.x
+      - name: Restore Windows app
+        run: >-
+          dotnet restore src\WindowsCompanion.App\WindowsCompanion.App.csproj
+          -p:Platform=x64 -r win-x64 --nologo
+      - name: Install Windows App Runtime
+        shell: pwsh
+        run: |
+          $assets = Get-Content `
+            "src\WindowsCompanion.App\obj\project.assets.json" -Raw |
+            ConvertFrom-Json
+          $runtimeLibrary = $assets.libraries.PSObject.Properties.Name |
+            Where-Object { $_ -like "Microsoft.WindowsAppSDK.Runtime/*" } |
+            Select-Object -First 1
+          if (-not $runtimeLibrary) {
+            throw "The restored Windows App Runtime dependency was not found."
+          }
+          $runtimeVersion = $runtimeLibrary.Split("/", 2)[1]
+          $packageRoot = Join-Path `
+            "$env:USERPROFILE\.nuget\packages\microsoft.windowsappsdk.runtime\$runtimeVersion" `
+            "tools\MSIX\win10-x64"
+          @(
+            "Microsoft.WindowsAppRuntime.2.msix"
+            "Microsoft.WindowsAppRuntime.Main.2.msix"
+            "Microsoft.WindowsAppRuntime.Singleton.2.msix"
+            "Microsoft.WindowsAppRuntime.DDLM.2.msix"
+          ) | ForEach-Object {
+            Add-AppxPackage -Path (Join-Path $packageRoot $_) -ErrorAction Stop
+          }
       - name: Run ten E2E passes
         id: e2e-tests
         shell: pwsh

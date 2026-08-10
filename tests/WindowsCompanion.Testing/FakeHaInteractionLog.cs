@@ -1,10 +1,23 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace WindowsCompanion.Testing;
 
 /// <summary>Records sanitized scenario interactions and supports deterministic waits.</summary>
 public sealed class FakeHaInteractionLog
 {
+    private static readonly HashSet<string> CredentialPropertyNames =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+            "access_token",
+            "refresh_token",
+            "webhook_id",
+            "secret",
+            "token",
+            "authorization_code",
+            "code"
+        };
+
     private readonly object _gate = new();
     private readonly List<FakeHaInteraction> _interactions = [];
     private readonly List<Waiter> _waiters = [];
@@ -127,10 +140,30 @@ public sealed class FakeHaInteractionLog
     private JsonElement? Sanitize(object? payload)
     {
         if (payload is null) return null;
-        var json = JsonSerializer.Serialize(payload);
-        json = Redact(json);
-        using var document = JsonDocument.Parse(json);
+        var node = JsonSerializer.SerializeToNode(payload);
+        var sanitized = SanitizeNode(node);
+        using var document = JsonDocument.Parse(sanitized?.ToJsonString() ?? "null");
         return document.RootElement.Clone();
+    }
+
+    private JsonNode? SanitizeNode(JsonNode? node)
+    {
+        return node switch
+        {
+            JsonObject obj => new JsonObject(obj.Select(property =>
+                KeyValuePair.Create(
+                    Redact(property.Key),
+                    CredentialPropertyNames.Contains(property.Key)
+                        ? JsonValue.Create("[REDACTED]") as JsonNode
+                        : SanitizeNode(property.Value)))),
+            JsonArray array => new JsonArray(array
+                .Select(SanitizeNode)
+                .ToArray()),
+            JsonValue value when value.TryGetValue<string>(out var text) =>
+                JsonValue.Create(Redact(text)),
+            null => null,
+            _ => node.DeepClone()
+        };
     }
 
     private string Redact(string value)

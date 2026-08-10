@@ -71,8 +71,16 @@ public sealed class EvidenceContractTests
         {
             var controller = await fixture.ResumePreauthorizedAsync();
             const string failingStep = "verify-sensor-delivery";
-            const string sensitiveSensorValue = "synthetic-private-sensor-value";
+            const string sensitiveSensorValue = "synthetic \"private\\sensor\nvalue";
             fixture.Evidence.RegisterSensitiveValue(sensitiveSensorValue);
+            fixture.Scenario.Interactions.Record(
+                WindowsCompanion.Testing.FakeHaInteractionKind.Webhook,
+                "POST",
+                "sensitive-key",
+                new Dictionary<string, string>
+                {
+                    [sensitiveSensorValue] = "synthetic-value"
+                });
             var sensorId = CompanionJourneyFixture.DeterministicSensorSource.EnabledId;
             fixture.Sensors.SetState(sensorId, sensitiveSensorValue);
             fixture.Scenario.Faults.RejectSensorUniqueId = sensorId;
@@ -96,6 +104,12 @@ public sealed class EvidenceContractTests
             Assert.True(File.Exists(artifacts.MetadataPath));
             Assert.True(File.Exists(artifacts.InteractionLogPath));
             Assert.True(File.Exists(artifacts.AppLogPath));
+
+            using var interactions = JsonDocument.Parse(
+                await File.ReadAllTextAsync(artifacts.InteractionLogPath));
+            Assert.DoesNotContain(
+                EnumerateJsonStrings(interactions.RootElement),
+                value => value.Contains(sensitiveSensorValue, StringComparison.Ordinal));
 
             using var metadata = JsonDocument.Parse(
                 await File.ReadAllTextAsync(artifacts.MetadataPath));
@@ -144,10 +158,34 @@ public sealed class EvidenceContractTests
                 retained,
                 StringComparison.Ordinal);
         }
+
         finally
         {
             if (Directory.Exists(evidenceRoot))
                 Directory.Delete(evidenceRoot, recursive: true);
+        }
+    }
+
+    private static IEnumerable<string> EnumerateJsonStrings(JsonElement element)
+    {
+        switch (element.ValueKind)
+        {
+            case JsonValueKind.String:
+                yield return element.GetString() ?? string.Empty;
+                break;
+            case JsonValueKind.Object:
+                foreach (var property in element.EnumerateObject())
+                {
+                    yield return property.Name;
+                foreach (var value in EnumerateJsonStrings(property.Value))
+                    yield return value;
+                }
+                break;
+            case JsonValueKind.Array:
+                foreach (var item in element.EnumerateArray())
+                foreach (var value in EnumerateJsonStrings(item))
+                    yield return value;
+                break;
         }
     }
 }

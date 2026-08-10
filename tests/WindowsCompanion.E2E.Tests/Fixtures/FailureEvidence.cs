@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Microsoft.Extensions.Logging;
 using WindowsCompanion.Core.Models;
 using WindowsCompanion.Testing;
@@ -157,7 +158,7 @@ internal sealed class FailureEvidence : IDisposable
                 appLog = Path.GetFileName(appLogPath)
             }
         };
-        var metadataJson = Sanitize(JsonSerializer.Serialize(metadata, JsonOptions));
+        var metadataJson = SanitizeJson(JsonSerializer.Serialize(metadata, JsonOptions));
         await File.WriteAllTextAsync(
                 metadataPath,
                 metadataJson,
@@ -176,8 +177,14 @@ internal sealed class FailureEvidence : IDisposable
     {
         if (_scenario is not null)
         {
+            string[] sensitiveValues;
+            lock (_sensitiveGate) sensitiveValues = _sensitiveValues.ToArray();
             return await FakeHaEvidenceWriter
-                .WriteAsync(_scenario, EvidenceDirectory, cancellationToken)
+                .WriteAsync(
+                    _scenario,
+                    EvidenceDirectory,
+                    sensitiveValues,
+                    cancellationToken)
                 .ConfigureAwait(false);
         }
 
@@ -199,9 +206,34 @@ internal sealed class FailureEvidence : IDisposable
         var content = await File.ReadAllTextAsync(path, cancellationToken).ConfigureAwait(false);
         await File.WriteAllTextAsync(
                 path,
-                Sanitize(content),
+                SanitizeJson(content),
                 cancellationToken)
             .ConfigureAwait(false);
+    }
+
+    private string SanitizeJson(string json)
+    {
+        var node = JsonNode.Parse(json)
+                   ?? throw new JsonException("Evidence JSON was empty.");
+        return SanitizeJsonNode(node)!.ToJsonString(JsonOptions);
+    }
+
+    private JsonNode? SanitizeJsonNode(JsonNode? node)
+    {
+        return node switch
+        {
+            JsonObject obj => new JsonObject(obj.Select(property =>
+                KeyValuePair.Create(
+                    Sanitize(property.Key),
+                    SanitizeJsonNode(property.Value)))),
+            JsonArray array => new JsonArray(array
+                .Select(SanitizeJsonNode)
+                .ToArray()),
+            JsonValue value when value.TryGetValue<string>(out var text) =>
+                JsonValue.Create(Sanitize(text)),
+            null => null,
+            _ => node.DeepClone()
+        };
     }
 
     private string Sanitize(string value)
@@ -222,11 +254,47 @@ internal sealed class FailureEvidence : IDisposable
         foreach (var path in paths)
         {
             var content = File.ReadAllText(path);
-            if (sensitive.Any(item => content.Contains(item, StringComparison.Ordinal)))
+            bool containsSensitive;
+            if (Path.GetExtension(path).Equals(".json", StringComparison.OrdinalIgnoreCase))
+            {
+                using var document = JsonDocument.Parse(content);
+                containsSensitive = EnumerateJsonStrings(document.RootElement)
+                    .Any(value => sensitive.Any(item =>
+                        value.Contains(item, StringComparison.Ordinal)));
+            }
+            else
+            {
+                containsSensitive = sensitive.Any(item =>
+                    content.Contains(item, StringComparison.Ordinal));
+            }
+            if (containsSensitive)
             {
                 throw new InvalidOperationException(
                     $"Failure evidence '{Path.GetFileName(path)}' contains a sensitive value.");
             }
+        }
+    }
+
+    private static IEnumerable<string> EnumerateJsonStrings(JsonElement element)
+    {
+        switch (element.ValueKind)
+        {
+            case JsonValueKind.String:
+                yield return element.GetString() ?? string.Empty;
+                break;
+            case JsonValueKind.Object:
+                foreach (var property in element.EnumerateObject())
+                {
+                    yield return property.Name;
+                foreach (var value in EnumerateJsonStrings(property.Value))
+                    yield return value;
+                }
+                break;
+            case JsonValueKind.Array:
+                foreach (var item in element.EnumerateArray())
+                foreach (var value in EnumerateJsonStrings(item))
+                    yield return value;
+                break;
         }
     }
 

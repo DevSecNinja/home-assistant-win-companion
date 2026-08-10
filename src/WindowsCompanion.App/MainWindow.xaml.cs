@@ -912,11 +912,10 @@ public sealed partial class MainWindow : Window
         // The tray tooltip is the at-a-glance view when the window is hidden.
         // The short name is used because Windows truncates the tooltip at 127
         // characters and the status summary can be long.
-        TrayIcon.ToolTipText = _availableUpdate is { } update
-            ? $"{Branding.ShortName} — Update v{update.AvailableVersion} available"
-            : healthy
-                ? $"{Branding.ShortName} — Healthy"
-                : $"{Branding.ShortName} — {summary}";
+        TrayIcon.ToolTipText = TrayTooltipFormatter.Format(
+            healthy,
+            summary,
+            _availableUpdate?.AvailableVersion);
     }
 
     private void OnOpenLog(object sender, RoutedEventArgs e) => _controller.OpenLogFile();

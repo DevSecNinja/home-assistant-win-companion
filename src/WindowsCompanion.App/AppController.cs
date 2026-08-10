@@ -100,8 +100,16 @@ public sealed class AppController : IAsyncDisposable
     private void NotifyUpdateAvailable(AvailableUpdate update)
     {
         Volatile.Write(ref _availableUpdate, update);
-        _toasts.Show(update);
-        UpdateAvailable?.Invoke(update);
+        try
+        {
+            _toasts.Show(update);
+        }
+        finally
+        {
+            // The tray badge and window banner remain useful even if the Windows
+            // notification platform rejects this individual toast.
+            UpdateAvailable?.Invoke(update);
+        }
     }
 
     public ConnectionState State => _connection?.State ?? ConnectionState.Disconnected;

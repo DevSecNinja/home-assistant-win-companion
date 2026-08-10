@@ -28,6 +28,12 @@
     <Compile
       Include="..\..\src\WindowsCompanion.App\Services\InstalledBuildResolver.cs"
       Link="AppBoundary\InstalledBuildResolver.cs" />
+    <Compile
+      Include="..\..\src\WindowsCompanion.App\Services\TrayTooltipFormatter.cs"
+      Link="AppBoundary\TrayTooltipFormatter.cs" />
+    <Compile
+      Include="..\..\src\WindowsCompanion.App\Branding.cs"
+      Link="AppBoundary\Branding.cs" />
   </ItemGroup>
 
 </Project>

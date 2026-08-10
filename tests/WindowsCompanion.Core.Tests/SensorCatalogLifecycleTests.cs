@@ -124,6 +124,50 @@ public class SensorCatalogLifecycleTests
         Assert.Equal(0, healthy.StartCount);
     }
 
+    [Fact]
+    public async Task A_preview_never_asks_a_source_for_a_sensitive_sensor_that_is_off()
+    {
+        var source = new RequestRecordingSource();
+        var preferences = new SensorPreferences();
+        var catalog = new SensorCatalog([source], preferences);
+
+        await catalog.PreviewAsync();
+        Assert.Equal([RequestRecordingSource.BenignId], source.LastRequested);
+
+        preferences.Set(RequestRecordingSource.SensitiveId, true);
+        await catalog.PreviewAsync();
+
+        Assert.Contains(RequestRecordingSource.SensitiveId, source.LastRequested!);
+    }
+
+    private sealed class RequestRecordingSource : ISensorSource
+    {
+        public const string BenignId = "recording_benign";
+        public const string SensitiveId = "recording_sensitive";
+
+        public IReadOnlySet<string>? LastRequested { get; private set; }
+
+        public IReadOnlyList<SensorDefinition> Definitions { get; } =
+        [
+            new(BenignId, "Benign", "Test sensor.", SensorPrivacy.Benign, false),
+            new(SensitiveId, "Sensitive", "Test sensor.", SensorPrivacy.Sensitive, false)
+        ];
+
+        public IReadOnlyList<Sensor> Read(IReadOnlySet<string> enabled, SensorReadContext context)
+        {
+            LastRequested = enabled;
+            return [];
+        }
+
+        public void Start(Action onChanged)
+        {
+        }
+
+        public void Stop()
+        {
+        }
+    }
+
     private sealed class CountingSource : ISensorSource
     {
         public const string PrimaryId = "counting_primary";

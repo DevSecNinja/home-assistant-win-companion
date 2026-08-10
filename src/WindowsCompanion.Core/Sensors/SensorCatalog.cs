@@ -112,14 +112,21 @@ public sealed class SensorCatalog
     }
 
     /// <summary>
-    /// Reads every sensor regardless of whether it is enabled, so the UI can show
-    /// the user exactly what a sensor would report before they switch it on.
-    /// Purely local: nothing produced here is transmitted.
+    /// Reads every sensor the user is allowed to see, so the UI can show exactly
+    /// what a sensor would report before they switch it on. Purely local: nothing
+    /// produced here is transmitted.
     /// </summary>
+    /// <remarks>
+    /// A privacy-sensitive sensor is only read once it is enabled. Gating here
+    /// rather than in each source means a new sensitive source cannot leak by
+    /// forgetting to apply <see cref="SensorPreviewGate"/> itself.
+    /// </remarks>
     public async Task<IReadOnlyDictionary<string, string>> PreviewAsync(
         CancellationToken cancellationToken = default)
     {
-        var all = Definitions.Select(d => d.UniqueId).ToHashSet(StringComparer.Ordinal);
+        var definitions = Definitions;
+        var all = definitions.Select(d => d.UniqueId).ToHashSet(StringComparer.Ordinal);
+        var permitted = SensorPreviewGate.Permitted(definitions, all, _preferences);
         var values = new Dictionary<string, string>(StringComparer.Ordinal);
 
         foreach (var source in _sources)
@@ -127,7 +134,7 @@ public sealed class SensorCatalog
             IReadOnlyList<Sensor> readings;
             try
             {
-                readings = await source.PreviewAsync(all, cancellationToken).ConfigureAwait(false);
+                readings = await source.PreviewAsync(permitted, cancellationToken).ConfigureAwait(false);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {

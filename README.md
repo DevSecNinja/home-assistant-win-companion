@@ -84,9 +84,10 @@ one that just works with stock Home Assistant.**
   APNS/FCM equivalent).
 - **Opt-in sensor catalog** — battery, active/idle, screen locked, connection type,
   IPv4/IPv6 address, LAN MAC address, Wi-Fi SSID/BSSID, OS version, PC model, last
-  boot, display count and resolution, dark mode, locale and time zone, system-drive
-  usage, notification/presentation state, microphone and camera use, audio output,
-  headset presence, WinGet update count, system lifecycle state, and an optional
+  boot, joined domain/workgroup, display count and resolution, dark mode, locale
+  and time zone, system-drive usage, notification/presentation state, microphone
+  and camera use, audio output, headset presence, WinGet update count, system
+  lifecycle state, and an optional
   frontmost-app/last-update value. Each sensor can be switched on or off
   individually, shows a local preview, and privacy-sensitive ones are off by
   default. Network identifiers are only read once you enable their own sensor —

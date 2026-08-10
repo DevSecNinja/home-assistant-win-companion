@@ -12,6 +12,7 @@ using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Automation.Peers;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Media;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.Graphics;
 
@@ -32,7 +33,7 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
     private readonly AppController _controller;
     private readonly DispatcherQueue _dispatcher;
     private readonly DispatcherQueueTimer _statusTimer;
-    private readonly WindowsStartupRegistration _startup = new();
+    private readonly IStartupRegistration _startup;
     private readonly RestartManagerShutdownMonitor _restartManagerShutdown;
     private readonly MainWindowActivation _windowActivation;
     private readonly bool _startHidden;
@@ -56,9 +57,12 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
     public ICommand TrayDisconnectCommand { get; }
     public ICommand TrayExitCommand { get; }
 
-    public MainWindow(bool startHidden = false)
+    public MainWindow(
+        bool startHidden = false,
+        IStartupRegistration? startupRegistration = null)
     {
         _controller = App.Controller;
+        _startup = startupRegistration ?? new WindowsStartupRegistration();
         _windowActivation = new MainWindowActivation(this);
         _updateActions = new UpdateUiActions(
             ActivateMainWindow,
@@ -98,6 +102,14 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
         _controller.UpdateStateChanged += OnUpdateStateChanged;
         ApplyUpdateState(_controller.UpdateState);
 
+        var showWindowCommand = new XamlUICommand();
+        showWindowCommand.ExecuteRequested += (_, _) => ActivateMainWindow();
+        TrayIcon.LeftClickCommand = showWindowCommand;
+#if DEBUG
+        if (App.TestLaunchOptions is { } testOptions)
+            TrayIcon.ToolTipText = testOptions.TrayIdentity;
+#endif
+
         // Kept in Core so the demo warning reads the same wherever it is shown.
         DemoBanner.Title = DemoSession.Title;
         DemoBanner.Message = DemoSession.Message;
@@ -126,6 +138,7 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
         try
         {
             var resumed = await _controller.TryResumeAsync();
+            _connected = resumed;
             ShowPanel(resumed);
             // Only offered once it is settled that there is no session to resume:
             // starting a demo alongside a connection in flight would make the app
@@ -210,6 +223,7 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
         try
         {
             await _controller.SignInAsync(url);
+            _connected = true;
             ApplyDemoChrome();
             ShowPanel(true);
             RefreshBattery();
@@ -340,6 +354,7 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
             CloseButtonText = "Cancel",
             DefaultButton = ContentDialogButton.Close
         };
+        PrepareDialog(dialog);
 
         if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
 
@@ -360,6 +375,9 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
         DemoModeButton.IsEnabled = true;
         ShowView(View.Connect);
 
+#if DEBUG
+        if (App.TestLaunchOptions is not null) return;
+#endif
         var removed = new ContentDialog
         {
             XamlRoot = Content.XamlRoot,
@@ -375,6 +393,7 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
             CloseButtonText = "Done",
             DefaultButton = ContentDialogButton.Close
         };
+        PrepareDialog(removed);
 
         if (await removed.ShowAsync() == ContentDialogResult.Primary
             && !string.IsNullOrWhiteSpace(homeAssistantUrl))
@@ -470,6 +489,15 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
         _loadingStartupSetting = true;
         try
         {
+            if (!_startup.IsSupported)
+            {
+                StartWithWindowsToggle.IsOn = false;
+                StartWithWindowsToggle.IsEnabled = false;
+                StartupStatusText.Text = "Unavailable in the isolated test profile.";
+                return;
+            }
+
+            StartWithWindowsToggle.IsEnabled = true;
             var state = _startup.GetState();
             var repaired = false;
             if (state == StartupRegistrationState.NeedsRepair)
@@ -502,7 +530,7 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
 
     private void OnStartWithWindowsToggled(object sender, RoutedEventArgs e)
     {
-        if (_loadingStartupSetting) return;
+        if (_loadingStartupSetting || !_startup.IsSupported) return;
 
         try
         {
@@ -652,6 +680,12 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
                 OffContent = string.Empty,
                 VerticalAlignment = VerticalAlignment.Center
             };
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetAutomationId(
+                toggle,
+                $"Sensors.Toggle.{definition.UniqueId}");
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(
+                toggle,
+                $"{definition.Name} enabled");
             toggle.Toggled += OnSensorToggled;
 
             var heading = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
@@ -824,6 +858,7 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
                 CloseButtonText = LifecycleSensorAdvisory.CloseButton,
                 DefaultButton = ContentDialogButton.Close
             };
+            PrepareDialog(advisory);
 
             toggle.IsEnabled = false;
             var answer = await advisory.ShowAsync();
@@ -1143,6 +1178,7 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
                 CloseButtonText = "Keep application names",
                 DefaultButton = ContentDialogButton.Close
             };
+            PrepareDialog(dialog);
 
             if (await dialog.ShowAsync() != ContentDialogResult.Primary)
             {
@@ -1174,5 +1210,53 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
     {
         ConnectError.Text = message;
         ConnectError.Visibility = Visibility.Visible;
+    }
+
+    private static void PrepareDialog(ContentDialog dialog)
+    {
+        dialog.PrimaryButtonStyle = DialogButtonStyle("Dialog.Primary");
+        dialog.CloseButtonStyle = DialogButtonStyle("Dialog.Cancel");
+        dialog.SecondaryButtonStyle = DialogButtonStyle("Dialog.Cancel");
+        dialog.Opened += (_, _) =>
+        {
+            foreach (var button in Descendants(dialog).OfType<Button>())
+            {
+                if (string.Equals(button.Name, "PrimaryButton", StringComparison.Ordinal)
+                    || Equals(button.Content, dialog.PrimaryButtonText))
+                {
+                    Microsoft.UI.Xaml.Automation.AutomationProperties.SetAutomationId(
+                        button,
+                        "Dialog.Primary");
+                }
+                else if (string.Equals(button.Name, "CloseButton", StringComparison.Ordinal)
+                         || string.Equals(button.Name, "SecondaryButton", StringComparison.Ordinal)
+                         || Equals(button.Content, dialog.CloseButtonText)
+                         || Equals(button.Content, dialog.SecondaryButtonText))
+                {
+                    Microsoft.UI.Xaml.Automation.AutomationProperties.SetAutomationId(
+                        button,
+                        "Dialog.Cancel");
+                }
+            }
+        };
+    }
+
+    private static Style DialogButtonStyle(string automationId)
+    {
+        var style = new Style(typeof(Button));
+        style.Setters.Add(new Setter(
+            Microsoft.UI.Xaml.Automation.AutomationProperties.AutomationIdProperty,
+            automationId));
+        return style;
+    }
+
+    private static IEnumerable<DependencyObject> Descendants(DependencyObject parent)
+    {
+        for (var index = 0; index < VisualTreeHelper.GetChildrenCount(parent); index++)
+        {
+            var child = VisualTreeHelper.GetChild(parent, index);
+            yield return child;
+            foreach (var descendant in Descendants(child)) yield return descendant;
+        }
     }
 }

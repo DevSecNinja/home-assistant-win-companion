@@ -110,6 +110,10 @@
     <ProjectReference Include="..\WindowsCompanion.Core\WindowsCompanion.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="WindowsCompanion.E2E.Tests" />
+  </ItemGroup>
+
   <!--
     Defining the "HasPackageAndPublishMenuAddedByProject" property here allows the Solution
     Explorer "Package and Publish" context menu entry to be enabled for this project even if

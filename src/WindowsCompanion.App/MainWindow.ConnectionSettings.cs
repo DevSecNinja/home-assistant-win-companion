@@ -288,6 +288,7 @@ public sealed partial class MainWindow
             CloseButtonText = "Keep current server",
             DefaultButton = ContentDialogButton.Close
         };
+        PrepareDialog(replace);
 
         if (await replace.ShowAsync() != ContentDialogResult.Primary) return;
 

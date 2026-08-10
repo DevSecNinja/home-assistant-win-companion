@@ -140,6 +140,44 @@ public class HardwareSensorTests
     }
 
     [Fact]
+    public void Display_count_never_permits_resolution_detail_collection()
+    {
+        var enabled = new HashSet<string>(StringComparer.Ordinal)
+        {
+            DisplayCapturePolicy.DisplayCountId
+        };
+
+        Assert.Equal(DisplayCaptureScope.CountOnly, DisplayCapturePolicy.For(enabled));
+
+        enabled.Add(DisplayCapturePolicy.DisplayResolutionId);
+        Assert.Equal(DisplayCaptureScope.Details, DisplayCapturePolicy.For(enabled));
+    }
+
+    [Fact]
+    public void Count_only_display_observation_never_captures_details()
+    {
+        var countCaptures = 0;
+        var detailCaptures = 0;
+        var observations = new DisplayObservationGate(
+            () =>
+            {
+                countCaptures++;
+                return 1;
+            },
+            () =>
+            {
+                detailCaptures++;
+                return [Display(1920, 1080, primary: true)];
+            });
+
+        observations.Seed(DisplayCaptureScope.CountOnly);
+        observations.TryUpdate(DisplayCaptureScope.CountOnly);
+
+        Assert.Equal(2, countCaptures);
+        Assert.Equal(0, detailCaptures);
+    }
+
+    [Fact]
     public void Disk_usage_rounds_to_values_worth_reporting()
     {
         var usage = new DiskUsage(1_000_000_000_000, 250_000_000_000);

@@ -16,6 +16,7 @@
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
@@ -31,19 +32,37 @@
             IconSource="Assets/AppIcon.ico">
             <tb:TaskbarIcon.ContextFlyout>
                 <MenuFlyout>
-                    <MenuFlyoutItem Text="Open Home Assistant" Click="OnOpenHomeAssistant" />
+                    <MenuFlyoutItem
+                        x:Name="TrayOpenHomeAssistantItem"
+                        Text="Open Home Assistant"
+                        Click="OnOpenHomeAssistant" />
                     <MenuFlyoutItem Text="Show Companion" Click="OnShowWindow" />
                     <MenuFlyoutSeparator />
-                    <MenuFlyoutItem Text="Disconnect" Click="OnDisconnect" />
+                    <MenuFlyoutItem
+                        x:Name="TrayDisconnectItem"
+                        Text="Disconnect"
+                        Click="OnDisconnect" />
                     <MenuFlyoutItem Text="Exit" Click="OnExit" />
                 </MenuFlyout>
             </tb:TaskbarIcon.ContextFlyout>
         </tb:TaskbarIcon>
 
+        <InfoBar
+            x:Name="DemoBanner"
+            Grid.Row="1"
+            Margin="24,4,24,0"
+            Severity="Warning"
+            IsOpen="False"
+            IsClosable="False">
+            <InfoBar.ActionButton>
+                <Button Content="Leave demo mode" Click="OnLeaveDemoMode" />
+            </InfoBar.ActionButton>
+        </InfoBar>
+
         <!-- Connect view -->
         <StackPanel
             x:Name="ConnectPanel"
-            Grid.Row="1"
+            Grid.Row="2"
             Width="380"
             Padding="24"
             VerticalAlignment="Center"
@@ -70,12 +89,23 @@
                 Foreground="{ThemeResource SystemFillColorCriticalBrush}"
                 TextWrapping="Wrap"
                 Visibility="Collapsed" />
+            <TextBlock
+                Text="No server yet? Try demo mode to browse every sensor and its current value on this PC. Nothing is sent to Home Assistant."
+                TextWrapping="Wrap"
+                FontSize="12"
+                Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+            <Button
+                x:Name="DemoModeButton"
+                Content="Explore in demo mode"
+                IsEnabled="False"
+                Click="OnEnterDemoMode"
+                HorizontalAlignment="Stretch" />
         </StackPanel>
 
         <!-- Status view -->
         <StackPanel
             x:Name="StatusPanel"
-            Grid.Row="1"
+            Grid.Row="2"
             Width="380"
             Padding="24"
             VerticalAlignment="Center"
@@ -117,13 +147,14 @@
                 x:Name="StartupStatusText"
                 Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                 TextWrapping="Wrap" />
-            <Button Content="Open Home Assistant" Click="OnOpenHomeAssistant" HorizontalAlignment="Stretch" />
-            <Button Content="Connection…" Click="OnShowConnection" HorizontalAlignment="Stretch" />
+            <Button x:Name="OpenHomeAssistantButton" Content="Open Home Assistant" Click="OnOpenHomeAssistant" HorizontalAlignment="Stretch" />
+            <Button x:Name="ConnectionButton" Content="Connection…" Click="OnShowConnection" HorizontalAlignment="Stretch" />
             <Button x:Name="UpdateNowButton" Content="Update now" Click="OnForcePush" HorizontalAlignment="Stretch" />
             <Button Content="Sensors…" Click="OnShowSettings" HorizontalAlignment="Stretch" />
             <Button x:Name="DisconnectButton" Content="Disconnect" Click="OnDisconnect" HorizontalAlignment="Stretch" />
             <Button Content="Open log file" Click="OnOpenLog" HorizontalAlignment="Stretch" />
             <Button
+                x:Name="RemoveServerButton"
                 Content="Remove server…"
                 Click="OnRemoveServer"
                 HorizontalAlignment="Stretch"
@@ -131,7 +162,7 @@
         </StackPanel>
 
         <!-- Connection settings view -->
-        <Grid x:Name="ConnectionPanel" Grid.Row="1" Visibility="Collapsed">
+        <Grid x:Name="ConnectionPanel" Grid.Row="2" Visibility="Collapsed">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
@@ -248,7 +279,7 @@
         </Grid>
 
         <!-- Sensor settings view -->
-        <Grid x:Name="SettingsPanel" Grid.Row="1" Visibility="Collapsed">
+        <Grid x:Name="SettingsPanel" Grid.Row="2" Visibility="Collapsed">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />

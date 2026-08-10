@@ -113,7 +113,7 @@ public class WinGetUpdateTests
         await provider.Started.Task.WaitAsync(TimeSpan.FromSeconds(2));
         source.Stop();
 
-        Assert.True(provider.Cancelled.Task.IsCompletedSuccessfully);
+        Assert.True(provider.CancellationToken.IsCancellationRequested);
     }
 
     private static SensorPreferences EnabledPreferences()
@@ -129,8 +129,7 @@ public class WinGetUpdateTests
         public bool BlockUntilCancelled { get; set; }
         public TaskCompletionSource Started { get; } =
             new(TaskCreationOptions.RunContinuationsAsynchronously);
-        public TaskCompletionSource Cancelled { get; } =
-            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public CancellationToken CancellationToken { get; private set; }
         public WinGetUpdateResult Result { get; set; } =
             new(WinGetUpdateStatus.Ready, []);
 
@@ -141,11 +140,10 @@ public class WinGetUpdateTests
             CancellationToken cancellationToken = default)
         {
             CheckCount++;
+            CancellationToken = cancellationToken;
             Started.TrySetResult();
             if (!BlockUntilCancelled) return Result;
 
-            using var registration = cancellationToken.Register(
-                () => Cancelled.TrySetResult());
             await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
             return Result;
         }

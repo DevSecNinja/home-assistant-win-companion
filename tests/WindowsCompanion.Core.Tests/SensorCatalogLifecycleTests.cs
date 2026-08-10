@@ -197,6 +197,71 @@ public class SensorCatalogLifecycleTests
         Assert.Equal(1, pushes);
     }
 
+    [Fact]
+    public async Task Enable_refresh_does_not_suppress_an_unrelated_source()
+    {
+        var refreshing = new BlockingRefreshSource();
+        var unrelated = new CountingSource();
+        var catalog = new SensorCatalog([refreshing, unrelated], new SensorPreferences());
+        catalog.SetEnabled(CountingSource.PrimaryId, true);
+        var pushes = 0;
+        catalog.Start(() => pushes++);
+
+        var enabling = catalog.SetEnabledAndRefreshAsync(BlockingRefreshSource.Id, true);
+        await refreshing.Entered.Task.WaitAsync(TimeSpan.FromSeconds(2));
+
+        unrelated.SignalChange();
+        Assert.Equal(1, pushes);
+
+        refreshing.Release.TrySetResult();
+        await enabling;
+        Assert.Equal(1, pushes);
+    }
+
+    [Fact]
+    public async Task A_preview_never_asks_a_source_for_a_sensitive_sensor_that_is_off()
+    {
+        var source = new RequestRecordingSource();
+        var preferences = new SensorPreferences();
+        var catalog = new SensorCatalog([source], preferences);
+
+        await catalog.PreviewAsync();
+        Assert.Equal([RequestRecordingSource.BenignId], source.LastRequested);
+
+        preferences.Set(RequestRecordingSource.SensitiveId, true);
+        await catalog.PreviewAsync();
+
+        Assert.Contains(RequestRecordingSource.SensitiveId, source.LastRequested!);
+    }
+
+    private sealed class RequestRecordingSource : ISensorSource
+    {
+        public const string BenignId = "recording_benign";
+        public const string SensitiveId = "recording_sensitive";
+
+        public IReadOnlySet<string>? LastRequested { get; private set; }
+
+        public IReadOnlyList<SensorDefinition> Definitions { get; } =
+        [
+            new(BenignId, "Benign", "Test sensor.", SensorPrivacy.Benign, false),
+            new(SensitiveId, "Sensitive", "Test sensor.", SensorPrivacy.Sensitive, false)
+        ];
+
+        public IReadOnlyList<Sensor> Read(IReadOnlySet<string> enabled, SensorReadContext context)
+        {
+            LastRequested = enabled;
+            return [];
+        }
+
+        public void Start(Action onChanged)
+        {
+        }
+
+        public void Stop()
+        {
+        }
+    }
+
     private sealed class CountingSource : ISensorSource
     {
         public const string PrimaryId = "counting_primary";
@@ -378,5 +443,39 @@ public class SensorCatalogLifecycleTests
         }
 
         public void SignalChange() => _onChanged?.Invoke();
+    }
+
+    private sealed class BlockingRefreshSource : ISensorSource, IRefreshableSensorSource
+    {
+        private Action? _onChanged;
+
+        public const string Id = "blocking_refresh";
+
+        public TaskCompletionSource Entered { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public TaskCompletionSource Release { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public IReadOnlyList<SensorDefinition> Definitions { get; } =
+            [new(Id, "Blocking refresh", "Test sensor.", SensorPrivacy.Benign, false)];
+
+        public IReadOnlyList<Sensor> Read(IReadOnlySet<string> enabled, SensorReadContext context) =>
+            [];
+
+        public void Start(Action onChanged)
+        {
+            _onChanged = onChanged;
+            _onChanged();
+        }
+
+        public void Stop() => _onChanged = null;
+
+        public async Task RefreshAsync(CancellationToken cancellationToken = default)
+        {
+            _onChanged?.Invoke();
+            Entered.TrySetResult();
+            await Release.Task.WaitAsync(cancellationToken);
+        }
     }
 }

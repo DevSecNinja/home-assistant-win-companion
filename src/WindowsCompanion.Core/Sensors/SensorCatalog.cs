@@ -15,9 +15,9 @@ public sealed class SensorCatalog
     private readonly HashSet<ISensorSource> _running = new();
     private readonly object _lifetime = new();
     private readonly SemaphoreSlim _preview = new(1, 1);
+    private readonly Dictionary<ISensorSource, int> _changeNotificationSuppression = new();
     private Action? _onChanged;
     private bool _started;
-    private int _changeNotificationSuppression;
 
     public SensorCatalog(IEnumerable<ISensorSource> sources, SensorPreferences preferences)
     {
@@ -88,7 +88,13 @@ public sealed class SensorCatalog
         bool enabled,
         CancellationToken cancellationToken = default)
     {
-        lock (_lifetime) _changeNotificationSuppression++;
+        var source = SourceFor(uniqueId);
+        lock (_lifetime)
+        {
+            _changeNotificationSuppression.TryGetValue(source, out var count);
+            _changeNotificationSuppression[source] = count + 1;
+        }
+
         try
         {
             SetEnabled(uniqueId, enabled);
@@ -97,7 +103,14 @@ public sealed class SensorCatalog
         }
         finally
         {
-            lock (_lifetime) _changeNotificationSuppression--;
+            lock (_lifetime)
+            {
+                var count = _changeNotificationSuppression[source] - 1;
+                if (count == 0)
+                    _changeNotificationSuppression.Remove(source);
+                else
+                    _changeNotificationSuppression[source] = count;
+            }
         }
     }
 
@@ -124,11 +137,7 @@ public sealed class SensorCatalog
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(uniqueId);
 
-        var source = _sources.FirstOrDefault(candidate =>
-            candidate.Definitions.Any(definition =>
-                string.Equals(definition.UniqueId, uniqueId, StringComparison.Ordinal)));
-        if (source is null)
-            throw new ArgumentException($"Unknown sensor '{uniqueId}'.", nameof(uniqueId));
+        var source = SourceFor(uniqueId);
         if (!IsEnabled(uniqueId) || source is not IRefreshableSensorSource refreshable) return;
 
         await refreshable.RefreshAsync(cancellationToken).ConfigureAwait(false);
@@ -153,14 +162,20 @@ public sealed class SensorCatalog
     }
 
     /// <summary>
-    /// Reads every sensor regardless of whether it is enabled, so the UI can show
-    /// the user exactly what a sensor would report before they switch it on.
-    /// Purely local: nothing produced here is transmitted.
+    /// Reads every sensor the user is allowed to see, so the UI can show exactly
+    /// what a sensor would report before they switch it on. Purely local: nothing
+    /// produced here is transmitted.
     /// </summary>
+    /// <remarks>
+    /// A privacy-sensitive sensor is only read once it is enabled. Gating here
+    /// rather than in each source means a new sensitive source cannot leak by
+    /// forgetting to apply <see cref="SensorPreviewGate"/> itself.
+    /// </remarks>
     public async Task<IReadOnlyDictionary<string, string>> PreviewAsync(
         CancellationToken cancellationToken = default)
     {
-        var all = Definitions.Select(d => d.UniqueId).ToHashSet(StringComparer.Ordinal);
+        var definitions = Definitions;
+        var all = definitions.Select(d => d.UniqueId).ToHashSet(StringComparer.Ordinal);
         var values = new Dictionary<string, string>(StringComparer.Ordinal);
 
         await _preview.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -309,7 +324,7 @@ public sealed class SensorCatalog
         {
             if (!_started
                 || !_running.Contains(source)
-                || _changeNotificationSuppression > 0)
+                || _changeNotificationSuppression.ContainsKey(source))
             {
                 return;
             }
@@ -318,5 +333,15 @@ public sealed class SensorCatalog
         }
 
         onChanged?.Invoke();
+    }
+
+    private ISensorSource SourceFor(string uniqueId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(uniqueId);
+
+        return _sources.FirstOrDefault(candidate =>
+                   candidate.Definitions.Any(definition =>
+                       string.Equals(definition.UniqueId, uniqueId, StringComparison.Ordinal)))
+               ?? throw new ArgumentException($"Unknown sensor '{uniqueId}'.", nameof(uniqueId));
     }
 }

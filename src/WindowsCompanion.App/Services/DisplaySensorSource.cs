@@ -55,15 +55,47 @@ public sealed class DisplaySensorSource : ISensorSource
         if (!enabled.Contains(DisplayCountId) && !enabled.Contains(DisplayResolutionId))
             return [];
 
-        var displays = Enumerate();
-        var summary = DisplaySummary.Describe(displays);
-        _summary.Seed(summary);
-
-        var count = DisplaySummary.Count(displays);
         var readings = new List<Sensor>();
 
-        if (enabled.Contains(DisplayCountId))
+        // The sensitive resolution details are only gathered once that sensor is
+        // itself enabled/permitted, so a count-only caller (including a preview
+        // where the resolution sensor is off) never collects them at all.
+        if (enabled.Contains(DisplayResolutionId))
         {
+            var displays = Enumerate();
+            var summary = DisplaySummary.Describe(displays);
+            _summary.Seed(summary);
+
+            var count = DisplaySummary.Count(displays);
+
+            if (enabled.Contains(DisplayCountId))
+            {
+                readings.Add(new Sensor
+                {
+                    UniqueId = DisplayCountId,
+                    Type = "sensor",
+                    Name = "Displays",
+                    State = count,
+                    StateClass = "measurement",
+                    EntityCategory = "diagnostic",
+                    Icon = DisplaySummary.IconFor(count)
+                });
+            }
+
+            readings.Add(new Sensor
+            {
+                UniqueId = DisplayResolutionId,
+                Type = "sensor",
+                Name = "Display Resolution",
+                State = summary,
+                EntityCategory = "diagnostic",
+                Icon = DisplaySummary.IconFor(count),
+                Attributes = DisplaySummary.BuildAttributes(displays)
+            });
+        }
+        else if (enabled.Contains(DisplayCountId))
+        {
+            var count = CountDisplays();
             readings.Add(new Sensor
             {
                 UniqueId = DisplayCountId,
@@ -76,21 +108,33 @@ public sealed class DisplaySensorSource : ISensorSource
             });
         }
 
-        if (enabled.Contains(DisplayResolutionId))
+        return readings;
+    }
+
+    /// <summary>
+    /// Counts active displays without touching mode, scaling or connection
+    /// details, so the benign <see cref="DisplayCountId"/> sensor never has to
+    /// gather anything the sensitive <see cref="DisplayResolutionId"/> sensor
+    /// reports.
+    /// </summary>
+    private static int CountDisplays()
+    {
+        var count = 0;
+
+        try
         {
-            readings.Add(new Sensor
+            EnumDisplayMonitors(IntPtr.Zero, IntPtr.Zero, (_, _, _, _) =>
             {
-                UniqueId = DisplayResolutionId,
-                Type = "sensor",
-                Name = "Display Resolution",
-                State = summary,
-                EntityCategory = "diagnostic",
-                Icon = DisplaySummary.IconFor(count),
-                Attributes = DisplaySummary.BuildAttributes(displays)
-            });
+                count++;
+                return true;
+            }, IntPtr.Zero);
+        }
+        catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException)
+        {
+            return 0;
         }
 
-        return readings;
+        return count;
     }
 
     public void Start(Action onChanged)

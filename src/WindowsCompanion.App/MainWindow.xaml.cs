@@ -191,6 +191,11 @@ public sealed partial class MainWindow : Window
 
     private async void OnEnterDemoMode(object sender, RoutedEventArgs e)
     {
+        // A sign-in already in flight must win: entering the demo here would
+        // let the OAuth round-trip finish underneath it and register with
+        // Home Assistant while the demo banner still promises nothing is sent.
+        if (!SignInButton.IsEnabled) return;
+
         DemoModeButton.IsEnabled = false;
         try
         {
@@ -1173,6 +1178,10 @@ public sealed partial class MainWindow : Window
     {
         SignInButton.IsEnabled = !busy;
         UrlBox.IsEnabled = !busy;
+        // A demo started while a sign-in is in flight would let the OAuth
+        // round-trip finish underneath it and register with Home Assistant
+        // while the demo banner still promises nothing is sent.
+        DemoModeButton.IsEnabled = !busy;
         SignInProgress.IsActive = busy;
         if (busy) ConnectError.Visibility = Visibility.Collapsed;
     }

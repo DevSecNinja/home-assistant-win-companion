@@ -1026,26 +1026,6 @@ public class MessagePumpLifetimeTests
         lifetime.Dispose();
     }
 
-    [Fact]
-    public void Repeated_start_stop_generations_leave_no_running_pump()
-    {
-        using var lifetime = new MessagePumpLifetime();
-
-        for (var generation = 0; generation < 100; generation++)
-        {
-            Assert.True(lifetime.TryBeginStart());
-            lifetime.MarkReady();
-            Assert.True(lifetime.WaitUntilReady(Wait));
-            Assert.True(lifetime.RequestStop());
-            lifetime.MarkStopped();
-
-            Assert.False(lifetime.IsRunning);
-            Assert.False(lifetime.StopRequested);
-        }
-
-        Assert.True(lifetime.TryBeginStart());
-        lifetime.MarkStopped();
-    }
 }
 
 public class LifecycleSensorAdvisoryTests

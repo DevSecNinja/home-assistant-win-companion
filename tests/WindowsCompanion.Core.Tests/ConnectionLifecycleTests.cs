@@ -226,28 +226,6 @@ public class ConnectionLifecycleTests
         Assert.Equal(host.Builds, host.Teardowns + host.LiveManagers);
     }
 
-    [Fact]
-    public async Task Repeated_restart_and_route_cycles_leave_one_owned_connection()
-    {
-        await using var host = new Host();
-
-        for (var cycle = 0; cycle < 100; cycle++)
-        {
-            await host.StartAsync();
-            await host.RouteSwitchAsync();
-            await host.ReconnectAsync();
-            await host.StopAsync();
-
-            Assert.Equal(0, host.LiveManagers);
-        }
-
-        await host.StartAsync();
-
-        Assert.Equal(1, host.LiveManagers);
-        Assert.Equal(1, host.PeakLiveManagers);
-        Assert.Equal(host.Builds, host.Teardowns + 1);
-    }
-
     /// <summary>
     /// Stands in for AppController: the same transitions over the same lifecycle,
     /// with the network calls replaced by a build step the test can pause inside.

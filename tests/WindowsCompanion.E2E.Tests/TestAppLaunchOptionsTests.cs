@@ -1,5 +1,7 @@
 using System.Text;
 using System.Text.Json;
+using System.Reflection.Metadata;
+using System.Reflection.PortableExecutable;
 using WindowsCompanion_App;
 
 namespace WindowsCompanion.E2E.Tests;
@@ -96,8 +98,18 @@ public sealed class TestAppLaunchOptionsTests
     [Fact]
     public void Release_assembly_excludes_test_profile_contract()
     {
-        Assert.Null(typeof(App).Assembly.GetType("WindowsCompanion_App.TestAppLaunchOptions"));
-        Assert.Null(typeof(App).Assembly.GetType("WindowsCompanion_App.TestAppComposition"));
+        var assemblyPath = Path.Combine(AppContext.BaseDirectory, "WindowsCompanion.dll");
+        using var stream = File.OpenRead(assemblyPath);
+        using var pe = new PEReader(stream);
+        var metadata = pe.GetMetadataReader();
+        var typeNames = metadata.TypeDefinitions
+            .Select(metadata.GetTypeDefinition)
+            .Where(type => metadata.GetString(type.Namespace) == "WindowsCompanion_App")
+            .Select(type => metadata.GetString(type.Name))
+            .ToHashSet(StringComparer.Ordinal);
+
+        Assert.DoesNotContain("TestAppLaunchOptions", typeNames);
+        Assert.DoesNotContain("TestAppComposition", typeNames);
     }
 #endif
 }

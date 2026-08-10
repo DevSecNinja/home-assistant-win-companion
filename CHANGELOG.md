@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.4.1](https://github.com/DevSecNinja/home-assistant-win-companion/compare/v0.4.0...v0.4.1) (2026-08-10)
+
+
+### Bug Fixes
+
+* bound reconnect work during outages ([#128](https://github.com/DevSecNinja/home-assistant-win-companion/issues/128)) ([c8f3f20](https://github.com/DevSecNinja/home-assistant-win-companion/commit/c8f3f20e4b315246928ed4f7f932726c7bc9874c))
+* improve tray update actions ([#123](https://github.com/DevSecNinja/home-assistant-win-companion/issues/123)) ([2d4a64d](https://github.com/DevSecNinja/home-assistant-win-companion/commit/2d4a64dc071e1b54e79463b462b89e3a51c40f2a))
+* refresh WinGet module detection after installation ([#124](https://github.com/DevSecNinja/home-assistant-win-companion/issues/124)) ([6a86aea](https://github.com/DevSecNinja/home-assistant-win-companion/commit/6a86aeae05f2d744b4c8827b5620647a4523f6c9))
+
 ## [0.4.0](https://github.com/DevSecNinja/home-assistant-win-companion/compare/v0.3.0...v0.4.0) (2026-08-10)
 
 

@@ -820,6 +820,7 @@ public sealed class AppController : IAsyncDisposable
         var settle = new CancellationTokenSource();
         var previous = Interlocked.Exchange(ref _networkSettle, settle);
         previous?.Cancel();
+        if (Volatile.Read(ref _disposeStarted) != 0) settle.Cancel();
 
         _ = SettleNetworkChangeAsync(settle);
     }
@@ -835,6 +836,7 @@ public sealed class AppController : IAsyncDisposable
 
             _lastNetwork = network;
             await EvaluateRouteAsync(RouteTrigger.NetworkChanged, settle.Token).ConfigureAwait(false);
+            settle.Token.ThrowIfCancellationRequested();
 
             var connection = _connection;
             if (connection is null) return;
@@ -847,8 +849,8 @@ public sealed class AppController : IAsyncDisposable
         }
         finally
         {
-            if (Interlocked.CompareExchange(ref _networkSettle, null, settle) == settle)
-                settle.Dispose();
+            Interlocked.CompareExchange(ref _networkSettle, null, settle);
+            settle.Dispose();
         }
     }
 
@@ -987,8 +989,7 @@ public sealed class AppController : IAsyncDisposable
             _startupUpdates.StateChanged -= OnUpdateStateChanged;
             _network.NetworkChanged -= OnNetworkChanged;
             _network.Stop();
-            _networkSettle?.Cancel();
-            _networkSettle = null;
+            Interlocked.Exchange(ref _networkSettle, null)?.Cancel();
             _lastNetwork = null;
 
             using (await _lifecycle.AcquireAsync(LifecycleIntent.Stop).ConfigureAwait(false))

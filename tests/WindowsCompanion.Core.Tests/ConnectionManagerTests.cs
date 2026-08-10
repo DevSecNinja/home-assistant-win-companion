@@ -48,6 +48,16 @@ public class ConnectionManagerTests
     }
 
     [Fact]
+    public void Non_finite_jitter_ratio_is_rejected_during_construction()
+    {
+        var retry = new ConnectionRetryOptions { MaximumJitterRatio = double.NaN };
+
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            CreateManager(() => new BlockingSocket(), new FakeClient(), new ManualClock(),
+                retry: retry));
+    }
+
+    [Fact]
     public async Task Early_socket_closures_keep_increasing_backoff()
     {
         var clock = new ManualClock();

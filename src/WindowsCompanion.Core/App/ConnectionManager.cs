@@ -508,7 +508,8 @@ public sealed class ConnectionManager : IAsyncDisposable
             throw new ArgumentOutOfRangeException(nameof(options.InitialReconnectDelay));
         if (options.MaximumReconnectDelay < options.InitialReconnectDelay)
             throw new ArgumentOutOfRangeException(nameof(options.MaximumReconnectDelay));
-        if (options.MaximumJitterRatio is < 0 or > 1)
+        if (!double.IsFinite(options.MaximumJitterRatio)
+            || options.MaximumJitterRatio is < 0 or > 1)
             throw new ArgumentOutOfRangeException(nameof(options.MaximumJitterRatio));
         if (options.StableConnectionPeriod < TimeSpan.Zero)
             throw new ArgumentOutOfRangeException(nameof(options.StableConnectionPeriod));

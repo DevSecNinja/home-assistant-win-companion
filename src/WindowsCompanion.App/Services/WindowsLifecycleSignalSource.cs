@@ -9,8 +9,7 @@ namespace WindowsCompanion_App.Services;
 /// to <see cref="WindowsCompanion.Core.Lifecycle.WindowsLifecycleMessages"/> for mapping.
 /// </summary>
 /// <remarks>
-/// Two independent paths feed the same mapper, because neither is sufficient on its
-/// own:
+/// Two Windows paths feed the same mapper:
 ///
 /// * A dedicated hidden top-level window. <c>WM_QUERYENDSESSION</c> and
 ///   <c>WM_ENDSESSION</c> are only delivered to top-level windows, so a message-only
@@ -18,7 +17,10 @@ namespace WindowsCompanion_App.Services;
 ///   from the WinUI window because this app lives in the tray: the main window is
 ///   routinely closed, and a hook on a window that no longer exists is a hook that
 ///   silently stops working.
-/// * <c>SystemEvents</c>, which raises the same facts on its own hidden window.
+/// * <c>SystemEvents</c>, which supplies power and session-switch notifications.
+///   Session-ending notifications deliberately stay on the raw window path because
+///   the managed event discards <c>ENDSESSION_CLOSEAPP</c> and would misreport an
+///   installer-requested app close as a machine shutdown.
 ///
 /// Duplicates are expected and harmless - the tracker in Core applies each
 /// transition once. The window runs on its own background thread with its own
@@ -64,7 +66,6 @@ public sealed class WindowsLifecycleSignalSource : ILifecycleSignalSource, IDisp
             if (!_lifetime.TryBeginStart()) return;
 
             SystemEvents.PowerModeChanged += OnPowerModeChanged;
-            SystemEvents.SessionEnding += OnSessionEnding;
             SystemEvents.SessionSwitch += OnSessionSwitch;
 
             _hwnd = 0;
@@ -91,7 +92,6 @@ public sealed class WindowsLifecycleSignalSource : ILifecycleSignalSource, IDisp
             if (!_lifetime.RequestStop()) return;
 
             SystemEvents.PowerModeChanged -= OnPowerModeChanged;
-            SystemEvents.SessionEnding -= OnSessionEnding;
             SystemEvents.SessionSwitch -= OnSessionSwitch;
 
             pump = _pump;
@@ -204,13 +204,6 @@ public sealed class WindowsLifecycleSignalSource : ILifecycleSignalSource, IDisp
 
     private void OnPowerModeChanged(object sender, PowerModeChangedEventArgs e) =>
         Report(WindowsLifecycleMessages.MapPowerMode((int)e.Mode));
-
-    private void OnSessionEnding(object sender, SessionEndingEventArgs e)
-    {
-        // Never cancel: Cancel = true asks Windows to abandon the shutdown.
-        e.Cancel = false;
-        Report(WindowsLifecycleMessages.MapSessionEndReason((int)e.Reason));
-    }
 
     private void OnSessionSwitch(object sender, SessionSwitchEventArgs e) =>
         Report(WindowsLifecycleMessages.MapSessionSwitch((int)e.Reason));

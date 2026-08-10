@@ -49,6 +49,7 @@ public sealed class AppController : IAsyncDisposable
     private DemoSession? _demo;
     private RouteSupervisor? _supervisor;
     private CancellationTokenSource? _networkSettle;
+    private int _disposeStarted;
 
     public AppController()
     {
@@ -880,13 +881,30 @@ public sealed class AppController : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
-        _network.NetworkChanged -= OnNetworkChanged;
-        _network.Stop();
-        _networkSettle?.Cancel();
-        _catalog?.Stop();
-        if (_connection is not null)
-            await _connection.DisposeAsync().ConfigureAwait(false);
-        _lifecycle.Dispose();
-        _http.Dispose();
+        if (Interlocked.Exchange(ref _disposeStarted, 1) != 0) return;
+
+        var log = _loggerFactory.CreateLogger<AppController>();
+        log.LogInformation("Stopping companion background services.");
+
+        try
+        {
+            _network.NetworkChanged -= OnNetworkChanged;
+            _network.Stop();
+            _networkSettle?.Cancel();
+            _networkSettle?.Dispose();
+            _networkSettle = null;
+
+            using (await _lifecycle.AcquireAsync(LifecycleIntent.Stop).ConfigureAwait(false))
+            {
+                await DisconnectCoreAsync().ConfigureAwait(false);
+            }
+
+            log.LogInformation("Companion background services stopped.");
+        }
+        finally
+        {
+            _lifecycle.Dispose();
+            _http.Dispose();
+        }
     }
 }

@@ -4,6 +4,7 @@ using WindowsCompanion.Core.Models;
 using WindowsCompanion.Core.Sensors;
 using WindowsCompanion_App.Services;
 using System.Runtime.InteropServices;
+using System.Windows.Input;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
@@ -30,6 +31,7 @@ public sealed partial class MainWindow : Window
     private readonly DispatcherQueue _dispatcher;
     private readonly DispatcherQueueTimer _statusTimer;
     private readonly WindowsStartupRegistration _startup = new();
+    private readonly RestartManagerShutdownMonitor _restartManagerShutdown;
     private readonly bool _startHidden;
     private bool _exiting;
     private bool _connected;
@@ -41,16 +43,33 @@ public sealed partial class MainWindow : Window
     private bool _suppressBssidToggle;
     private bool _loadingSensorSettings;
     private bool _loadingStartupSetting;
+    private int _connectionActionRunning;
+
+    public ICommand TrayOpenHomeAssistantCommand { get; }
+    public ICommand TrayShowWindowCommand { get; }
+    public ICommand TrayDisconnectCommand { get; }
+    public ICommand TrayExitCommand { get; }
 
     public MainWindow(bool startHidden = false)
     {
+        _controller = App.Controller;
+        TrayOpenHomeAssistantCommand = new ActionCommand(
+            () => DispatchTrayAction(_controller.OpenHomeAssistant));
+        TrayShowWindowCommand = new ActionCommand(
+            () => DispatchTrayAction(Show));
+        TrayDisconnectCommand = new ActionCommand(
+            () => DispatchTrayAction(() => OnDisconnect(this, new RoutedEventArgs())));
+        TrayExitCommand = new ActionCommand(
+            () => ((App)Application.Current).RequestShutdown(AppShutdownReason.TrayMenu));
+
         InitializeComponent();
         _startHidden = startHidden;
 
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(AppTitleBar);
         AppWindow.SetIcon("Assets/AppIcon.ico");
-        var dpi = GetDpiForWindow(WinRT.Interop.WindowNative.GetWindowHandle(this));
+        var windowHandle = WinRT.Interop.WindowNative.GetWindowHandle(this);
+        var dpi = GetDpiForWindow(windowHandle);
         AppWindow.Resize(new SizeInt32(
             ScaleForDpi(InitialWindowWidth, dpi),
             ScaleForDpi(InitialWindowHeight, dpi)));
@@ -60,7 +79,6 @@ public sealed partial class MainWindow : Window
             presenter.PreferredMinimumHeight = ScaleForDpi(MinimumWindowHeight, dpi);
         }
 
-        _controller = App.Controller;
         _dispatcher = DispatcherQueue.GetForCurrentThread();
         _controller.StateChanged += OnStateChanged;
         _controller.RouteChanged += OnRouteChanged;
@@ -75,6 +93,9 @@ public sealed partial class MainWindow : Window
 
         AppWindow.Closing += OnWindowClosing;
         Activated += OnFirstActivated;
+        _restartManagerShutdown = new RestartManagerShutdownMonitor(
+            windowHandle,
+            () => ((App)Application.Current).RequestShutdown(AppShutdownReason.RestartManager));
     }
 
     private static int ScaleForDpi(int logicalPixels, uint dpi) =>
@@ -252,30 +273,43 @@ public sealed partial class MainWindow : Window
         // Reachable from the tray menu, where the demo has nothing to disconnect.
         if (_controller.IsDemoMode) return;
 
-        if (_connected)
+        if (Interlocked.Exchange(ref _connectionActionRunning, 1) != 0) return;
+
+        try
         {
-            _statusTimer.Stop();
-            await _controller.DisconnectAsync();
-            _connected = false;
-            DisconnectButton.Content = "Reconnect";
-            UpdateNowButton.IsEnabled = false;
-            StatusText.Text = "Disconnected";
+            if (_connected)
+            {
+                _statusTimer.Stop();
+                await _controller.DisconnectAsync();
+                _connected = false;
+                DisconnectButton.Content = "Reconnect";
+                UpdateNowButton.IsEnabled = false;
+                StatusText.Text = "Disconnected";
+            }
+            else
+            {
+                DisconnectButton.IsEnabled = false;
+                try
+                {
+                    await _controller.ReconnectAsync();
+                    _connected = true;
+                    DisconnectButton.Content = "Disconnect";
+                    UpdateNowButton.IsEnabled = true;
+                    _statusTimer.Start();
+                }
+                finally
+                {
+                    DisconnectButton.IsEnabled = true;
+                }
+            }
         }
-        else
+        catch (OperationCanceledException) when (_exiting)
         {
-            DisconnectButton.IsEnabled = false;
-            try
-            {
-                await _controller.ReconnectAsync();
-                _connected = true;
-                DisconnectButton.Content = "Disconnect";
-                UpdateNowButton.IsEnabled = true;
-                _statusTimer.Start();
-            }
-            finally
-            {
-                DisconnectButton.IsEnabled = true;
-            }
+            // Application shutdown superseded this user action.
+        }
+        finally
+        {
+            Interlocked.Exchange(ref _connectionActionRunning, 0);
         }
     }
 
@@ -655,32 +689,28 @@ public sealed partial class MainWindow : Window
             : $"Filled in the {string.Join(" and ", found)} address; check it before saving.";
     }
 
-    private void OnShowWindow(object sender, RoutedEventArgs e) => Show();
-
-    private void OnExit(object sender, RoutedEventArgs e)
+    private void DispatchTrayAction(Action action)
     {
-        if (_exiting) return;
-        _exiting = true;
-
-        // Let the tray flyout finish dispatching its click before disposing the
-        // icon and its WinUI objects. Tearing them down inside their own callback
-        // can raise a CoreMessaging stowed exception.
-        if (!_dispatcher.TryEnqueue(async () => await CompleteExitAsync()))
-            _exiting = false;
+        _dispatcher.TryEnqueue(() => action());
     }
 
-    internal async Task RequestExitAsync()
+    internal void BeginShutdown()
     {
         if (_exiting) return;
 
         _exiting = true;
-        await CompleteExitAsync();
-    }
-
-    private async Task CompleteExitAsync()
-    {
+        AppWindow.Hide();
+        _statusTimer.Stop();
+        _controller.StateChanged -= OnStateChanged;
+        _controller.RouteChanged -= OnRouteChanged;
+        _restartManagerShutdown.Dispose();
         TrayIcon.Dispose();
-        await ((App)Application.Current).ShutdownAsync();
+    }
+
+    internal void CloseForShutdown()
+    {
+        AppWindow.Closing -= OnWindowClosing;
+        Close();
     }
 
     private void OnWindowClosing(Microsoft.UI.Windowing.AppWindow sender,
@@ -794,6 +824,23 @@ public sealed partial class MainWindow : Window
 
     private void OnOpenLocationSettings(object sender, RoutedEventArgs e) =>
         _controller.OpenLocationSettings();
+
+    private sealed class ActionCommand : ICommand
+    {
+        private readonly Action _execute;
+
+        public ActionCommand(Action execute) => _execute = execute;
+
+        public event EventHandler? CanExecuteChanged
+        {
+            add { }
+            remove { }
+        }
+
+        public bool CanExecute(object? parameter) => true;
+
+        public void Execute(object? parameter) => _execute();
+    }
 
     private static string Ago(TimeSpan span) => span.TotalSeconds switch
     {

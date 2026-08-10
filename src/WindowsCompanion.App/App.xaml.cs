@@ -1,8 +1,9 @@
-using System.Diagnostics;
+using Microsoft.Extensions.Logging;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.Windows.AppNotifications;
 using WindowsCompanion.Core.App;
+using WindowsCompanion_App.Services;
 
 // To learn more about WinUI, the WinUI project structure,
 // and more about our project templates, see: http://aka.ms/winui-project-info.
@@ -15,9 +16,14 @@ namespace WindowsCompanion_App;
 public partial class App : Application
 {
     private const string InstanceMutexName = @"Local\WindowsCompanion.Instance";
-    private static readonly TimeSpan ShutdownTimeout = TimeSpan.FromSeconds(5);
     private static string ShutdownSignalName =>
         $@"Local\WindowsCompanion.Shutdown.{Environment.ProcessId}";
+    private static readonly ILoggerFactory AppLoggerFactory =
+        LoggerFactory.Create(builder =>
+        {
+            builder.AddProvider(new FileLoggerProvider(LogLevel.Debug));
+            builder.SetMinimumLevel(LogLevel.Debug);
+        });
 
     private Window? _window;
     private DispatcherQueue? _dispatcher;
@@ -26,6 +32,7 @@ public partial class App : Application
     private Mutex? _instanceMutex;
     private bool _notificationsRegistered;
     private int _shutdownStarted;
+    private readonly ILogger<App> _log = AppLoggerFactory.CreateLogger<App>();
 
     /// <summary>Shared coordinator for the OAuth session and Home Assistant connection.</summary>
     public static AppController Controller { get; } = new();
@@ -77,17 +84,27 @@ public partial class App : Application
 
     private void RequestExternalShutdown()
     {
-        _dispatcher?.TryEnqueue(() =>
-        {
-            if (_window is MainWindow window)
-                _ = window.RequestExitAsync();
-        });
+        RequestShutdown(AppShutdownReason.ExternalRequest);
     }
 
-    internal async Task ShutdownAsync()
+    internal void RequestShutdown(AppShutdownReason reason)
+    {
+        var dispatcher = _dispatcher;
+        if (dispatcher is null)
+        {
+            _log.LogError("Shutdown requested by {Reason}, but the UI dispatcher is unavailable.", reason);
+            return;
+        }
+
+        if (!dispatcher.TryEnqueue(() => _ = ShutdownAsync(reason)))
+            _log.LogError("Shutdown requested by {Reason}, but it could not be queued.", reason);
+    }
+
+    private async Task ShutdownAsync(AppShutdownReason reason)
     {
         if (Interlocked.Exchange(ref _shutdownStarted, 1) != 0) return;
 
+        _log.LogInformation("Application shutdown initiated by {Reason}.", reason);
         _shutdownRegistration?.Unregister(null);
         _shutdownRegistration = null;
         _shutdownSignal?.Dispose();
@@ -95,40 +112,93 @@ public partial class App : Application
 
         try
         {
-            await Controller.DisposeAsync().AsTask().WaitAsync(ShutdownTimeout);
-        }
-        catch (TimeoutException ex)
-        {
-            Trace.TraceError("Companion shutdown cleanup exceeded {0}: {1}", ShutdownTimeout, ex);
+            if (_window is MainWindow window)
+                window.BeginShutdown();
         }
         catch (Exception ex)
         {
-            Trace.TraceError("Companion shutdown cleanup failed: {0}", ex);
+            _log.LogError(ex, "Window and tray shutdown failed.");
         }
-        finally
+
+        try
         {
-            if (_notificationsRegistered)
+            await Controller.DisposeAsync();
+        }
+        catch (Exception ex)
+        {
+            _log.LogError(ex, "Background service shutdown failed.");
+        }
+
+        if (_notificationsRegistered)
+        {
+            try
+            {
+                AppNotificationManager.Default.Unregister();
+            }
+            catch (Exception ex)
+            {
+                _log.LogError(ex, "App notification shutdown failed.");
+            }
+
+            _notificationsRegistered = false;
+        }
+
+        try
+        {
+            await RunOnDispatcherAsync(() =>
+            {
+                if (_window is MainWindow window)
+                    window.CloseForShutdown();
+                _window = null;
+
+                _instanceMutex?.Dispose();
+                _instanceMutex = null;
+
+                _log.LogInformation("Application shutdown cleanup completed.");
+                Exit();
+            });
+        }
+        catch (Exception ex)
+        {
+            _log.LogCritical(ex, "Final application shutdown on the UI thread failed.");
+        }
+    }
+
+    private Task RunOnDispatcherAsync(Action action)
+    {
+        var dispatcher = _dispatcher
+            ?? throw new InvalidOperationException("The UI dispatcher is unavailable.");
+        if (dispatcher.HasThreadAccess)
+        {
+            action();
+            return Task.CompletedTask;
+        }
+
+        var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        if (!dispatcher.TryEnqueue(() =>
             {
                 try
                 {
-                    AppNotificationManager.Default.Unregister();
+                    action();
+                    completion.TrySetResult();
                 }
                 catch (Exception ex)
                 {
-                    Trace.TraceError("App notification shutdown failed: {0}", ex);
+                    completion.TrySetException(ex);
                 }
-
-                _notificationsRegistered = false;
-            }
-
-            _instanceMutex?.Dispose();
-            _instanceMutex = null;
-
-            // WinUI's Application.Exit can leave this unpackaged tray process
-            // alive, and has produced CoreMessaging stowed exceptions during
-            // teardown. All owned resources are released above; terminate the
-            // process explicitly so Exit always means Exit.
-            Environment.Exit(0);
+            }))
+        {
+            completion.TrySetException(new InvalidOperationException(
+                "Final shutdown could not be queued on the UI dispatcher."));
         }
+
+        return completion.Task;
     }
+}
+
+internal enum AppShutdownReason
+{
+    TrayMenu,
+    RestartManager,
+    ExternalRequest
 }

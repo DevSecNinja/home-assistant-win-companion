@@ -47,6 +47,14 @@ Keep changes focused and explain user-visible behavior, privacy implications, an
 any Home Assistant protocol assumptions. The Windows app build and Core test suite
 must pass before merge.
 
+For concurrent work, keep branches and pull requests short-lived and update from
+`main` before requesting review. Put feature-specific `MainWindow` behavior in a
+focused partial-class file rather than growing `MainWindow.xaml.cs`; reserve the
+root file for shared window lifecycle and navigation. Stack dependent pull requests
+explicitly, and avoid mixing hotspot refactors with user-visible behavior changes.
+Enable Git rerere locally (`git config rerere.enabled true`) so repeated mechanical
+conflict resolutions can be reused without weakening review.
+
 Security vulnerabilities must be reported privately according to
 [SECURITY.md](SECURITY.md), not through a public issue.
 

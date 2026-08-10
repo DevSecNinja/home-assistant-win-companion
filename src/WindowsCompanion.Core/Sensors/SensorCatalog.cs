@@ -83,12 +83,15 @@ public sealed class SensorCatalog
     /// Applies an enablement change and obtains the source's first fresh snapshot
     /// without letting its startup callback race the caller's explicit settings sync.
     /// </summary>
-    public async Task SetEnabledAndRefreshAsync(
+    public async Task<string?> SetEnabledAndRefreshAsync(
         string uniqueId,
         bool enabled,
         CancellationToken cancellationToken = default)
     {
         var source = SourceFor(uniqueId);
+        var definition = source.Definitions.First(candidate =>
+            string.Equals(candidate.UniqueId, uniqueId, StringComparison.Ordinal));
+        var wasEnabled = _preferences.IsEnabled(definition);
         lock (_lifetime)
         {
             _changeNotificationSuppression.TryGetValue(source, out var count);
@@ -97,9 +100,55 @@ public sealed class SensorCatalog
 
         try
         {
-            SetEnabled(uniqueId, enabled);
-            if (enabled)
-                await RefreshSensorAsync(uniqueId, cancellationToken).ConfigureAwait(false);
+            try
+            {
+                SetEnabled(uniqueId, enabled);
+            }
+            catch (Exception enableFailure)
+            {
+                try
+                {
+                    if (_preferences.IsEnabled(definition) != wasEnabled)
+                        SetEnabled(uniqueId, wasEnabled);
+                }
+                catch (Exception rollbackFailure)
+                {
+                    throw new AggregateException(
+                        $"Could not change sensor '{uniqueId}' or restore its previous state.",
+                        enableFailure,
+                        rollbackFailure);
+                }
+
+                throw;
+            }
+
+            if (!enabled && definition.Privacy == SensorPrivacy.Sensitive)
+                return definition.DisabledPreview;
+
+            var requested = new HashSet<string>(StringComparer.Ordinal) { uniqueId };
+            await _preview.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                IReadOnlyList<Sensor> readings;
+                if (source is IRefreshableSensorSource refreshable)
+                {
+                    if (enabled)
+                        await refreshable.RefreshAsync(cancellationToken).ConfigureAwait(false);
+                    readings = source.Read(requested, new SensorReadContext("Preview"));
+                }
+                else
+                {
+                    readings = await source
+                        .PreviewAsync(requested, cancellationToken)
+                        .ConfigureAwait(false);
+                }
+
+                return DescribeReading(readings, uniqueId);
+            }
+            finally
+            {
+                _preview.Release();
+            }
         }
         finally
         {
@@ -251,9 +300,7 @@ public sealed class SensorCatalog
             var readings = await match.source
                 .PreviewAsync(requested, cancellationToken)
                 .ConfigureAwait(false);
-            var reading = readings.FirstOrDefault(candidate =>
-                string.Equals(candidate.UniqueId, uniqueId, StringComparison.Ordinal));
-            return reading is null ? null : Describe(reading.State);
+            return DescribeReading(readings, uniqueId);
         }
         finally
         {
@@ -333,6 +380,13 @@ public sealed class SensorCatalog
         }
 
         onChanged?.Invoke();
+    }
+
+    private static string? DescribeReading(IReadOnlyList<Sensor> readings, string uniqueId)
+    {
+        var reading = readings.FirstOrDefault(candidate =>
+            string.Equals(candidate.UniqueId, uniqueId, StringComparison.Ordinal));
+        return reading is null ? null : Describe(reading.State);
     }
 
     private ISensorSource SourceFor(string uniqueId)

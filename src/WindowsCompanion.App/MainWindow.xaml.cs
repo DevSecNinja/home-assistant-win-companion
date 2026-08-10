@@ -1142,11 +1142,12 @@ public sealed partial class MainWindow : Window
         toggle.IsEnabled = false;
         using var previewCancellation = BeginSensorPreview(uniqueId);
         Exception? refreshFailure = null;
+        string? refreshedPreview = null;
         try
         {
             try
             {
-                await catalog.SetEnabledAndRefreshAsync(
+                refreshedPreview = await catalog.SetEnabledAndRefreshAsync(
                     uniqueId,
                     toggle.IsOn,
                     previewCancellation.Token);
@@ -1162,7 +1163,6 @@ public sealed partial class MainWindow : Window
                 }
                 else
                 {
-                    catalog.SetEnabled(uniqueId, wasEnabled);
                     SetToggleState(toggle, wasEnabled);
                     ShowSensorPreviewError(uniqueId, "Could not update sensor: " + ex.Message);
                     return;
@@ -1204,7 +1204,6 @@ public sealed partial class MainWindow : Window
                 return;
             }
 
-            var value = await catalog.PreviewSensorAsync(uniqueId, previewCancellation.Token);
             if (!ReferenceEquals(catalog, _controller.Catalog)
                 || catalog.IsEnabled(uniqueId) != toggle.IsOn)
             {
@@ -1213,7 +1212,7 @@ public sealed partial class MainWindow : Window
 
             if (_sensorPreviewTexts.TryGetValue(uniqueId, out var previewText))
             {
-                previewText.Text = $"Current value: {value ?? "Unavailable"}";
+                previewText.Text = $"Current value: {refreshedPreview ?? "Unavailable"}";
                 previewText.Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources[
                     "TextFillColorSecondaryBrush"];
             }

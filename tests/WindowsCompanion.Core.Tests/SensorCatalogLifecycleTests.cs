@@ -137,15 +137,16 @@ public class SensorCatalogLifecycleTests
         Assert.Equal(0, source.StartCount);
 
         catalog.Start(() => { });
-        catalog.SetEnabled(source.Id, true);
 
-        Assert.Equal("Fresh value", await catalog.PreviewSensorAsync(source.Id));
+        Assert.Equal(
+            "Fresh value",
+            await catalog.SetEnabledAndRefreshAsync(source.Id, true));
         Assert.Equal(1, source.CollectionCount);
         Assert.Equal(1, source.StartCount);
 
-        catalog.SetEnabled(source.Id, false);
-
-        Assert.Equal("Enable to read this value", await catalog.PreviewSensorAsync(source.Id));
+        Assert.Equal(
+            "Enable to read this value",
+            await catalog.SetEnabledAndRefreshAsync(source.Id, false));
         Assert.Equal(1, source.CollectionCount);
         Assert.Equal(1, source.StopCount);
     }
@@ -195,6 +196,41 @@ public class SensorCatalogLifecycleTests
 
         source.SignalChange();
         Assert.Equal(1, pushes);
+    }
+
+    [Fact]
+    public async Task Enable_refresh_returns_the_cached_reading_without_recollecting()
+    {
+        var source = new CachedRefreshSource();
+        var catalog = new SensorCatalog([source], new SensorPreferences());
+
+        var preview = await catalog.SetEnabledAndRefreshAsync(CachedRefreshSource.Id, true);
+
+        Assert.Equal("Fresh value", preview);
+        Assert.Equal(1, source.RefreshCount);
+        Assert.Equal(1, source.ReadCount);
+        Assert.Equal(0, source.PreviewCount);
+
+        var disabledPreview = await catalog.SetEnabledAndRefreshAsync(CachedRefreshSource.Id, false);
+
+        Assert.Equal("Fresh value", disabledPreview);
+        Assert.Equal(1, source.RefreshCount);
+        Assert.Equal(2, source.ReadCount);
+        Assert.Equal(0, source.PreviewCount);
+    }
+
+    [Fact]
+    public async Task A_start_failure_restores_the_previous_enablement()
+    {
+        var source = new ThrowingStartSource();
+        var catalog = new SensorCatalog([source], new SensorPreferences());
+        catalog.Start(() => { });
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => catalog.SetEnabledAndRefreshAsync(ThrowingStartSource.Id, true));
+
+        Assert.False(catalog.IsEnabled(ThrowingStartSource.Id));
+        Assert.Equal(1, source.StartCount);
     }
 
     [Fact]
@@ -476,6 +512,77 @@ public class SensorCatalogLifecycleTests
             _onChanged?.Invoke();
             Entered.TrySetResult();
             await Release.Task.WaitAsync(cancellationToken);
+        }
+    }
+
+    private sealed class CachedRefreshSource : ISensorSource, IRefreshableSensorSource
+    {
+        public const string Id = "cached_refresh";
+
+        private string _value = "Stale value";
+
+        public int ReadCount { get; private set; }
+
+        public int PreviewCount { get; private set; }
+
+        public int RefreshCount { get; private set; }
+
+        public IReadOnlyList<SensorDefinition> Definitions { get; } =
+            [new(Id, "Cached refresh", "Test sensor.", SensorPrivacy.Benign, false)];
+
+        public IReadOnlyList<Sensor> Read(IReadOnlySet<string> enabled, SensorReadContext context)
+        {
+            ReadCount++;
+            return enabled.Contains(Id)
+                ? [new Sensor { UniqueId = Id, State = _value }]
+                : [];
+        }
+
+        public ValueTask<IReadOnlyList<Sensor>> PreviewAsync(
+            IReadOnlySet<string> requested,
+            CancellationToken cancellationToken = default)
+        {
+            PreviewCount++;
+            return ValueTask.FromResult<IReadOnlyList<Sensor>>(
+                [new Sensor { UniqueId = Id, State = "Collected again" }]);
+        }
+
+        public Task RefreshAsync(CancellationToken cancellationToken = default)
+        {
+            RefreshCount++;
+            _value = "Fresh value";
+            return Task.CompletedTask;
+        }
+
+        public void Start(Action onChanged)
+        {
+        }
+
+        public void Stop()
+        {
+        }
+    }
+
+    private sealed class ThrowingStartSource : ISensorSource
+    {
+        public const string Id = "throwing_start";
+
+        public int StartCount { get; private set; }
+
+        public IReadOnlyList<SensorDefinition> Definitions { get; } =
+            [new(Id, "Throwing start", "Test sensor.", SensorPrivacy.Benign, false)];
+
+        public IReadOnlyList<Sensor> Read(IReadOnlySet<string> enabled, SensorReadContext context) =>
+            [];
+
+        public void Start(Action onChanged)
+        {
+            StartCount++;
+            throw new InvalidOperationException("Start failed.");
+        }
+
+        public void Stop()
+        {
         }
     }
 }

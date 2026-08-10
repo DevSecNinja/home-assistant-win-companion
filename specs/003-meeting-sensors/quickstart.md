@@ -37,3 +37,5 @@ dotnet test tests\WindowsCompanion.Core.Tests\WindowsCompanion.Core.Tests.csproj
 
 Disable all sensors belonging to one source, wait more than 10 seconds, and verify
 no source-driven update occurs. Re-enable one sensor and verify changes resume.
+For the shared microphone/camera source, verify activity changes are sampled once
+per second without producing updates while the sampled state is unchanged.

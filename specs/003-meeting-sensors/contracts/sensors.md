@@ -27,6 +27,6 @@ poller.
 
 ## Update behavior
 
-A poll updates the cached snapshot every 10 seconds. The source requests an
+A poll updates the cached snapshot every second. The source requests an
 immediate sensor sync only when the snapshot changes. The existing periodic sync
 still reports enabled readings as a resilience fallback.

@@ -18,6 +18,10 @@ records under both per-user and machine-wide ConsentStore roots, including
 active. Missing or inaccessible records are treated as inactive so one sensor
 cannot break synchronization.
 
+The shared capability source samples once per second while either sensor is
+enabled. It requests a sensor sync only when the combined microphone/camera
+snapshot changes, keeping unchanged polls local.
+
 Alternatives considered: opening the devices would require consent and interfere
 with the application already using them; Teams log parsing no longer works.
 

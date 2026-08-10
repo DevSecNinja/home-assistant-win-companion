@@ -11,21 +11,26 @@ public sealed class CapabilityUsageSensorSource : ISensorSource
     public const string MicrophoneId = "microphone";
     public const string CameraId = "camera";
 
+    internal static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(1);
+
     private const string ConsentStore =
         @"SOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore";
 
     private readonly SensorPreferences _preferences;
-    private readonly System.Timers.Timer _timer = new(TimeSpan.FromSeconds(10));
-    private readonly object _gate = new();
-    private Action? _onChanged;
-    private ActivitySnapshot _last;
-    private bool _observing;
+    private readonly Func<string, bool> _readCapability;
+    private readonly SensorPollLoop _loop;
+    private readonly ChangeGate<ActivitySnapshot> _activity = new(default);
 
-    public CapabilityUsageSensorSource(SensorPreferences preferences)
+    private Action? _onChanged;
+
+    public CapabilityUsageSensorSource(
+        SensorPreferences preferences,
+        Func<string, bool>? readCapability = null,
+        TimeSpan? pollInterval = null)
     {
         _preferences = preferences ?? throw new ArgumentNullException(nameof(preferences));
-        _timer.AutoReset = true;
-        _timer.Elapsed += (_, _) => Poll();
+        _readCapability = readCapability ?? IsCapabilityActive;
+        _loop = new SensorPollLoop(PollAsync, pollInterval ?? PollInterval);
     }
 
     public IReadOnlyList<SensorDefinition> Definitions { get; } =
@@ -36,7 +41,7 @@ public sealed class CapabilityUsageSensorSource : ISensorSource
             "On while any application is using a microphone.",
             SensorPrivacy.Sensitive,
             EnabledByDefault: false,
-            ResourceUsage: "Low. Checks Windows every 10 seconds. Sends an extra update only when "
+            ResourceUsage: "Low. Checks Windows every second. Sends an extra update only when "
                            + "microphone use starts or stops.",
             AutomationIdea: "When the microphone is in use, turn the hall light red as an on-air light."),
         new(
@@ -45,7 +50,7 @@ public sealed class CapabilityUsageSensorSource : ISensorSource
             "On while any application is using a camera.",
             SensorPrivacy.Sensitive,
             EnabledByDefault: false,
-            ResourceUsage: "Low. Checks Windows every 10 seconds. Sends an extra update only when "
+            ResourceUsage: "Low. Checks Windows every second. Sends an extra update only when "
                            + "camera use starts or stops.",
             AutomationIdea: "When the camera is in use, turn on a video-call indicator light.")
     ];
@@ -60,36 +65,29 @@ public sealed class CapabilityUsageSensorSource : ISensorSource
     public void Start(Action onChanged)
     {
         _onChanged = onChanged;
-        if (_observing) return;
+        if (_loop.IsRunning) return;
 
-        lock (_gate) _last = Capture(EnabledIds());
-        _timer.Start();
-        _observing = true;
+        _activity.Seed(Capture(EnabledIds()));
+        _loop.Start();
     }
 
     public void Stop()
     {
-        if (!_observing) return;
-        _timer.Stop();
-        _observing = false;
+        _loop.Stop();
+        _onChanged = null;
     }
 
-    private void Poll()
+    private async Task PollAsync(
+        SensorPollReason reason,
+        CancellationToken cancellationToken)
     {
         var enabled = EnabledIds();
-        var current = Capture(enabled);
-        var changed = false;
+        var current = await Task.Run(() => Capture(enabled), cancellationToken)
+            .ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
 
-        lock (_gate)
-        {
-            if (current != _last)
-            {
-                _last = current;
-                changed = true;
-            }
-        }
-
-        if (changed) _onChanged?.Invoke();
+        if (reason == SensorPollReason.Scheduled && _activity.TryUpdate(current))
+            _onChanged?.Invoke();
     }
 
     private HashSet<string> EnabledIds() =>
@@ -97,9 +95,9 @@ public sealed class CapabilityUsageSensorSource : ISensorSource
             .Select(definition => definition.UniqueId)
             .ToHashSet(StringComparer.Ordinal);
 
-    private static ActivitySnapshot Capture(IReadOnlySet<string> enabled) => new(
-        enabled.Contains(MicrophoneId) ? IsCapabilityActive("microphone") : null,
-        enabled.Contains(CameraId) ? IsCapabilityActive("webcam") : null);
+    private ActivitySnapshot Capture(IReadOnlySet<string> enabled) => new(
+        enabled.Contains(MicrophoneId) ? _readCapability("microphone") : null,
+        enabled.Contains(CameraId) ? _readCapability("webcam") : null);
 
     private static IReadOnlyList<Sensor> Build(
         ActivitySnapshot snapshot, IReadOnlySet<string> enabled)

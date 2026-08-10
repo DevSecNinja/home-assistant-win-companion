@@ -135,8 +135,9 @@ output, verifying that the enabled sensors update and show friendly device names
 
 ### Measurable Outcomes
 
-- **SC-001**: Presenting, microphone, camera, headset, and default-output changes
-  appear in Home Assistant within 15 seconds while their sensors are enabled.
+- **SC-001**: Microphone and camera changes are detected locally within 1 second
+  after Windows updates its capability history and appear in Home Assistant within
+  2 seconds; other meeting sensor changes appear within 15 seconds.
 - **SC-002**: With all new sensors disabled, the app performs no polling work for
   them and produces no additional network traffic.
 - **SC-003**: An unchanged machine state produces no more Home Assistant updates

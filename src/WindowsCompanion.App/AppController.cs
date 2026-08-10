@@ -46,6 +46,7 @@ public sealed class AppController : IAsyncDisposable
     private ServerConfig? _config;
     private ConnectionManager? _connection;
     private SensorCatalog? _catalog;
+    private DemoSession? _demo;
     private RouteSupervisor? _supervisor;
     private CancellationTokenSource? _networkSettle;
 
@@ -74,7 +75,7 @@ public sealed class AppController : IAsyncDisposable
         : _supervisor?.Status ?? RouteStatus.Offline;
 
     /// <summary>One word for the status view and tray tooltip.</summary>
-    public string RouteSummary => RouteState switch
+    public string RouteSummary => IsDemoMode ? DemoSession.RouteSummary : RouteState switch
     {
         RouteStatus.Internal => "Internal",
         RouteStatus.External => "External",
@@ -97,6 +98,7 @@ public sealed class AppController : IAsyncDisposable
     {
         get
         {
+            if (IsDemoMode) return (false, DemoSession.HealthSummary);
             if (_connection is null) return (false, "Not connected");
 
             return _connection.State switch
@@ -140,7 +142,7 @@ public sealed class AppController : IAsyncDisposable
     /// <summary>Persists the current sensor choices and pushes them immediately.</summary>
     public async Task ApplySensorChangesAsync()
     {
-        if (_config is null) return;
+        if (IsDemoMode || _config is null) return;
         _settings.Save(_config);
         if (_connection is not null)
             await _connection.SyncNowAsync(SensorReadContext.SettingsChanged).ConfigureAwait(false);
@@ -148,7 +150,39 @@ public sealed class AppController : IAsyncDisposable
 
     public void SaveSensorPreferences()
     {
+        if (IsDemoMode) return;
         if (_config is not null) _settings.Save(_config);
+    }
+
+    /// <summary>Whether the local, server-less demo is running.</summary>
+    public bool IsDemoMode => _demo is not null;
+
+    /// <summary>
+    /// Starts the local demo: the sensor catalog becomes browsable without a Home
+    /// Assistant server. Nothing is registered, saved or transmitted, and no sensor
+    /// source is started, so switching a sensor on only affects the local preview.
+    /// </summary>
+    public void EnterDemoMode()
+    {
+        if (_demo is not null) return;
+        if (_connection is not null || _catalog is not null)
+            throw new InvalidOperationException("Demo mode is only available while disconnected.");
+
+        var preferences = new SensorPreferences();
+        var demo = new DemoSession(CreateSensorSources(preferences, CreateLifecycleCoordinator()), preferences);
+        _demo = demo;
+        _catalog = demo.Catalog;
+    }
+
+    /// <summary>Ends the demo and discards everything it produced.</summary>
+    public void ExitDemoMode()
+    {
+        var demo = _demo;
+        if (demo is null) return;
+
+        _demo = null;
+        if (ReferenceEquals(_catalog, demo.Catalog)) _catalog = null;
+        demo.End();
     }
 
     public Task<bool> IsWinGetModuleInstalledAsync(CancellationToken ct = default) =>
@@ -182,6 +216,10 @@ public sealed class AppController : IAsyncDisposable
         if (config is null || !config.IsValid()) return false;
         if (string.IsNullOrEmpty(_secrets.Get(AppConstants.RefreshTokenKey))) return false;
 
+        // A real session replaces the demo: its catalog must not stay behind and
+        // shadow the one built for the connection.
+        ExitDemoMode();
+
         _config = config;
         // The supervisor captures the config instance, so a reload must discard it
         // rather than leave it deciding routes from an orphaned object.
@@ -202,6 +240,8 @@ public sealed class AppController : IAsyncDisposable
             throw new InvalidOperationException("Home Assistant did not return a refresh token.");
 
         using var lease = await _lifecycle.AcquireAsync(LifecycleIntent.Start, ct).ConfigureAwait(false);
+
+        ExitDemoMode();
 
         _secrets.Save(AppConstants.RefreshTokenKey, tokens.RefreshToken);
 
@@ -536,36 +576,13 @@ public sealed class AppController : IAsyncDisposable
         // of the catalog that the connection will read from, so the final push is
         // resolved lazily rather than captured.
         ConnectionManager? live = null;
-        // Named for the machine's power lifecycle, not the connection lifecycle
-        // gate in _lifecycle. A new one is built per connection and released by
-        // the catalog's Stop, so a route switch does not leak its signal hooks.
-        var systemLifecycle = new LifecycleCoordinator(
-            new FileLifecycleJournal(),
+        var systemLifecycle = CreateLifecycleCoordinator(
             finalPush: token => live is null
                 ? Task.FromResult(false)
-                : live.SyncNowAsync(SensorReadContext.LifecycleTransition, token),
-            finalPushTimeout: FinalLifecyclePushTimeout,
-            log: _loggerFactory.CreateLogger<LifecycleCoordinator>());
+                : live.SyncNowAsync(SensorReadContext.LifecycleTransition, token));
 
         var catalog = new SensorCatalog(
-            new ISensorSource[]
-            {
-                new BatterySensorSource(_status),
-                new ActiveSensorSource(config.Sensors),
-                new NetworkSensorSource(config.Sensors),
-                new WifiSensorSource(config.Sensors),
-                new SystemSensorSource(),
-                new DisplaySensorSource(),
-                new WindowsThemeSensorSource(),
-                new LocaleSensorSource(),
-                new DiskUsageSensorSource(),
-                new NotificationStateSensorSource(),
-                new CapabilityUsageSensorSource(config.Sensors),
-                new AudioDeviceSensorSource(config.Sensors),
-                new FrontmostAppSensorSource(config.Sensors),
-                new WinGetUpdateSensorSource(_winGetUpdates, config.Sensors),
-                new LifecycleSensorSource(systemLifecycle, new WindowsLifecycleSignalSource())
-            },
+            CreateSensorSources(config.Sensors, systemLifecycle),
             config.Sensors);
         _catalog = catalog;
 
@@ -593,6 +610,44 @@ public sealed class AppController : IAsyncDisposable
     }
 
     private string ActiveUrl(ServerConfig config) => _supervisor?.ActiveUrl ?? config.BaseUrl;
+
+    /// <summary>
+    /// Every sensor source this installation offers, wired to the given choices.
+    /// Shared by the live connection and by demo mode so the demo shows exactly
+    /// the catalog a connected PC would report.
+    /// </summary>
+    private ISensorSource[] CreateSensorSources(
+        SensorPreferences preferences, LifecycleCoordinator systemLifecycle) =>
+    [
+        new BatterySensorSource(_status),
+        new ActiveSensorSource(preferences),
+        new NetworkSensorSource(preferences),
+        new WifiSensorSource(preferences),
+        new SystemSensorSource(),
+        new DisplaySensorSource(),
+        new WindowsThemeSensorSource(),
+        new LocaleSensorSource(),
+        new DiskUsageSensorSource(),
+        new NotificationStateSensorSource(),
+        new CapabilityUsageSensorSource(preferences),
+        new AudioDeviceSensorSource(preferences),
+        new FrontmostAppSensorSource(preferences),
+        new WinGetUpdateSensorSource(_winGetUpdates, preferences),
+        new LifecycleSensorSource(systemLifecycle, new WindowsLifecycleSignalSource())
+    ];
+
+    /// <summary>
+    /// Named for the machine's power lifecycle, not the connection lifecycle gate
+    /// in <c>_lifecycle</c>. A new one is built per connection and released by the
+    /// catalog's Stop, so a route switch does not leak its signal hooks. Demo mode
+    /// passes no final push: there is nowhere to push to.
+    /// </summary>
+    private LifecycleCoordinator CreateLifecycleCoordinator(
+        Func<CancellationToken, Task<bool>>? finalPush = null) =>
+        new(new FileLifecycleJournal(),
+            finalPush,
+            finalPushTimeout: FinalLifecyclePushTimeout,
+            log: _loggerFactory.CreateLogger<LifecycleCoordinator>());
 
     private HomeAssistantClient CreateClient(ServerConfig config, string url, out OAuthTokenManager tokens)
     {

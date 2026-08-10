@@ -100,6 +100,10 @@ one that just works with stock Home Assistant.**
   blocks or delays a shutdown. The sensor is off by default and asks you to confirm
   its limits before it starts, because they cannot be engineered away — see
   [docs/windows-lifecycle-signals.md](docs/windows-lifecycle-signals.md).
+- **Demo mode** — try the app without a server. From the sign-in screen, "Explore in
+  demo mode" opens the sensor catalog with each sensor's current value read on this
+  PC. Nothing is registered, saved or sent to Home Assistant, no sensor source is
+  started, and a warning banner stays on every screen until you leave the demo.
 - **Health and logs** — a health verdict based on whether the app is actually
   reporting on schedule, plus a rolling local log you can open from the UI.
 - **Open Home Assistant** — one click (window or tray menu) to open your instance in

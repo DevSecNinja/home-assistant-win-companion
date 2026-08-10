@@ -65,6 +65,10 @@ public sealed partial class MainWindow : Window
         _controller.StateChanged += OnStateChanged;
         _controller.RouteChanged += OnRouteChanged;
 
+        // Kept in Core so the demo warning reads the same wherever it is shown.
+        DemoBanner.Title = DemoSession.Title;
+        DemoBanner.Message = DemoSession.Message;
+
         _statusTimer = _dispatcher.CreateTimer();
         _statusTimer.Interval = TimeSpan.FromSeconds(5);
         _statusTimer.Tick += (_, _) => RefreshBattery();
@@ -106,7 +110,9 @@ public sealed partial class MainWindow : Window
         _dispatcher.TryEnqueue(() =>
         {
             RouteText.Text = _controller.RouteSummary;
-            ServerText.Text = _controller.BaseUrl ?? "—";
+            ServerText.Text = _controller.IsDemoMode
+                ? DemoSession.ServerLabel
+                : _controller.BaseUrl ?? "—";
             UpdateHealth();
         });
 
@@ -163,6 +169,7 @@ public sealed partial class MainWindow : Window
         try
         {
             await _controller.SignInAsync(url);
+            ApplyDemoChrome();
             ShowPanel(true);
             RefreshBattery();
             _statusTimer.Start();
@@ -177,8 +184,62 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    private async void OnEnterDemoMode(object sender, RoutedEventArgs e)
+    {
+        DemoModeButton.IsEnabled = false;
+        try
+        {
+            _controller.EnterDemoMode();
+        }
+        catch (Exception ex)
+        {
+            ShowConnectError(ex.Message);
+            return;
+        }
+        finally
+        {
+            DemoModeButton.IsEnabled = true;
+        }
+
+        ApplyDemoChrome();
+        RefreshStatusFields();
+        ShowView(View.Status);
+        _statusTimer.Start();
+
+        // Seeing the sensors is the whole point of the demo, so it opens on them.
+        if (await BuildSensorListAsync()) ShowView(View.Settings);
+    }
+
+    private void OnLeaveDemoMode(object sender, RoutedEventArgs e)
+    {
+        _statusTimer.Stop();
+        _controller.ExitDemoMode();
+        ApplyDemoChrome();
+        ShowView(View.Connect);
+    }
+
+    /// <summary>
+    /// Shows the demo warning on every screen and hides the actions that need a
+    /// Home Assistant server, so nothing in the demo looks like it talks to one.
+    /// </summary>
+    private void ApplyDemoChrome()
+    {
+        var demo = _controller.IsDemoMode;
+        DemoBanner.IsOpen = demo;
+
+        var serverActions = demo ? Visibility.Collapsed : Visibility.Visible;
+        OpenHomeAssistantButton.Visibility = serverActions;
+        ConnectionButton.Visibility = serverActions;
+        UpdateNowButton.Visibility = serverActions;
+        DisconnectButton.Visibility = serverActions;
+        RemoveServerButton.Visibility = serverActions;
+    }
+
     private async void OnDisconnect(object sender, RoutedEventArgs e)
     {
+        // Reachable from the tray menu, where the demo has nothing to disconnect.
+        if (_controller.IsDemoMode) return;
+
         if (_connected)
         {
             _statusTimer.Stop();
@@ -684,13 +745,17 @@ public sealed partial class MainWindow : Window
             ? $"{status.BatteryPercent}% ({status.BatteryStateString})"
             : "No battery (desktop)";
 
-        ServerText.Text = _controller.BaseUrl ?? "—";
+        var demo = _controller.IsDemoMode;
+        ServerText.Text = demo ? DemoSession.ServerLabel : _controller.BaseUrl ?? "—";
         RouteText.Text = _controller.RouteSummary;
+        if (demo) StatusText.Text = DemoSession.Title;
 
         var last = _controller.LastSyncedAt;
-        LastUpdateText.Text = last is null
-            ? "—"
-            : $"{last.Value.ToLocalTime():HH:mm:ss} ({Ago(DateTimeOffset.UtcNow - last.Value)})";
+        LastUpdateText.Text = demo
+            ? "Never (demo mode)"
+            : last is null
+                ? "—"
+                : $"{last.Value.ToLocalTime():HH:mm:ss} ({Ago(DateTimeOffset.UtcNow - last.Value)})";
 
         UpdateHealth();
     }
@@ -766,7 +831,8 @@ public sealed partial class MainWindow : Window
         var previews = await catalog.PreviewAsync();
         if (buildVersion != _sensorListBuildVersion
             || !ReferenceEquals(catalog, _controller.Catalog)
-            || _controller.State is ConnectionState.Disconnected or ConnectionState.AuthError)
+            || (!_controller.IsDemoMode
+                && _controller.State is ConnectionState.Disconnected or ConnectionState.AuthError))
         {
             return false;
         }

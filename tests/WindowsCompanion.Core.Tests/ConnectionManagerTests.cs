@@ -425,6 +425,33 @@ public class ConnectionManagerTests
         Assert.Equal(0, clock.PendingDelayCount);
     }
 
+    [Fact]
+    public async Task Repeated_manager_lifetimes_release_every_socket_and_loop()
+    {
+        var sockets = new ResourceTrackingSocketFactory();
+
+        for (var cycle = 1; cycle <= 100; cycle++)
+        {
+            var clock = new ManualClock();
+            var manager = CreateManager(
+                sockets.Create,
+                new FakeClient { BlockUpdates = true },
+                clock);
+
+            manager.Start();
+            await sockets.ReachedAsync(cycle);
+            await manager.DisposeAsync();
+
+            Assert.False(manager.HasRunningLoops);
+            Assert.Equal(0, clock.PendingDelayCount);
+            Assert.Equal(0, sockets.Active);
+        }
+
+        Assert.Equal(100, sockets.Created);
+        Assert.Equal(100, sockets.Disposed);
+        Assert.Equal(1, sockets.PeakActive);
+    }
+
     private static bool IsReconnectDelay(TimeSpan delay) =>
         delay <= TimeSpan.FromMinutes(1);
 
@@ -673,6 +700,71 @@ public class ConnectionManagerTests
             using var timeout = new CancellationTokenSource(Timeout);
             while (Count < count)
                 await _attempts.Reader.ReadAsync(timeout.Token);
+        }
+    }
+
+    private sealed class ResourceTrackingSocketFactory
+    {
+        private readonly Channel<int> _created = Channel.CreateUnbounded<int>();
+        private int _active;
+        private int _disposed;
+        private int _peakActive;
+        private int _createdCount;
+
+        public int Active => Volatile.Read(ref _active);
+        public int Created => Volatile.Read(ref _createdCount);
+        public int Disposed => Volatile.Read(ref _disposed);
+        public int PeakActive => Volatile.Read(ref _peakActive);
+
+        public IHaSocket Create()
+        {
+            var created = Interlocked.Increment(ref _createdCount);
+            var active = Interlocked.Increment(ref _active);
+            UpdateMaximum(ref _peakActive, active);
+            _created.Writer.TryWrite(created);
+            return new ResourceTrackingSocket(this);
+        }
+
+        public async Task ReachedAsync(int count)
+        {
+            using var timeout = new CancellationTokenSource(Timeout);
+            while (Created < count)
+                await _created.Reader.ReadAsync(timeout.Token);
+        }
+
+        private void Released()
+        {
+            Interlocked.Increment(ref _disposed);
+            Interlocked.Decrement(ref _active);
+        }
+
+        private static void UpdateMaximum(ref int maximum, int value)
+        {
+            while (true)
+            {
+                var current = Volatile.Read(ref maximum);
+                if (current >= value) return;
+                if (Interlocked.CompareExchange(ref maximum, value, current) == current) return;
+            }
+        }
+
+        private sealed class ResourceTrackingSocket(ResourceTrackingSocketFactory owner) : IHaSocket
+        {
+            private int _disposed;
+
+            public Task ConnectAsync(Uri uri, CancellationToken ct) => Task.CompletedTask;
+            public Task SendAsync(string json, CancellationToken ct) => Task.CompletedTask;
+
+            public async Task<string?> ReceiveAsync(CancellationToken ct)
+            {
+                await Task.Delay(System.Threading.Timeout.InfiniteTimeSpan, ct);
+                return null;
+            }
+
+            public void Dispose()
+            {
+                if (Interlocked.Exchange(ref _disposed, 1) == 0) owner.Released();
+            }
         }
     }
 

@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
 using WindowsCompanion.Core.Lifecycle;
 using Microsoft.Win32;
 
@@ -31,6 +32,7 @@ namespace WindowsCompanion_App.Services;
 /// the companion must not veto, delay or question a shutdown, and it never puts up
 /// UI on this path.
 /// </remarks>
+[SupportedOSPlatform("windows")]
 public sealed class WindowsLifecycleSignalSource : ILifecycleSignalSource, IDisposable
 {
     private const string WindowClassName = "WindowsCompanionLifecycleWindow";
@@ -54,10 +56,23 @@ public sealed class WindowsLifecycleSignalSource : ILifecycleSignalSource, IDisp
 
     private Thread? _pump;
     private nint _hwnd;
+    private bool _eventsSubscribed;
 
     public WindowsLifecycleSignalSource() => _wndProc = OnWindowMessage;
 
     public event Action<LifecycleSignal>? SignalObserved;
+
+    internal bool HasRunningPump => _lifetime.IsRunning;
+
+    internal bool HasWindow
+    {
+        get { lock (_gate) return _hwnd != 0; }
+    }
+
+    internal bool EventsSubscribed
+    {
+        get { lock (_gate) return _eventsSubscribed; }
+    }
 
     public void Start()
     {
@@ -67,6 +82,7 @@ public sealed class WindowsLifecycleSignalSource : ILifecycleSignalSource, IDisp
 
             SystemEvents.PowerModeChanged += OnPowerModeChanged;
             SystemEvents.SessionSwitch += OnSessionSwitch;
+            _eventsSubscribed = true;
 
             _hwnd = 0;
             _pump = new Thread(PumpMessages)
@@ -93,6 +109,7 @@ public sealed class WindowsLifecycleSignalSource : ILifecycleSignalSource, IDisp
 
             SystemEvents.PowerModeChanged -= OnPowerModeChanged;
             SystemEvents.SessionSwitch -= OnSessionSwitch;
+            _eventsSubscribed = false;
 
             pump = _pump;
             _pump = null;

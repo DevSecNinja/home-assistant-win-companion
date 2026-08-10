@@ -291,11 +291,18 @@ public sealed class NetworkSensorSource : ISensorSource
 
         var includeIpv4 = scope.HasFlag(NetworkCaptureScope.Ipv4Address);
         var includeIpv6 = scope.HasFlag(NetworkCaptureScope.Ipv6Address);
+        var identifyActiveAdapter = scope.HasFlag(NetworkCaptureScope.ActiveAdapter);
 
         try
         {
+            var routeLocalIpv4 = includeIpv4 || identifyActiveAdapter
+                ? ResolveRoute(AddressFamily.InterNetwork)
+                : null;
+            var routeLocalIpv6 = includeIpv6 || identifyActiveAdapter
+                ? ResolveRoute(AddressFamily.InterNetworkV6)
+                : null;
             var adapters = NetworkInterface.GetAllNetworkInterfaces()
-                .Select(adapter => Describe(adapter, scope))
+                .Select(adapter => Describe(adapter, scope, routeLocalIpv4, routeLocalIpv6))
                 .ToList();
 
             if (scope == NetworkCaptureScope.ConnectionTypeOnly)
@@ -308,8 +315,8 @@ public sealed class NetworkSensorSource : ISensorSource
 
             return NetworkIdentity.From(
                 adapters,
-                includeIpv4 ? ResolveRoute(AddressFamily.InterNetwork) : null,
-                includeIpv6 ? ResolveRoute(AddressFamily.InterNetworkV6) : null);
+                includeIpv4 ? routeLocalIpv4 : null,
+                includeIpv6 ? routeLocalIpv6 : null);
         }
         catch (NetworkInformationException)
         {
@@ -319,7 +326,9 @@ public sealed class NetworkSensorSource : ISensorSource
 
     private static NetworkAdapterSnapshot Describe(
         NetworkInterface adapter,
-        NetworkCaptureScope scope)
+        NetworkCaptureScope scope,
+        string? routeLocalIpv4,
+        string? routeLocalIpv6)
     {
         var kind = adapter.NetworkInterfaceType switch
         {
@@ -338,6 +347,7 @@ public sealed class NetworkSensorSource : ISensorSource
 
         var includeIpv4 = scope.HasFlag(NetworkCaptureScope.Ipv4Address);
         var includeIpv6 = scope.HasFlag(NetworkCaptureScope.Ipv6Address);
+        var identifyActiveAdapter = scope.HasFlag(NetworkCaptureScope.ActiveAdapter);
         if (scope == NetworkCaptureScope.ConnectionTypeOnly)
             return new NetworkAdapterSnapshot(adapter.Id, adapter.Description, kind, isUp, isVirtual);
 
@@ -354,10 +364,12 @@ public sealed class NetworkSensorSource : ISensorSource
         var ipv4 = new List<string>();
         var ipv6 = new List<Ipv6AddressInfo>();
         var hasGateway = false;
+        var matchesActiveRoute = false;
         string? gatewayAddress = null;
         var dns = new List<string>();
 
-        if (includeIpv4 || includeIpv6 || includeGatewayAddress || includeDnsServers)
+        if (includeIpv4 || includeIpv6 || identifyActiveAdapter
+            || includeGatewayAddress || includeDnsServers)
         {
             try
             {
@@ -378,22 +390,35 @@ public sealed class NetworkSensorSource : ISensorSource
                         .ToList();
                 }
 
-                if (includeIpv4 || includeIpv6)
+                if (includeIpv4 || includeIpv6 || identifyActiveAdapter)
                 {
                     foreach (var unicast in properties.UnicastAddresses)
                     {
-                        if (includeIpv4
-                            && unicast.Address.AddressFamily == AddressFamily.InterNetwork)
+                        if (unicast.Address.AddressFamily == AddressFamily.InterNetwork)
                         {
-                            ipv4.Add(unicast.Address.ToString());
+                            if (identifyActiveAdapter
+                                && SameAddress(unicast.Address, routeLocalIpv4))
+                            {
+                                matchesActiveRoute = true;
+                            }
+
+                            if (includeIpv4) ipv4.Add(unicast.Address.ToString());
                         }
-                        else if (includeIpv6
-                                 && unicast.Address.AddressFamily == AddressFamily.InterNetworkV6)
+                        else if (unicast.Address.AddressFamily == AddressFamily.InterNetworkV6)
                         {
-                            ipv6.Add(new Ipv6AddressInfo(
-                                unicast.Address.ToString(),
-                                StateOf(unicast),
-                                OriginOf(unicast)));
+                            if (identifyActiveAdapter
+                                && SameAddress(unicast.Address, routeLocalIpv6))
+                            {
+                                matchesActiveRoute = true;
+                            }
+
+                            if (includeIpv6)
+                            {
+                                ipv6.Add(new Ipv6AddressInfo(
+                                    unicast.Address.ToString(),
+                                    StateOf(unicast),
+                                    OriginOf(unicast)));
+                            }
                         }
                     }
                 }
@@ -421,8 +446,13 @@ public sealed class NetworkSensorSource : ISensorSource
             dns,
             includePermanentPhysicalAddress
                 ? WindowsNetworkInterfaceIdentity.PermanentPhysicalAddressOf(adapter.Id)
-                : null);
+                : null,
+            matchesActiveRoute);
     }
+
+    private static bool SameAddress(IPAddress address, string? routeLocalAddress) =>
+        IPAddress.TryParse(routeLocalAddress, out var route)
+        && address.GetAddressBytes().SequenceEqual(route.GetAddressBytes());
 
     private static bool IsUnspecified(IPAddress address) =>
         address.Equals(IPAddress.Any) || address.Equals(IPAddress.IPv6Any);

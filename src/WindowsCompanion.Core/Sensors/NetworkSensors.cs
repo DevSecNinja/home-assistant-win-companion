@@ -35,9 +35,12 @@ public enum NetworkCaptureScope
     /// <summary>The wireless adapter's permanent hardware address is needed.</summary>
     WlanPermanentAddress = 1 << 7,
 
+    /// <summary>The adapter carrying the active route must be identified without retaining its addresses.</summary>
+    ActiveAdapter = 1 << 8,
+
     /// <summary>All network sensor fields may be collected.</summary>
     Full = ConnectionTypeOnly | Ipv4Address | Ipv6Address | CurrentPhysicalAddress | GatewayAddress
-           | DnsServers | LanPermanentAddress | WlanPermanentAddress
+           | DnsServers | LanPermanentAddress | WlanPermanentAddress | ActiveAdapter
 }
 
 /// <summary>
@@ -79,8 +82,7 @@ public static class NetworkSensors
 
         if (enabled.Contains(MacAddressId))
         {
-            scope |= NetworkCaptureScope.Ipv4Address
-                     | NetworkCaptureScope.Ipv6Address
+            scope |= NetworkCaptureScope.ActiveAdapter
                      | NetworkCaptureScope.CurrentPhysicalAddress;
         }
 
@@ -92,15 +94,13 @@ public static class NetworkSensors
 
         if (enabled.Contains(GatewayAddressId))
         {
-            scope |= NetworkCaptureScope.Ipv4Address
-                     | NetworkCaptureScope.Ipv6Address
+            scope |= NetworkCaptureScope.ActiveAdapter
                      | NetworkCaptureScope.GatewayAddress;
         }
 
         if (enabled.Contains(DnsServersId))
         {
-            scope |= NetworkCaptureScope.Ipv4Address
-                     | NetworkCaptureScope.Ipv6Address
+            scope |= NetworkCaptureScope.ActiveAdapter
                      | NetworkCaptureScope.DnsServers;
         }
 

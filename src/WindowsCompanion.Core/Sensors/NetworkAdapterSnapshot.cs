@@ -54,7 +54,8 @@ public sealed record NetworkAdapterSnapshot(
     IReadOnlyList<byte>? PhysicalAddress = null,
     string? GatewayAddress = null,
     IReadOnlyList<string>? DnsAddresses = null,
-    IReadOnlyList<byte>? PermanentPhysicalAddress = null)
+    IReadOnlyList<byte>? PermanentPhysicalAddress = null,
+    bool MatchesActiveRoute = false)
 {
     public IReadOnlyList<string> Ipv4 => Ipv4Addresses ?? [];
 

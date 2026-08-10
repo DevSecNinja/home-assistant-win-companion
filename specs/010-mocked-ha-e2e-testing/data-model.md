@@ -103,7 +103,7 @@ Artifacts retained when a scenario fails.
 | TestResult | TRX | Always generated |
 | InteractionLog | JSON | Sanitized |
 | AppLog | Text | Sanitized; copied from isolated profile |
-| Screenshot | Image | UI tests only and only on failure |
+| Accessibility tree | Structured text | UI tests only and sanitized before retention |
 
 No artifact may contain access tokens, refresh tokens, webhook IDs, personal
 endpoints, Wi-Fi identifiers, or sensitive sensor values.

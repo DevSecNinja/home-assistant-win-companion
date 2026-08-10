@@ -30,7 +30,7 @@ secrets
 
 **Testing**: Existing Core unit tests; new protocol/application end-to-end xUnit
 tests; new sequential Windows UI xUnit smoke tests; sanitized TRX, interaction
-logs, and screenshots on failure
+logs, application logs, and accessibility trees on failure
 
 **Target Platform**: Windows 10 build 19041+ and Windows 11 for the application;
 Windows GitHub-hosted runners for build/Core/end-to-end checks; interactive x64
@@ -160,7 +160,7 @@ the built executable and owns one isolated scenario at a time.
   self-hosted runner. The tray smoke test skips with a capability reason when UIA
   cannot expose the tray affordance; native toast capability passed previously.
 - Failures preserve sanitized TRX, scenario metadata, app logs, fake-server
-  interactions, and UI screenshot/accessibility evidence where relevant.
+  interactions, application logs, and UI accessibility evidence where relevant.
 - Prior runtime validation passed 24 journey/foundation tests and seven rendered
   UI scenarios. No reliable elapsed-time measurement was retained.
 - Further runtime test execution is CI-only by user request. Remaining validation
@@ -171,5 +171,5 @@ the built executable and owns one isolated scenario at a time.
 
 | Violation | Why Needed | Simpler Alternative Rejected Because |
 |-----------|------------|-------------------------------------|
-| Third-party FlaUI test dependency | Stable native UIA3 discovery, interaction, retries, and screenshots | Raw COM UI Automation duplicates substantial mature plumbing; WinAppDriver is an unmaintained external service and adds more failure modes |
+| Third-party FlaUI test dependency | Stable native UIA3 discovery, interaction, retries, and accessibility inspection | Raw COM UI Automation duplicates substantial mature plumbing; WinAppDriver is an unmaintained external service and adds more failure modes |
 | Interactive self-hosted UI runner | WinUI rendering and UI Automation require an unlocked interactive desktop | Hosted service sessions can build and run headless tests but cannot reliably render or inspect the native desktop |

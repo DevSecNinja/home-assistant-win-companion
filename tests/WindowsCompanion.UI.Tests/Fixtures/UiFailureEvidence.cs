@@ -14,7 +14,6 @@ internal sealed partial class UiFailureEvidence
     private readonly string _scenarioId;
     private readonly string _evidenceRoot;
     private readonly IReadOnlyList<string> _sensitiveValues;
-    private readonly Func<string, CancellationToken, Task>? _captureScreenshot;
     private readonly Func<UiAccessibilityNode>? _captureTree;
     private readonly Func<string, CancellationToken, Task>? _writeInteractions;
     private readonly string? _appLogPath;
@@ -31,13 +30,6 @@ internal sealed partial class UiFailureEvidence
             ScenarioSensitiveValues(scenario).Concat(additionalSensitiveValues),
             window is null
                 ? null
-                : (path, _) =>
-                {
-                    window.CaptureToFile(path);
-                    return Task.CompletedTask;
-                },
-            window is null
-                ? null
                 : () => CaptureTree(window, ScenarioSensitiveValues(scenario)
                     .Concat(additionalSensitiveValues)
                     .ToArray()),
@@ -51,7 +43,6 @@ internal sealed partial class UiFailureEvidence
         string scenarioId,
         string evidenceRoot,
         IEnumerable<string> sensitiveValues,
-        Func<string, CancellationToken, Task>? captureScreenshot,
         Func<UiAccessibilityNode>? captureTree,
         Func<string, CancellationToken, Task>? writeInteractions = null,
         string? appLogPath = null)
@@ -64,7 +55,6 @@ internal sealed partial class UiFailureEvidence
             .Where(static value => !string.IsNullOrWhiteSpace(value))
             .Distinct(StringComparer.Ordinal)
             .ToArray();
-        _captureScreenshot = captureScreenshot;
         _captureTree = captureTree;
         _writeInteractions = writeInteractions;
         _appLogPath = appLogPath;
@@ -117,27 +107,9 @@ internal sealed partial class UiFailureEvidence
 
         var directory = CreateEvidenceDirectory(step);
         var errors = new List<string>();
-        var screenshotPath = Path.Combine(directory, "screenshot.png");
         var treePath = Path.Combine(directory, "accessibility-tree.json");
         var appLogArtifactPath = Path.Combine(directory, "app.log");
         var failurePath = Path.Combine(directory, "failure.json");
-
-        if (_captureScreenshot is not null)
-        {
-            try
-            {
-                await _captureScreenshot(screenshotPath, cancellationToken).ConfigureAwait(false);
-            }
-            catch (Exception captureException)
-            {
-                screenshotPath = string.Empty;
-                errors.Add($"screenshot: {Sanitize(captureException.Message, _sensitiveValues)}");
-            }
-        }
-        else
-        {
-            screenshotPath = string.Empty;
-        }
 
         if (_captureTree is not null)
         {
@@ -213,7 +185,6 @@ internal sealed partial class UiFailureEvidence
 
         return new UiFailureEvidenceResult(
             directory,
-            string.IsNullOrEmpty(screenshotPath) ? null : screenshotPath,
             string.IsNullOrEmpty(treePath) ? null : treePath,
             string.IsNullOrEmpty(appLogArtifactPath) ? null : appLogArtifactPath,
             failurePath,
@@ -339,7 +310,6 @@ internal sealed partial class UiFailureEvidence
 
 internal sealed record UiFailureEvidenceResult(
     string Directory,
-    string? ScreenshotPath,
     string? AccessibilityTreePath,
     string? AppLogPath,
     string FailurePath,

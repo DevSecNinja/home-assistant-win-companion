@@ -123,7 +123,7 @@ prevents shipped binaries from exposing a test credential or browser path.
   `self-hosted`, `windows`, `x64`, `interactive`, triggered for trusted `main`
   pushes or manually. Do not execute untrusted fork code on that runner.
 
-**Rationale**: Native WinUI rendering, UI Automation, and screenshots require an
+**Rationale**: Native WinUI rendering and UI Automation require an
 unlocked interactive desktop. Hosted runners remain appropriate for compilation
 and headless loopback protocol tests. The split avoids presenting a non-executing
 or flaky hosted UI job as coverage.
@@ -143,7 +143,7 @@ or flaky hosted UI job as coverage.
 credential resource, and interaction log. Headless end-to-end tests may run in
 parallel when isolation is proven. UI tests use an xUnit collection with
 parallelization disabled and capture sanitized interaction JSON, app logs, TRX,
-and a window screenshot on failure.
+and a sanitized accessibility-tree snapshot on failure.
 
 **Rationale**: OS-level singleton resources and the interactive desktop make
 parallel UI execution unsafe. Protocol tests can safely parallelize with strict
@@ -172,7 +172,7 @@ polling.
   The checked-in interactive workflow currently runs on trusted pushes to `main`
   and manual dispatch, not release branches.
 - Failure evidence includes sanitized interaction history, app logs, scenario
-  metadata, TRX, and UI screenshot/accessibility data where relevant.
+  metadata, TRX, application logs, and UI accessibility data where relevant.
 - All further runtime test execution is CI-only by user request. These findings
   were reconciled with static Markdown and diff inspection.
 

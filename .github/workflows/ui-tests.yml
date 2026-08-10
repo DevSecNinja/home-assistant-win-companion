@@ -19,6 +19,9 @@ jobs:
       - x64
       - interactive
     timeout-minutes: 20
+    env:
+      WINDOWS_COMPANION_UI_NOTIFICATIONS: "1"
+      WINDOWS_COMPANION_UI_TRAY: "1"
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -32,7 +35,7 @@ jobs:
         id: ui-tests
         shell: pwsh
         run: >-
-          .\scripts\test.ps1 -Ui
+          .\scripts\test.ps1 -Ui -RepeatCount 10
           -ResultsDirectory TestResults
       - name: Upload UI test results
         if: ${{ always() && steps.ui-tests.outcome != 'skipped' }}

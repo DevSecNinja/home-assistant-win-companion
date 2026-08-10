@@ -1,6 +1,8 @@
 using System.Runtime.InteropServices;
 using FlaUI.Core.AutomationElements;
 using FlaUI.Core;
+using FlaUI.Core.Definitions;
+using FlaUI.UIA3;
 
 namespace WindowsCompanion.UI.Tests;
 
@@ -41,6 +43,19 @@ internal static class UiCapabilities
         }
         if (FindWindow("Shell_TrayWnd", null) == 0)
             return "Tray capability unavailable: the Windows taskbar shell is not running in this desktop.";
+        try
+        {
+            using var automation = new UIA3Automation();
+            if (!TrayAutomationRoots(automation).Any(root =>
+                    root.FindAllDescendants(cf => cf.ByControlType(ControlType.Button)).Length > 0))
+            {
+                return "Tray capability unavailable: UI Automation does not expose taskbar icons.";
+            }
+        }
+        catch (Exception exception)
+        {
+            return $"Tray capability unavailable: UI Automation probe failed ({exception.GetType().Name}).";
+        }
         return null;
     }
 
@@ -65,9 +80,10 @@ internal static class UiCapabilities
 
     internal static IReadOnlyList<AutomationElement> TrayAutomationRoots(AutomationBase automation)
     {
+        var taskbar = FindWindow("Shell_TrayWnd", null);
         var handles = new[]
         {
-            FindWindow("Shell_TrayWnd", null),
+            taskbar == 0 ? 0 : FindWindowEx(taskbar, 0, "TrayNotifyWnd", null),
             FindWindow("NotifyIconOverflowWindow", null)
         };
         return handles
@@ -91,6 +107,13 @@ internal static class UiCapabilities
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     private static extern nint FindWindow(string className, string? windowName);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern nint FindWindowEx(
+        nint parent,
+        nint childAfter,
+        string className,
+        string? windowName);
 
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]

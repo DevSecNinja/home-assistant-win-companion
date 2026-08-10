@@ -42,6 +42,10 @@ native-toast capability scenario. The tray scenario is capability-gated and skip
 with the missing capability when UIA cannot expose a usable tray icon; it is never
 converted into a pass or driven with screen coordinates.
 
+The interactive workflow explicitly enables notification and tray capability
+probes. Raw screenshots are not retained because rendered pixels may contain
+sensitive values that cannot be reliably redacted.
+
 This repository is public. Never allow unreviewed fork pull-request code to run on
 the persistent self-hosted runner. The checked-in UI workflow runs only for trusted
 pushes to `main` or explicit manual dispatch. Use repository/environment approval
@@ -55,7 +59,7 @@ results directory:
 - TRX test result
 - fake-server interaction log
 - isolated application log
-- UI screenshot and accessibility-tree summary for UI failures
+- sanitized accessibility-tree summary for UI failures
 
 Evidence must contain only synthetic endpoints and credentials. If a retained
 artifact includes a personal URL, credential, webhook identifier, Wi-Fi

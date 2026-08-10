@@ -147,7 +147,8 @@ As a contributor, I can rely on continuous integration to run the required suite
 - Hosted CI runs the headless end-to-end project and compiles the UI project.
   Rendered UI execution belongs to the trusted interactive x64 self-hosted job.
 - Failure paths retain sanitized scenario metadata, app and fake-server logs, TRX
-  results, and UI screenshots/accessibility trees where applicable.
+  results, and UI accessibility trees where applicable. Raw screenshots are not
+  retained because rendered pixels cannot be reliably redacted.
 - Release application builds are supported for x64 and ARM64. Rendered UI
   automation remains x64 because that is the configured interactive runner.
 - No measured duration was retained from the prior validation, so SC-003 and

@@ -5,11 +5,8 @@ namespace WindowsCompanion.UI.Tests;
 
 public sealed class FailureEvidenceTests
 {
-    private static readonly byte[] OnePixelPng = Convert.FromBase64String(
-        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=");
-
     [Fact]
-    public async Task Induced_failure_writes_screenshot_and_sanitized_tree()
+    public async Task Induced_failure_writes_sanitized_tree_and_log()
     {
         var root = EvidenceRoot();
         const string secret = "synthetic-sensitive-value";
@@ -23,8 +20,6 @@ public sealed class FailureEvidenceTests
             "ui-evidence-contract",
             root,
             [secret, endpoint],
-            (path, cancellationToken) =>
-                File.WriteAllBytesAsync(path, OnePixelPng, cancellationToken),
             () => new UiAccessibilityNode(
                 "Connect.Error",
                 "Text",
@@ -53,14 +48,12 @@ public sealed class FailureEvidenceTests
             Assert.Contains("Induced failure", exception.Message, StringComparison.Ordinal);
             var directory = Directory.GetDirectories(root, "*", SearchOption.AllDirectories)
                 .Single(path => File.Exists(Path.Combine(path, "failure.json")));
-            var screenshot = Path.Combine(directory, "screenshot.png");
             var tree = await File.ReadAllTextAsync(
                 Path.Combine(directory, "accessibility-tree.json"));
             var appLog = await File.ReadAllTextAsync(Path.Combine(directory, "app.log"));
             var failure = await File.ReadAllTextAsync(Path.Combine(directory, "failure.json"));
 
-            Assert.True(File.Exists(screenshot));
-            Assert.Equal(OnePixelPng, await File.ReadAllBytesAsync(screenshot));
+            Assert.False(File.Exists(Path.Combine(directory, "screenshot.png")));
             Assert.Contains("[REDACTED]", tree, StringComparison.Ordinal);
             Assert.Contains("[URI]", tree, StringComparison.Ordinal);
             Assert.Contains("[REDACTED]", appLog, StringComparison.Ordinal);
@@ -86,7 +79,6 @@ public sealed class FailureEvidenceTests
             "ui-capture-error",
             root,
             [],
-            (_, _) => throw new InvalidOperationException("screenshot unavailable"),
             () => throw new InvalidOperationException("tree unavailable"));
 
         try
@@ -102,12 +94,7 @@ public sealed class FailureEvidenceTests
                 .Single();
             using var document = JsonDocument.Parse(await File.ReadAllTextAsync(failurePath));
             var errors = document.RootElement.GetProperty("captureErrors");
-            Assert.Equal(2, errors.GetArrayLength());
-            Assert.Contains(
-                errors.EnumerateArray(),
-                error => error.GetString()!.StartsWith(
-                    "screenshot:",
-                    StringComparison.Ordinal));
+            Assert.Single(errors.EnumerateArray());
             Assert.Contains(
                 errors.EnumerateArray(),
                 error => error.GetString()!.StartsWith(

@@ -54,7 +54,6 @@ Dynamic sensor controls derive IDs from stable sensor IDs, for example
 
 On failure the fixture captures:
 
-- current window screenshot
 - sanitized UI tree summary containing IDs, control types, names, enabled state,
   and visibility
 - isolated app log
@@ -63,6 +62,9 @@ On failure the fixture captures:
 
 Captured UI text is treated as potentially sensitive and redacted through the
 same fixture policy as application logs.
+
+Raw screenshots are never retained because text rendered into pixels cannot be
+reliably sanitized.
 
 If the runner lacks notification or shell capability, the environment probe must
 report the exact unsupported capability; it must not report the smoke scenario as

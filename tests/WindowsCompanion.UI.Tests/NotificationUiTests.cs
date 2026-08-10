@@ -16,6 +16,9 @@ public sealed class NotificationUiTests
             {
                 new ConnectPage(fixture.Window).EnterUrl(fixture.Scenario.BaseUrl!.AbsoluteUri);
                 new StatusPage(fixture.Window).WaitForConnection("Connected");
+                await fixture.Scenario.Interactions.WaitForAsync(
+                    interaction => interaction.PathOrMessageType == "push_subscribed",
+                    TimeSpan.FromSeconds(20));
                 var confirmationId = $"ui-confirm-{Guid.NewGuid():N}";
                 var title = $"Companion UI notification {Guid.NewGuid():N}";
 

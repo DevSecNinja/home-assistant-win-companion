@@ -105,7 +105,7 @@ values.
 
 - [X] T035 [P] [US3] Implement JSON interaction export and secret/sensitive-value redaction tests in `tests/WindowsCompanion.Testing/FakeHaEvidenceWriter.cs` and `tests/WindowsCompanion.E2E.Tests/EvidenceRedactionTests.cs`
 - [X] T036 [P] [US3] Implement isolated app-log collection and scenario metadata in `tests/WindowsCompanion.E2E.Tests/Fixtures/FailureEvidence.cs`
-- [X] T037 [US3] Add screenshot and sanitized accessibility-tree capture on UI failure in `tests/WindowsCompanion.UI.Tests/Fixtures/UiFailureEvidence.cs`
+- [X] T037 [US3] Add sanitized accessibility-tree and application-log capture on UI failure in `tests/WindowsCompanion.UI.Tests/Fixtures/UiFailureEvidence.cs`
 - [X] T038 [US3] Add induced-failure evidence contract tests in `tests/WindowsCompanion.UI.Tests/FailureEvidenceTests.cs` and `tests/WindowsCompanion.E2E.Tests/EvidenceContractTests.cs`
 
 **Checkpoint**: Failed scenarios leave useful evidence and evidence-contract tests

@@ -18,6 +18,9 @@ param(
     [ValidateSet('x64', 'ARM64')]
     [string]$Platform,
 
+    [ValidateRange(1, 10)]
+    [int]$RepeatCount = 1,
+
     [ValidateRange(0, 100)]
     [double]$MinimumLineCoverage = 85,
 
@@ -128,11 +131,13 @@ else {
 Invoke-TestProject -Project $appBoundaryProject -Name 'app-boundary'
 
 if ($EndToEnd) {
-    Invoke-TestProject `
-        -Project $e2eProject `
-        -Name 'end-to-end' `
-        -Configuration 'Release' `
-        -AdditionalArguments @("-p:Platform=$Platform", '-r', $runtimeIdentifier)
+    foreach ($run in 1..$RepeatCount) {
+        Invoke-TestProject `
+            -Project $e2eProject `
+            -Name "end-to-end-$run" `
+            -Configuration 'Release' `
+            -AdditionalArguments @("-p:Platform=$Platform", '-r', $runtimeIdentifier)
+    }
 }
 
 if ($Ui) {
@@ -144,9 +149,11 @@ if ($Ui) {
         --nologo
     if ($LASTEXITCODE -ne 0) { throw 'The Debug Windows app build failed.' }
 
-    Invoke-TestProject `
-        -Project $uiProject `
-        -Name 'ui' `
-        -Configuration 'Debug' `
-        -AdditionalArguments @("-p:Platform=$Platform", '-r', $runtimeIdentifier)
+    foreach ($run in 1..$RepeatCount) {
+        Invoke-TestProject `
+            -Project $uiProject `
+            -Name "ui-$run" `
+            -Configuration 'Debug' `
+            -AdditionalArguments @("-p:Platform=$Platform", '-r', $runtimeIdentifier)
+    }
 }

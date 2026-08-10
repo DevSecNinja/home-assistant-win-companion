@@ -90,15 +90,11 @@ jobs:
           --results-directory TestResults --nologo
       - name: Run end-to-end tests
         id: e2e-tests
-        shell: pwsh
-        run: |
-          foreach ($run in 1..10) {
-            dotnet test tests\WindowsCompanion.E2E.Tests\WindowsCompanion.E2E.Tests.csproj -c Release `
-              -p:Platform=x64 -p:PublishReadyToRun=false -r win-x64 --no-restore `
-              --logger "trx;LogFileName=e2e-test-results-$run.trx" `
-              --results-directory TestResults --nologo
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          }
+        run: >-
+          dotnet test tests\WindowsCompanion.E2E.Tests\WindowsCompanion.E2E.Tests.csproj -c Release
+          -p:Platform=x64 -p:PublishReadyToRun=false -r win-x64 --no-restore
+          --logger "trx;LogFileName=e2e-test-results.trx"
+          --results-directory TestResults --nologo
       - name: Run Debug launch-profile safety tests
         run: >-
           dotnet test tests\WindowsCompanion.E2E.Tests\WindowsCompanion.E2E.Tests.csproj -c Debug

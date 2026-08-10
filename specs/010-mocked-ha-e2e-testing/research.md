@@ -171,6 +171,8 @@ polling.
   application builds. Rendered UI remains an interactive x64 self-hosted concern.
   The checked-in interactive workflow currently runs on trusted pushes to `main`
   and manual dispatch, not release branches.
+- Ten-pass E2E/UI repeatability runs weekly or by manual dispatch in a separate
+  extended workflow rather than blocking pull requests.
 - Failure evidence includes sanitized interaction history, app logs, scenario
   metadata, TRX, application logs, and UI accessibility data where relevant.
 - All further runtime test execution is CI-only by user request. These findings

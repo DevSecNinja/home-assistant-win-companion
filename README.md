@@ -175,6 +175,8 @@ execute rendered UI. Trusted main builds and manual runs execute it sequentially
 on a self-hosted runner labelled `windows`, `x64`, and `interactive`. See
 [`specs/010-mocked-ha-e2e-testing/quickstart.md`](specs/010-mocked-ha-e2e-testing/quickstart.md)
 for focused filters, diagnostics, runner constraints, and security boundaries.
+Ten-pass repeatability runs are kept out of the PR gate and run from the scheduled
+or manually dispatched **Extended tests** workflow.
 
 `scripts/run.ps1` builds and then launches exactly what it just built. That matters:
 a solution build and a project build otherwise select different platforms and write

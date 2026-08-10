@@ -159,6 +159,8 @@ the built executable and owns one isolated scenario at a time.
 - Rendered UI tests execute sequentially on the trusted interactive x64
   self-hosted runner. The tray smoke test skips with a capability reason when UIA
   cannot expose the tray affordance; native toast capability passed previously.
+- Normal PR/main gates run one pass. Ten-pass E2E and UI repeatability is isolated
+  in a weekly or manually dispatched extended workflow.
 - Failures preserve sanitized TRX, scenario metadata, app logs, fake-server
   interactions, application logs, and UI accessibility evidence where relevant.
 - Prior runtime validation passed 24 journey/foundation tests and seven rendered

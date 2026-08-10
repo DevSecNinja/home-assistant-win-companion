@@ -71,3 +71,6 @@ identifier, or sensitive sensor value, treat that as a test failure.
 - The UI project is compiled on hosted CI.
 - Rendered UI smoke tests run sequentially on an interactive self-hosted Windows
   runner for trusted pushes to `main` or manual dispatch.
+- Pull requests run each required suite once. Ten-pass E2E and UI repeatability
+  runs execute weekly or by manual dispatch through the **Extended tests**
+  workflow, so they do not lengthen the normal PR gate.

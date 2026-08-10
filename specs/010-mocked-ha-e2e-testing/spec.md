@@ -146,6 +146,8 @@ As a contributor, I can rely on continuous integration to run the required suite
   is not reported as a pass.
 - Hosted CI runs the headless end-to-end project and compiles the UI project.
   Rendered UI execution belongs to the trusted interactive x64 self-hosted job.
+- Pull-request checks run one pass; the ten-pass repeatability requirement runs
+  in a weekly or manually dispatched extended workflow.
 - Failure paths retain sanitized scenario metadata, app and fake-server logs, TRX
   results, and UI accessibility trees where applicable. Raw screenshots are not
   retained because rendered pixels cannot be reliably redacted.

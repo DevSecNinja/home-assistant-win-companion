@@ -35,7 +35,7 @@ jobs:
         id: ui-tests
         shell: pwsh
         run: >-
-          .\scripts\test.ps1 -Ui -RepeatCount 10
+          .\scripts\test.ps1 -Ui
           -ResultsDirectory TestResults
       - name: Upload UI test results
         if: ${{ always() && steps.ui-tests.outcome != 'skipped' }}

@@ -134,7 +134,7 @@ real HA instance, and UI execution is not misrepresented on hosted runners.
 ## Phase 7: Polish & Cross-Cutting Concerns
 
 - [X] T044 [P] Add XML documentation for public test-harness contracts and remove duplicated fixture helpers across `tests/WindowsCompanion.Testing/` and new test projects
-- [ ] T045 Run targeted Core, fake-server contract, end-to-end, and interactive UI tests using `scripts/test.ps1`, then run ten consecutive new-suite executions required by `spec.md`
+- [ ] T045 Run targeted Core, fake-server contract, end-to-end, and interactive UI tests in CI, then complete the weekly/manual ten-pass extended executions required by `spec.md`
 - [X] T046 Build Release x64 and ARM64 app targets and confirm the Release binary has no debug test-launch composition in `src/WindowsCompanion.App/WindowsCompanion.App.csproj`
 - [X] T047 Reconcile implementation discoveries, supported scenarios, measured timings, and known limitations in `specs/010-mocked-ha-e2e-testing/spec.md`, `plan.md`, `research.md`, and `quickstart.md`
 

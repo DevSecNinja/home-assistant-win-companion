@@ -10,7 +10,8 @@ internal sealed partial record TestAppLaunchOptions(
     string CredentialResourceSuffix,
     string InstanceIdentity,
     Uri ServerUrl,
-    bool AutoAuthorize)
+    bool AutoAuthorize,
+    bool SuppressTrayLeftClick)
 {
     internal const string ArgumentPrefix = "--test-profile=";
 
@@ -79,7 +80,8 @@ internal sealed partial record TestAppLaunchOptions(
             profile.CredentialResourceSuffix!,
             profile.InstanceIdentity!,
             serverUrl,
-            profile.AutoAuthorize);
+            profile.AutoAuthorize,
+            profile.SuppressTrayLeftClick);
     }
 
     private static string FromBase64Url(string value)
@@ -101,6 +103,7 @@ internal sealed partial record TestAppLaunchOptions(
         public string? InstanceIdentity { get; init; }
         public string? ServerUrl { get; init; }
         public bool AutoAuthorize { get; init; }
+        public bool SuppressTrayLeftClick { get; init; }
     }
 }
 #endif

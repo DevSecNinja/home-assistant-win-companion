@@ -17,6 +17,7 @@ internal sealed class UiScenarioFixture : IAsyncDisposable
 {
     private readonly string _applicationPath;
     private readonly string _evidenceRoot;
+    private readonly bool _suppressTrayLeftClick;
     private Application? _application;
     private int _automationDisposed;
     private int _disposed;
@@ -27,7 +28,8 @@ internal sealed class UiScenarioFixture : IAsyncDisposable
         string profileDirectory,
         string credentialResource,
         string instanceIdentity,
-        string evidenceRoot)
+        string evidenceRoot,
+        bool suppressTrayLeftClick)
     {
         _applicationPath = applicationPath;
         Scenario = scenario;
@@ -35,6 +37,7 @@ internal sealed class UiScenarioFixture : IAsyncDisposable
         CredentialResource = credentialResource;
         InstanceIdentity = instanceIdentity;
         _evidenceRoot = evidenceRoot;
+        _suppressTrayLeftClick = suppressTrayLeftClick;
         Automation = new UIA3Automation();
         FailureEvidence = CreateFailureEvidence(window: null);
     }
@@ -50,7 +53,8 @@ internal sealed class UiScenarioFixture : IAsyncDisposable
 
     internal static async Task<UiScenarioFixture> StartAsync(
         string scenarioId,
-        Action<FakeHaScenario>? configure = null)
+        Action<FakeHaScenario>? configure = null,
+        bool suppressTrayLeftClick = false)
     {
         var scenario = await FakeHaScenario.StartAsync(scenarioId);
         UiScenarioFixture? fixture = null;
@@ -73,7 +77,8 @@ internal sealed class UiScenarioFixture : IAsyncDisposable
                 profile,
                 credentialResource,
                 identity,
-                evidenceRoot);
+                evidenceRoot,
+                suppressTrayLeftClick);
             Directory.CreateDirectory(profile);
             await fixture.LaunchAsync(suffix);
             return fixture;
@@ -107,11 +112,12 @@ internal sealed class UiScenarioFixture : IAsyncDisposable
         string step,
         Func<UiScenarioFixture, Task> action,
         Action<FakeHaScenario>? configure = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        bool suppressTrayLeftClick = false)
     {
         ArgumentNullException.ThrowIfNull(action);
         WindowsCompanion.UI.Tests.UiCapabilities.RequireInteractive();
-        var fixture = await StartAsync(scenarioId, configure);
+        var fixture = await StartAsync(scenarioId, configure, suppressTrayLeftClick);
         Exception? scenarioFailure = null;
         try
         {
@@ -185,7 +191,8 @@ internal sealed class UiScenarioFixture : IAsyncDisposable
             credentialResourceSuffix = credentialSuffix,
             instanceIdentity = InstanceIdentity,
             serverUrl = Scenario.BaseUrl!.AbsoluteUri,
-            autoAuthorize = true
+            autoAuthorize = true,
+            suppressTrayLeftClick = _suppressTrayLeftClick
         });
         var encoded = Convert.ToBase64String(Encoding.UTF8.GetBytes(json))
             .TrimEnd('=')

@@ -18,7 +18,8 @@ public sealed class TrayUiTests
     public Task Hidden_window_is_restored_by_double_clicking_the_tray_icon() =>
         HiddenWindowIsRestoredThroughTrayIcon(
             "hide and restore through tray double click",
-            trayIcon => trayIcon.DoubleClick());
+            trayIcon => trayIcon.DoubleClick(),
+            suppressTrayLeftClick: true);
 
     [UiTrayFact]
     public Task Visible_background_window_is_activated_through_the_tray_icon() =>
@@ -30,7 +31,8 @@ public sealed class TrayUiTests
     public Task Visible_background_window_is_activated_by_double_clicking_the_tray_icon() =>
         VisibleBackgroundWindowIsActivatedThroughTrayIcon(
             "activate background window through tray double click",
-            trayIcon => trayIcon.DoubleClick());
+            trayIcon => trayIcon.DoubleClick(),
+            suppressTrayLeftClick: true);
 
     [UiTrayFact]
     public Task Visible_background_window_is_activated_through_the_tray_menu() =>
@@ -65,7 +67,8 @@ public sealed class TrayUiTests
 
     private static Task VisibleBackgroundWindowIsActivatedThroughTrayIcon(
         string scenarioName,
-        Action<AutomationElement> activateTrayIcon) =>
+        Action<AutomationElement> activateTrayIcon,
+        bool suppressTrayLeftClick = false) =>
         UiScenarioFixture.RunAsync(
             "ui-tray",
             scenarioName,
@@ -87,11 +90,13 @@ public sealed class TrayUiTests
                     "The application window did not return to the foreground.");
                 Assert.True(UiCapabilities.IsWindowVisible(fixture.Window));
                 return Task.CompletedTask;
-            });
+            },
+            suppressTrayLeftClick: suppressTrayLeftClick);
 
     private static Task HiddenWindowIsRestoredThroughTrayIcon(
         string scenarioName,
-        Action<AutomationElement> activateTrayIcon) =>
+        Action<AutomationElement> activateTrayIcon,
+        bool suppressTrayLeftClick = false) =>
         UiScenarioFixture.RunAsync(
             "ui-tray",
             scenarioName,
@@ -109,7 +114,8 @@ public sealed class TrayUiTests
                 status.WaitForConnection("Connected");
                 Assert.True(UiCapabilities.IsWindowVisible(fixture.Window));
                 return Task.CompletedTask;
-            });
+            },
+            suppressTrayLeftClick: suppressTrayLeftClick);
 
     private static StatusPage Connect(UiScenarioFixture fixture)
     {

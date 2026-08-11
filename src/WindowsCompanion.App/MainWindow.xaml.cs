@@ -106,7 +106,12 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
         _controller.UpdateStateChanged += OnUpdateStateChanged;
         ApplyUpdateState(_controller.UpdateState);
 
+#if DEBUG
+        if (App.TestLaunchOptions is not { SuppressTrayLeftClick: true })
+            TrayIcon.LeftClickCommand = TrayShowWindowCommand;
+#else
         TrayIcon.LeftClickCommand = TrayShowWindowCommand;
+#endif
         TrayIcon.DoubleClickCommand = TrayShowWindowCommand;
 #if DEBUG
         if (App.TestLaunchOptions is { } testOptions)

@@ -14,6 +14,32 @@
     </Window.SystemBackdrop>
 
     <Grid>
+        <Grid.Resources>
+            <Style x:Key="SettingsCardStyle" TargetType="Border">
+                <Setter Property="Background" Value="{ThemeResource CardBackgroundFillColorDefaultBrush}" />
+                <Setter Property="BorderBrush" Value="{ThemeResource CardStrokeColorDefaultBrush}" />
+                <Setter Property="BorderThickness" Value="1" />
+                <Setter Property="CornerRadius" Value="8" />
+            </Style>
+            <Style x:Key="SettingsSectionHeaderStyle" TargetType="TextBlock">
+                <Setter Property="FontSize" Value="14" />
+                <Setter Property="FontWeight" Value="SemiBold" />
+                <Setter Property="Margin" Value="4,0,0,0" />
+            </Style>
+            <Style x:Key="SettingsDescriptionStyle" TargetType="TextBlock">
+                <Setter Property="FontSize" Value="12" />
+                <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}" />
+                <Setter Property="TextWrapping" Value="Wrap" />
+            </Style>
+            <Style
+                x:Key="SettingsActionButtonStyle"
+                TargetType="Button"
+                BasedOn="{StaticResource DefaultButtonStyle}">
+                <Setter Property="HorizontalAlignment" Value="Stretch" />
+                <Setter Property="HorizontalContentAlignment" Value="Center" />
+            </Style>
+        </Grid.Resources>
+
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
@@ -60,6 +86,8 @@
             <InfoBar
                 x:Name="DemoBanner"
                 Margin="24,4,24,0"
+                MaxWidth="680"
+                HorizontalAlignment="Center"
                 Severity="Warning"
                 IsOpen="False"
                 IsClosable="False">
@@ -67,32 +95,49 @@
                     <Button Content="Leave demo mode" Click="OnLeaveDemoMode" />
                 </InfoBar.ActionButton>
             </InfoBar>
-            <InfoBar
-                x:Name="UpdateBanner"
-                Margin="24,4,24,0"
-                Title="Update available"
-                Severity="Informational"
-                IsOpen="False"
-                IsClosable="False">
-                <StackPanel Spacing="8">
-                    <TextBlock
-                        x:Name="UpdateBannerMessage"
-                        AutomationProperties.LiveSetting="Polite"
-                        TextWrapping="Wrap" />
-                    <StackPanel Orientation="Horizontal" Spacing="8">
-                        <Button
-                            x:Name="ViewReleaseButton"
-                            Content="View release"
-                            Visibility="Collapsed"
-                            Click="OnViewRelease" />
-                        <Button
-                            x:Name="RecheckUpdatesButton"
-                            Content="Recheck for updates"
-                            Visibility="Collapsed"
-                            Click="OnRecheckUpdates" />
-                    </StackPanel>
-                </StackPanel>
-            </InfoBar>
+            <Grid Margin="24,4,24,0" MaxWidth="680" HorizontalAlignment="Center">
+                <InfoBar
+                    x:Name="UpdateBanner"
+                    HorizontalAlignment="Stretch"
+                    Padding="0,8"
+                    Severity="Informational"
+                    IsOpen="False"
+                    IsClosable="True">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Spacing="2" VerticalAlignment="Center">
+                            <TextBlock
+                                x:Name="UpdateBannerTitleText"
+                                Text="Update available"
+                                FontWeight="SemiBold" />
+                            <TextBlock
+                                x:Name="UpdateBannerMessage"
+                                AutomationProperties.LiveSetting="Polite"
+                                TextWrapping="Wrap"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        </StackPanel>
+                        <StackPanel
+                            Grid.Column="1"
+                            Orientation="Horizontal"
+                            Spacing="8"
+                            VerticalAlignment="Center">
+                            <Button
+                                x:Name="ViewReleaseButton"
+                                Content="View release"
+                                Visibility="Collapsed"
+                                Click="OnViewRelease" />
+                            <Button
+                                x:Name="RecheckUpdatesButton"
+                                Content="Recheck for updates"
+                                Visibility="Collapsed"
+                                Click="OnRecheckUpdates" />
+                        </StackPanel>
+                    </Grid>
+                </InfoBar>
+            </Grid>
         </StackPanel>
 
         <!-- Connect view -->
@@ -142,187 +187,460 @@
         </StackPanel>
 
         <!-- Status view -->
-        <StackPanel
-            x:Name="StatusPanel"
-            Grid.Row="2"
-            Width="380"
-            Padding="24"
-            VerticalAlignment="Center"
-            HorizontalAlignment="Center"
-            Spacing="12"
-            Visibility="Collapsed">
-            <TextBlock Text="Windows Companion for Home Assistant" Style="{StaticResource SubtitleTextBlockStyle}" />
-            <StackPanel Orientation="Horizontal" Spacing="8">
-                <TextBlock Text="Server:" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                <TextBlock x:Name="ServerText" AutomationProperties.AutomationId="Status.Server" Text="—" TextTrimming="CharacterEllipsis" />
-            </StackPanel>
-            <StackPanel Orientation="Horizontal" Spacing="8">
-                <TextBlock Text="Address in use:" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                <TextBlock x:Name="RouteText" Text="—" FontWeight="SemiBold" />
-            </StackPanel>
-            <StackPanel Orientation="Horizontal" Spacing="8">
-                <TextBlock Text="Status:" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                <TextBlock x:Name="StatusText" AutomationProperties.AutomationId="Status.Connection" Text="Connecting…" FontWeight="SemiBold" />
-            </StackPanel>
-            <StackPanel Orientation="Horizontal" Spacing="8">
-                <TextBlock Text="Health:" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                <TextBlock x:Name="HealthText" AutomationProperties.AutomationId="Status.Health" Text="—" FontWeight="SemiBold" TextWrapping="Wrap" />
-            </StackPanel>
-            <StackPanel Orientation="Horizontal" Spacing="8">
-                <TextBlock Text="Battery:" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                <TextBlock x:Name="BatteryText" Text="—" />
-            </StackPanel>
-            <StackPanel Orientation="Horizontal" Spacing="8">
-                <TextBlock Text="Last update:" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                <TextBlock x:Name="LastUpdateText" Text="—" />
-            </StackPanel>
-            <Button x:Name="OpenHomeAssistantButton" Content="Open Home Assistant" Click="OnOpenHomeAssistant" HorizontalAlignment="Stretch" />
-            <Button AutomationProperties.AutomationId="Status.OpenSensors"
-                    Content="Sensors" Click="OnShowSensors" HorizontalAlignment="Stretch" />
-            <Button AutomationProperties.AutomationId="Status.OpenSettings"
-                    AutomationProperties.Name="Open Settings"
-                    Content="Settings" Click="OnShowPreferences" HorizontalAlignment="Stretch" />
-        </StackPanel>
+        <Grid x:Name="StatusPanel" Grid.Row="2" Visibility="Collapsed">
+            <ScrollViewer Padding="24,12,24,24">
+                <StackPanel MaxWidth="680" HorizontalAlignment="Center" Spacing="20">
+                    <Grid ColumnSpacing="14">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="48" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Image
+                            Width="48"
+                            Height="48"
+                            Source="Assets/Square150x150Logo.scale-200.png"
+                            AutomationProperties.Name="Windows Companion for Home Assistant logo" />
+                        <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
+                            <TextBlock Text="Overview" Style="{StaticResource SubtitleTextBlockStyle}" />
+                            <TextBlock
+                                Text="Connection and device status at a glance."
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        </StackPanel>
+                    </Grid>
+
+                    <Border Style="{StaticResource SettingsCardStyle}">
+                        <Grid Padding="18,16" ColumnSpacing="16">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="184" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Spacing="4">
+                                <TextBlock
+                                    x:Name="StatusText"
+                                    AutomationProperties.AutomationId="Status.Connection"
+                                    Text="Connecting…"
+                                    FontSize="18"
+                                    FontWeight="SemiBold" />
+                                <TextBlock
+                                    x:Name="ServerText"
+                                    AutomationProperties.AutomationId="Status.Server"
+                                    Text="—"
+                                    TextTrimming="CharacterEllipsis" />
+                                <TextBlock
+                                    x:Name="RouteText"
+                                    Text="—"
+                                    Style="{StaticResource SettingsDescriptionStyle}" />
+                            </StackPanel>
+                            <Button
+                                x:Name="OpenHomeAssistantButton"
+                                Grid.Column="1"
+                                Content="Open Home Assistant"
+                                Style="{StaticResource SettingsActionButtonStyle}"
+                                VerticalAlignment="Center"
+                                Click="OnOpenHomeAssistant" />
+                        </Grid>
+                    </Border>
+
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="At a glance" Style="{StaticResource SettingsSectionHeaderStyle}" />
+                        <Border Style="{StaticResource SettingsCardStyle}">
+                            <Grid Padding="16,14" RowSpacing="12" ColumnSpacing="16">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="128" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+                                <TextBlock Text="Connection health" Style="{StaticResource SettingsDescriptionStyle}" />
+                                <TextBlock
+                                    x:Name="HealthText"
+                                    Grid.Column="1"
+                                    AutomationProperties.AutomationId="Status.Health"
+                                    Text="—"
+                                    FontWeight="SemiBold"
+                                    TextWrapping="Wrap" />
+                                <TextBlock Grid.Row="1" Text="Battery" Style="{StaticResource SettingsDescriptionStyle}" />
+                                <TextBlock x:Name="BatteryText" Grid.Row="1" Grid.Column="1" Text="—" />
+                                <TextBlock Grid.Row="2" Text="Last sensor sync" Style="{StaticResource SettingsDescriptionStyle}" />
+                                <TextBlock x:Name="LastUpdateText" Grid.Row="2" Grid.Column="1" Text="—" />
+                            </Grid>
+                        </Border>
+                    </StackPanel>
+
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="Manage" Style="{StaticResource SettingsSectionHeaderStyle}" />
+                        <Border Style="{StaticResource SettingsCardStyle}">
+                            <Grid Padding="16,14" ColumnSpacing="16">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="184" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Spacing="3">
+                                    <TextBlock Text="Sensors" FontWeight="SemiBold" />
+                                    <TextBlock
+                                        Text="Choose what this PC reports to Home Assistant."
+                                        Style="{StaticResource SettingsDescriptionStyle}" />
+                                </StackPanel>
+                                <Button
+                                    Grid.Column="1"
+                                    AutomationProperties.AutomationId="Status.OpenSensors"
+                                    Content="Manage sensors"
+                                    Style="{StaticResource SettingsActionButtonStyle}"
+                                    VerticalAlignment="Center"
+                                    Click="OnShowSensors" />
+                            </Grid>
+                        </Border>
+                        <Border Style="{StaticResource SettingsCardStyle}">
+                            <Grid Padding="16,14" ColumnSpacing="16">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="184" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Spacing="3">
+                                    <TextBlock Text="Application settings" FontWeight="SemiBold" />
+                                    <TextBlock
+                                        Text="Configure startup, sync, updates and the connection."
+                                        Style="{StaticResource SettingsDescriptionStyle}" />
+                                </StackPanel>
+                                <Button
+                                    Grid.Column="1"
+                                    AutomationProperties.AutomationId="Status.OpenSettings"
+                                    AutomationProperties.Name="Open Settings"
+                                    Content="Open settings"
+                                    Style="{StaticResource SettingsActionButtonStyle}"
+                                    VerticalAlignment="Center"
+                                    Click="OnShowPreferences" />
+                            </Grid>
+                        </Border>
+                    </StackPanel>
+                </StackPanel>
+            </ScrollViewer>
+        </Grid>
 
         <!-- Application settings view -->
         <Grid x:Name="PreferencesPanel" Grid.Row="2" Visibility="Collapsed">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
-                <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
-            <StackPanel Grid.Row="0" Padding="24,16,24,8" Spacing="4">
-                <TextBlock Text="Settings" Style="{StaticResource SubtitleTextBlockStyle}" />
-                <TextBlock
-                    Text="Configure how the companion behaves and manage its connection to Home Assistant."
-                    TextWrapping="Wrap"
-                    Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-            </StackPanel>
+            <Grid Grid.Row="0" Padding="24,12,24,12" ColumnSpacing="12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Button
+                    AutomationProperties.AutomationId="Settings.Back"
+                    AutomationProperties.Name="Back"
+                    Width="40"
+                    Height="40"
+                    VerticalAlignment="Top"
+                    Click="OnClosePreferences">
+                    <FontIcon Glyph="&#xE72B;" FontSize="16" />
+                </Button>
+                <StackPanel Grid.Column="1" Spacing="2">
+                    <TextBlock Text="Settings" Style="{StaticResource SubtitleTextBlockStyle}" />
+                    <TextBlock
+                        Text="Configure Windows Companion and its Home Assistant connection."
+                        TextWrapping="Wrap"
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                </StackPanel>
+            </Grid>
 
-            <ScrollViewer Grid.Row="1" Padding="24,0,24,0">
-                <StackPanel Spacing="20">
-                    <StackPanel Spacing="10">
-                        <TextBlock Text="General" FontWeight="SemiBold" />
-                        <ToggleSwitch
-                            x:Name="StartWithWindowsToggle"
-                            Header="Start with Windows"
-                            OnContent="On"
-                            OffContent="Off"
-                            Toggled="OnStartWithWindowsToggled" />
-                        <TextBlock
-                            x:Name="StartupStatusText"
-                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                            TextWrapping="Wrap" />
-                        <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
-                            <TextBlock Text="Idle after" VerticalAlignment="Center" />
-                            <NumberBox
-                                x:Name="IdleMinutesBox"
-                                Minimum="1"
-                                Maximum="240"
-                                SpinButtonPlacementMode="Compact"
-                                Width="120"
-                                AutomationProperties.Name="Idle threshold in minutes"
-                                ValueChanged="OnIdleMinutesChanged" />
-                            <TextBlock Text="minutes without input" VerticalAlignment="Center"
-                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                        </StackPanel>
-                        <TextBlock
-                            Text="This only controls when the Active sensor reports idle. It does not lock or put this PC to sleep."
-                            TextWrapping="Wrap"
-                            FontSize="12"
-                            Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+            <ScrollViewer Grid.Row="1" Padding="24,0,24,20">
+                <StackPanel MaxWidth="680" HorizontalAlignment="Center" Spacing="20">
+                    <Border x:Name="ConnectionSettingsSection" Style="{StaticResource SettingsCardStyle}">
+                        <Grid Padding="18,16" ColumnSpacing="16">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="184" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Spacing="4">
+                                <TextBlock
+                                    x:Name="SettingsConnectionStatusText"
+                                    Text="Connected"
+                                    FontSize="16"
+                                    FontWeight="SemiBold"
+                                    AutomationProperties.LiveSetting="Polite" />
+                                <TextBlock
+                                    x:Name="SettingsServerText"
+                                    Text="Home Assistant"
+                                    TextTrimming="CharacterEllipsis" />
+                                <TextBlock
+                                    x:Name="SettingsRouteText"
+                                    Style="{StaticResource SettingsDescriptionStyle}"
+                                    Text="Current route unavailable" />
+                            </StackPanel>
+                            <Button
+                                x:Name="ConnectionButton"
+                                Grid.Column="1"
+                                Content="Connection settings"
+                                Style="{StaticResource SettingsActionButtonStyle}"
+                                VerticalAlignment="Center"
+                                Click="OnShowConnection" />
+                        </Grid>
+                    </Border>
+
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="General" Style="{StaticResource SettingsSectionHeaderStyle}" />
+                        <Border Style="{StaticResource SettingsCardStyle}">
+                            <Grid Padding="16,14" ColumnSpacing="16">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="184" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Spacing="3">
+                                    <TextBlock Text="Start with Windows" FontWeight="SemiBold" />
+                                    <TextBlock
+                                        x:Name="StartupStatusText"
+                                        Style="{StaticResource SettingsDescriptionStyle}" />
+                                </StackPanel>
+                                <ToggleSwitch
+                                    x:Name="StartWithWindowsToggle"
+                                    Grid.Column="1"
+                                    AutomationProperties.Name="Start with Windows"
+                                    OnContent=""
+                                    OffContent=""
+                                    Width="48"
+                                    MinWidth="0"
+                                    HorizontalAlignment="Right"
+                                    VerticalAlignment="Center"
+                                    Toggled="OnStartWithWindowsToggled" />
+                            </Grid>
+                        </Border>
+                        <Border Style="{StaticResource SettingsCardStyle}">
+                            <Grid Padding="16,14" ColumnSpacing="16">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="184" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Spacing="3">
+                                    <TextBlock Text="Report inactive after" FontWeight="SemiBold" />
+                                    <TextBlock
+                                        Text="Controls the Active sensor only; it does not lock or sleep this PC."
+                                        Style="{StaticResource SettingsDescriptionStyle}" />
+                                </StackPanel>
+                                <StackPanel
+                                    Grid.Column="1"
+                                    Orientation="Horizontal"
+                                    Spacing="8"
+                                    HorizontalAlignment="Right"
+                                    VerticalAlignment="Center">
+                                    <NumberBox
+                                        x:Name="IdleMinutesBox"
+                                        Minimum="1"
+                                        Maximum="240"
+                                        SpinButtonPlacementMode="Compact"
+                                        Width="104"
+                                        AutomationProperties.Name="Inactive threshold in minutes"
+                                        ValueChanged="OnIdleMinutesChanged" />
+                                    <TextBlock Text="minutes" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Grid>
+                        </Border>
                     </StackPanel>
 
-                    <StackPanel Spacing="10">
-                        <TextBlock Text="Sensors" FontWeight="SemiBold" />
-                        <TextBlock
-                            Text="Send the latest states for every enabled sensor to Home Assistant immediately."
-                            TextWrapping="Wrap"
-                            FontSize="12"
-                            Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                        <Button
-                            x:Name="SyncSensorsButton"
-                            AutomationProperties.AutomationId="Settings.SyncSensors"
-                            Content="Sync sensors now"
-                            Click="OnForcePush"
-                            HorizontalAlignment="Stretch" />
-                        <Button x:Name="ChooseSensorsButton" Content="Choose sensors"
-                                Click="OnShowSensorsFromSettings" HorizontalAlignment="Stretch" />
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="Sensors" Style="{StaticResource SettingsSectionHeaderStyle}" />
+                        <Border Style="{StaticResource SettingsCardStyle}">
+                            <Grid Padding="16,14" ColumnSpacing="16">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="184" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Spacing="3">
+                                    <TextBlock Text="Manage sensors" FontWeight="SemiBold" />
+                                    <TextBlock
+                                        x:Name="EnabledSensorCountText"
+                                        Text="Sensor catalog unavailable"
+                                        Style="{StaticResource SettingsDescriptionStyle}" />
+                                </StackPanel>
+                                <Button
+                                    x:Name="ChooseSensorsButton"
+                                    Grid.Column="1"
+                                    Content="Manage"
+                                    Style="{StaticResource SettingsActionButtonStyle}"
+                                    VerticalAlignment="Center"
+                                    Click="OnShowSensorsFromSettings" />
+                            </Grid>
+                        </Border>
+                        <Border Style="{StaticResource SettingsCardStyle}">
+                            <Grid Padding="16,14" ColumnSpacing="16">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="184" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Spacing="3">
+                                    <TextBlock Text="Sync sensor states" FontWeight="SemiBold" />
+                                    <TextBlock
+                                        x:Name="LastSensorSyncText"
+                                        Text="Not synced yet"
+                                        Style="{StaticResource SettingsDescriptionStyle}" />
+                                </StackPanel>
+                                <Button
+                                    x:Name="SyncSensorsButton"
+                                    Grid.Column="1"
+                                    AutomationProperties.AutomationId="Settings.SyncSensors"
+                                    Content="Sync now"
+                                    Style="{StaticResource SettingsActionButtonStyle}"
+                                    VerticalAlignment="Center"
+                                    Click="OnForcePush" />
+                            </Grid>
+                        </Border>
                     </StackPanel>
 
-                    <StackPanel x:Name="ConnectionSettingsSection" Spacing="10">
-                        <TextBlock Text="Connection" FontWeight="SemiBold" />
-                        <Button x:Name="ConnectionButton" Content="Connection settings"
-                                Click="OnShowConnection" HorizontalAlignment="Stretch" />
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="About &amp; support" Style="{StaticResource SettingsSectionHeaderStyle}" />
+                        <Border Style="{StaticResource SettingsCardStyle}">
+                            <Grid Padding="16,14" ColumnSpacing="16">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="184" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Spacing="3">
+                                    <TextBlock Text="Updates" FontWeight="SemiBold" />
+                                    <StackPanel Orientation="Horizontal" Spacing="4">
+                                        <ProgressRing
+                                            x:Name="SettingsUpdateProgress"
+                                            Width="14"
+                                            Height="14"
+                                            Margin="0,0,2,0"
+                                            IsActive="False"
+                                            Visibility="Collapsed"
+                                            AutomationProperties.Name="Checking for updates" />
+                                        <TextBlock Text="Version" Style="{StaticResource SettingsDescriptionStyle}" />
+                                        <TextBlock x:Name="InstalledVersionText" Text="—" Style="{StaticResource SettingsDescriptionStyle}" />
+                                        <TextBlock Text="·" Style="{StaticResource SettingsDescriptionStyle}" />
+                                        <TextBlock
+                                            x:Name="SettingsUpdateStatusText"
+                                            AutomationProperties.LiveSetting="Polite"
+                                            Style="{StaticResource SettingsDescriptionStyle}" />
+                                    </StackPanel>
+                                    <TextBlock x:Name="LatestVersionText" Visibility="Collapsed" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Spacing="6" VerticalAlignment="Center">
+                                    <Button
+                                        x:Name="SettingsCheckUpdatesButton"
+                                        AutomationProperties.AutomationId="Settings.CheckUpdates"
+                                        Content="Check for updates"
+                                        Style="{StaticResource SettingsActionButtonStyle}"
+                                        Click="OnRecheckUpdates" />
+                                    <Button
+                                        x:Name="SettingsInstallUpdateButton"
+                                        Content="Install update…"
+                                        Style="{StaticResource AccentButtonStyle}"
+                                        HorizontalAlignment="Stretch"
+                                        Click="OnViewRelease"
+                                        Visibility="Collapsed" />
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+                        <Border Style="{StaticResource SettingsCardStyle}">
+                            <Grid Padding="16,14" ColumnSpacing="16">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="184" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Spacing="3">
+                                    <TextBlock Text="Logs" FontWeight="SemiBold" />
+                                    <TextBlock
+                                        Text="Open the current diagnostic log for troubleshooting."
+                                        Style="{StaticResource SettingsDescriptionStyle}" />
+                                </StackPanel>
+                                <Button
+                                    Grid.Column="1"
+                                    Content="Open logs"
+                                    Style="{StaticResource SettingsActionButtonStyle}"
+                                    VerticalAlignment="Center"
+                                    Click="OnOpenLog" />
+                            </Grid>
+                        </Border>
+                    </StackPanel>
+
+                    <StackPanel x:Name="ConnectionManagementSection" Spacing="8">
+                        <TextBlock Text="Connection" Style="{StaticResource SettingsSectionHeaderStyle}" />
+                        <Border Style="{StaticResource SettingsCardStyle}">
+                            <Grid Padding="16,14" ColumnSpacing="16">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="184" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Spacing="3">
+                                    <TextBlock Text="Pause reporting" FontWeight="SemiBold" />
+                                    <TextBlock
+                                        Text="Keeps the saved server and sign-in so you can reconnect later."
+                                        Style="{StaticResource SettingsDescriptionStyle}" />
+                                </StackPanel>
+                                <Button
+                                    x:Name="DisconnectButton"
+                                    Grid.Column="1"
+                                    Content="Pause"
+                                    Style="{StaticResource SettingsActionButtonStyle}"
+                                    AutomationProperties.AutomationId="Settings.Disconnect"
+                                    VerticalAlignment="Center"
+                                    Click="OnDisconnect" />
+                            </Grid>
+                        </Border>
                         <TextBlock
-                            Text="Stopping the connection pauses reporting until you reconnect. It keeps your server and sign-in information."
-                            TextWrapping="Wrap"
-                            FontSize="12"
-                            Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                        <Button x:Name="DisconnectButton" Content="Stop connection"
-                                AutomationProperties.AutomationId="Settings.Disconnect"
-                                Click="OnDisconnect" HorizontalAlignment="Stretch" />
-                        <TextBlock
-                            Text="Removing the server signs out, deletes its saved configuration from this PC, and requires a new sign-in."
-                            TextWrapping="Wrap"
-                            FontSize="12"
-                            Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                        <Button
-                            x:Name="RemoveServerButton"
-                            AutomationProperties.AutomationId="Settings.RemoveServer"
-                            Content="Remove server…"
-                            Click="OnRemoveServer"
-                            HorizontalAlignment="Stretch"
+                            Text="Danger zone"
+                            Margin="4,12,0,0"
+                            Style="{StaticResource SettingsSectionHeaderStyle}"
                             Foreground="{ThemeResource SystemFillColorCriticalBrush}" />
+                        <Border
+                            Style="{StaticResource SettingsCardStyle}"
+                            BorderBrush="{ThemeResource SystemFillColorCriticalBrush}">
+                            <Grid Padding="16,14" ColumnSpacing="16">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="184" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Spacing="3">
+                                    <TextBlock
+                                        Text="Remove this server"
+                                        FontWeight="SemiBold"
+                                        Foreground="{ThemeResource SystemFillColorCriticalBrush}" />
+                                    <TextBlock
+                                        Text="Signs out and deletes the saved server configuration from this PC."
+                                        Style="{StaticResource SettingsDescriptionStyle}" />
+                                </StackPanel>
+                                <Button
+                                    x:Name="RemoveServerButton"
+                                    Grid.Column="1"
+                                    AutomationProperties.AutomationId="Settings.RemoveServer"
+                                    Content="Remove server…"
+                                    Style="{StaticResource SettingsActionButtonStyle}"
+                                    VerticalAlignment="Center"
+                                    Click="OnRemoveServer"
+                                    Foreground="{ThemeResource SystemFillColorCriticalBrush}" />
+                            </Grid>
+                        </Border>
                     </StackPanel>
 
-                    <StackPanel Spacing="10">
-                        <TextBlock Text="About &amp; updates" FontWeight="SemiBold" />
-                        <StackPanel Orientation="Horizontal" Spacing="8">
-                            <TextBlock Text="Installed version:"
-                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                            <TextBlock x:Name="InstalledVersionText" Text="—" />
+                    <InfoBar
+                        x:Name="SettingsActionInfoBar"
+                        IsOpen="False"
+                        IsClosable="True"
+                        Severity="Success">
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <ProgressRing
+                                x:Name="SettingsActionProgress"
+                                IsActive="False"
+                                Width="20"
+                                Height="20"
+                                AutomationProperties.Name="Settings action in progress" />
+                            <TextBlock
+                                x:Name="SettingsActionStatus"
+                                AutomationProperties.AutomationId="Settings.ActionStatus"
+                                VerticalAlignment="Center"
+                                TextWrapping="Wrap"
+                                AutomationProperties.LiveSetting="Polite" />
                         </StackPanel>
-                        <StackPanel Orientation="Horizontal" Spacing="8">
-                            <TextBlock Text="Latest stable version:"
-                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                            <TextBlock x:Name="LatestVersionText" Text="Not checked" />
-                        </StackPanel>
-                        <TextBlock
-                            x:Name="SettingsUpdateStatusText"
-                            TextWrapping="Wrap"
-                            AutomationProperties.LiveSetting="Polite"
-                            Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                        <Button
-                            x:Name="SettingsCheckUpdatesButton"
-                            Content="Check for updates"
-                            Click="OnRecheckUpdates"
-                            HorizontalAlignment="Stretch" />
-                        <Button
-                            x:Name="SettingsInstallUpdateButton"
-                            Content="Install update…"
-                            Click="OnViewRelease"
-                            Visibility="Collapsed"
-                            HorizontalAlignment="Stretch" />
-                        <Button Content="Open log file" Click="OnOpenLog" HorizontalAlignment="Stretch" />
-                    </StackPanel>
+                    </InfoBar>
                 </StackPanel>
             </ScrollViewer>
-
-            <StackPanel Grid.Row="2" Padding="24,8,24,20" Spacing="8">
-                <ProgressRing x:Name="SettingsActionProgress" IsActive="False"
-                              Width="20" Height="20" HorizontalAlignment="Left"
-                              AutomationProperties.Name="Settings action in progress" />
-                <TextBlock
-                    x:Name="SettingsActionStatus"
-                    AutomationProperties.AutomationId="Settings.ActionStatus"
-                    TextWrapping="Wrap"
-                    AutomationProperties.LiveSetting="Polite"
-                    Visibility="Collapsed" />
-                <Button AutomationProperties.AutomationId="Settings.Back"
-                        Content="Back" Click="OnClosePreferences" HorizontalAlignment="Stretch" />
-            </StackPanel>
         </Grid>
 
         <!-- Connection settings view -->
@@ -330,118 +648,133 @@
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
-                <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
-            <StackPanel Grid.Row="0" Padding="24,16,24,8" Spacing="4">
-                <TextBlock Text="Connection" Style="{StaticResource SubtitleTextBlockStyle}" />
-                <TextBlock
-                    Text="Use one address everywhere by default. Configure separate addresses only when Home Assistant is reached differently on your local networks and everywhere else."
-                    TextWrapping="Wrap"
-                    Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-            </StackPanel>
+            <Grid Grid.Row="0" Padding="24,12,24,12" ColumnSpacing="12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Button
+                    AutomationProperties.Name="Back"
+                    Width="40"
+                    Height="40"
+                    VerticalAlignment="Top"
+                    Click="OnCloseConnection">
+                    <FontIcon Glyph="&#xE72B;" FontSize="16" />
+                </Button>
+                <StackPanel Grid.Column="1" Spacing="2">
+                    <TextBlock Text="Connection" Style="{StaticResource SubtitleTextBlockStyle}" />
+                    <TextBlock
+                        Text="Choose how Windows Companion reaches your Home Assistant server."
+                        TextWrapping="Wrap"
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                </StackPanel>
+            </Grid>
 
-            <ScrollViewer Grid.Row="1" Padding="24,0,24,0">
-                <StackPanel Spacing="12">
-                    <TextBox
-                        x:Name="SingleUrlBox"
-                        Header="Home Assistant address"
-                        PlaceholderText="https://homeassistant.example.com" />
-                    <CheckBox
-                        x:Name="UseSeparateUrlsBox"
-                        Content="I use different internal and external URLs"
-                        Checked="OnUseSeparateUrlsChanged"
-                        Unchecked="OnUseSeparateUrlsChanged" />
+            <ScrollViewer Grid.Row="1" Padding="24,0,24,20">
+                <StackPanel MaxWidth="680" HorizontalAlignment="Center" Spacing="16">
+                    <Border Style="{StaticResource SettingsCardStyle}">
+                        <StackPanel Padding="18,16" Spacing="14">
+                            <StackPanel Spacing="3">
+                                <TextBlock Text="Server addresses" FontWeight="SemiBold" />
+                                <TextBlock
+                                    Text="Use one address everywhere unless this server is reached differently on your local network."
+                                    Style="{StaticResource SettingsDescriptionStyle}" />
+                            </StackPanel>
+                            <TextBox
+                                x:Name="SingleUrlBox"
+                                Header="Home Assistant address"
+                                PlaceholderText="https://homeassistant.example.com" />
+                            <CheckBox
+                                x:Name="UseSeparateUrlsBox"
+                                Content="Use different internal and external addresses"
+                                Checked="OnUseSeparateUrlsChanged"
+                                Unchecked="OnUseSeparateUrlsChanged" />
 
-                    <StackPanel x:Name="SeparateUrlsPanel" Spacing="12" Visibility="Collapsed">
-                        <TextBlock
-                            Text="Both addresses must reach the same Home Assistant instance. “Internal” means reachable on networks you configure below; “external” means the address to try everywhere else."
-                            TextWrapping="Wrap"
-                            FontSize="12"
-                            Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                        <TextBox
-                            x:Name="InternalUrlBox"
-                            Header="Internal address (reachable on configured local networks)"
-                            PlaceholderText="https://ha.lan.example" />
-                        <TextBox
-                            x:Name="ExternalUrlBox"
-                            Header="External address (reachable everywhere else, HTTPS only)"
-                            PlaceholderText="https://ha.example.com" />
-                        <TextBlock
-                            Text="Use HTTPS for both addresses. Plain HTTP is allowed only for the internal address when you deliberately accept that anyone on the matched local network could read or alter the traffic."
-                            TextWrapping="Wrap"
-                            FontSize="12"
-                            Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                        <StackPanel Orientation="Horizontal" Spacing="8">
-                            <Button Content="Suggest from Home Assistant" Click="OnSuggestUrls" />
-                            <TextBlock
-                                x:Name="SuggestionText"
-                                VerticalAlignment="Center"
-                                TextWrapping="Wrap"
-                                Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                            <StackPanel x:Name="SeparateUrlsPanel" Spacing="14" Visibility="Collapsed">
+                                <TextBlock
+                                    Text="Both addresses must reach the same Home Assistant instance."
+                                    Style="{StaticResource SettingsDescriptionStyle}" />
+                                <TextBox
+                                    x:Name="InternalUrlBox"
+                                    Header="Internal address"
+                                    PlaceholderText="https://ha.lan.example" />
+                                <TextBox
+                                    x:Name="ExternalUrlBox"
+                                    Header="External address (HTTPS)"
+                                    PlaceholderText="https://ha.example.com" />
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <Button Content="Suggest addresses" Click="OnSuggestUrls" />
+                                    <TextBlock
+                                        x:Name="SuggestionText"
+                                        VerticalAlignment="Center"
+                                        TextWrapping="Wrap"
+                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                </StackPanel>
+                                <ComboBox
+                                    x:Name="ConnectionModeBox"
+                                    Header="Routing behavior"
+                                    HorizontalAlignment="Stretch">
+                                    <ComboBoxItem Content="Automatic — internal on a match, otherwise external" />
+                                    <ComboBoxItem Content="Prefer internal — always try internal first" />
+                                    <ComboBoxItem Content="Prefer external — always try external first" />
+                                    <ComboBoxItem Content="Internal only — never try external" />
+                                    <ComboBoxItem Content="External only — never try internal" />
+                                </ComboBox>
+
+                                <Border Height="1" Background="{ThemeResource DividerStrokeColorDefaultBrush}" />
+
+                                <StackPanel Spacing="3">
+                                    <TextBlock Text="Trusted networks" FontWeight="SemiBold" />
+                                    <TextBlock
+                                        Text="Identify networks where the internal address is reachable. These details remain on this PC."
+                                        Style="{StaticResource SettingsDescriptionStyle}" />
+                                </StackPanel>
+                                <TextBox
+                                    x:Name="TrustedCidrsBox"
+                                    Header="Network CIDRs (one per line)"
+                                    PlaceholderText="192.168.50.0/24&#x0a;fd12:3456:789a::/48"
+                                    AcceptsReturn="True"
+                                    TextWrapping="NoWrap"
+                                    MinHeight="88"
+                                    TextChanged="OnTrustedCidrsChanged" />
+                                <TextBlock
+                                    x:Name="TrustedCidrsErrorText"
+                                    TextWrapping="Wrap"
+                                    FontSize="12"
+                                    Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+                                    AutomationProperties.LiveSetting="Assertive"
+                                    Visibility="Collapsed" />
+                                <Grid ColumnSpacing="12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock x:Name="CurrentNetworkText" VerticalAlignment="Center" TextWrapping="Wrap" />
+                                    <Button
+                                        x:Name="TrustNetworkButton"
+                                        Grid.Column="1"
+                                        Content="Trust this network"
+                                        Click="OnTrustCurrentNetwork" />
+                                </Grid>
+                                <StackPanel x:Name="TrustedNetworkList" Spacing="4" />
+                                <CheckBox
+                                    x:Name="RequireBssidBox"
+                                    Content="Also require the exact Wi-Fi access point"
+                                    Checked="OnRequireBssidChanged"
+                                    Unchecked="OnRequireBssidChanged" />
+                                <CheckBox x:Name="TrustWiredBox" Content="Trust wired networks" />
+                                <CheckBox
+                                    x:Name="ProbeUnknownBox"
+                                    Content="Try the internal address when Windows cannot identify the network" />
+                                <Button
+                                    Content="Open Windows Location settings"
+                                    Click="OnOpenLocationSettings"
+                                    HorizontalAlignment="Left" />
+                            </StackPanel>
                         </StackPanel>
-
-                        <ComboBox
-                            x:Name="ConnectionModeBox"
-                            Header="Routing behavior"
-                            HorizontalAlignment="Stretch">
-                            <ComboBoxItem Content="Automatic — internal on a match, otherwise external" />
-                            <ComboBoxItem Content="Prefer internal — always try internal first" />
-                            <ComboBoxItem Content="Prefer external — always try external first" />
-                            <ComboBoxItem Content="Internal only — never try external" />
-                            <ComboBoxItem Content="External only — never try internal" />
-                        </ComboBox>
-                        <TextBlock
-                            Text="A fallback is tried only when the first address cannot connect. In Automatic mode, a matched network tries internal then external; a definite nonmatch uses external only."
-                            TextWrapping="Wrap"
-                            FontSize="12"
-                            Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-
-                        <TextBlock Text="Trusted networks" FontWeight="SemiBold" />
-                        <TextBlock
-                            Text="Add IPv4 or IPv6 CIDR blocks for networks where the internal address is reachable. If any active Ethernet or Wi-Fi address falls inside a block, Automatic mode may use the internal address. CIDRs and Wi-Fi identifiers stay on this PC and are never written to the log or sent to Home Assistant."
-                            TextWrapping="Wrap"
-                            FontSize="12"
-                            Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                        <TextBox
-                            x:Name="TrustedCidrsBox"
-                            Header="Network CIDRs (one per line)"
-                            PlaceholderText="192.168.50.0/24&#x0a;fd12:3456:789a::/48"
-                            AcceptsReturn="True"
-                            TextWrapping="NoWrap"
-                            MinHeight="88"
-                            TextChanged="OnTrustedCidrsChanged" />
-                        <TextBlock
-                            x:Name="TrustedCidrsErrorText"
-                            TextWrapping="Wrap"
-                            FontSize="12"
-                            Foreground="{ThemeResource SystemFillColorCriticalBrush}"
-                            AutomationProperties.LiveSetting="Assertive"
-                            Visibility="Collapsed" />
-                        <StackPanel Orientation="Horizontal" Spacing="8">
-                            <TextBlock x:Name="CurrentNetworkText" VerticalAlignment="Center" TextWrapping="Wrap" />
-                            <Button x:Name="TrustNetworkButton" Content="Trust this network" Click="OnTrustCurrentNetwork" />
-                        </StackPanel>
-                        <StackPanel x:Name="TrustedNetworkList" Spacing="4" />
-                        <CheckBox
-                            x:Name="RequireBssidBox"
-                            Content="Also match the exact access point (records its address; mesh Wi-Fi may fail)"
-                            Checked="OnRequireBssidChanged"
-                            Unchecked="OnRequireBssidChanged" />
-                        <CheckBox x:Name="TrustWiredBox" Content="Treat any wired network as my own network" />
-                        <CheckBox
-                            x:Name="ProbeUnknownBox"
-                            Content="If the network cannot be identified, try external first and internal as a fallback" />
-                        <Button
-                            Content="Open Windows Location settings"
-                            Click="OnOpenLocationSettings"
-                            HorizontalAlignment="Stretch" />
-                        <TextBlock
-                            Text="Windows only reveals the Wi-Fi name when Location is allowed. CIDR matching can still identify a network from active interface addresses; otherwise Automatic mode uses the external address."
-                            TextWrapping="Wrap"
-                            FontSize="12"
-                            Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                    </StackPanel>
+                    </Border>
 
                     <CheckBox
                         x:Name="AcknowledgeUnreachableBox"
@@ -449,22 +782,39 @@
                         Visibility="Collapsed" />
                     <TextBlock
                         x:Name="ConnectionResultText"
+                        Padding="4,0"
                         TextWrapping="Wrap"
                         Visibility="Collapsed" />
+
+                    <Grid ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <ProgressRing
+                            x:Name="ConnectionProgress"
+                            Width="20"
+                            Height="20"
+                            IsActive="False"
+                            HorizontalAlignment="Left"
+                            VerticalAlignment="Center" />
+                        <Button
+                            x:Name="TestRoutesButton"
+                            Grid.Column="1"
+                            MinWidth="132"
+                            Content="Test URL"
+                            Click="OnTestRoutes" />
+                        <Button
+                            x:Name="SaveRoutesButton"
+                            Grid.Column="2"
+                            MinWidth="160"
+                            Content="Validate and save"
+                            Style="{StaticResource AccentButtonStyle}"
+                            Click="OnSaveRoutes" />
+                    </Grid>
                 </StackPanel>
             </ScrollViewer>
-
-            <StackPanel Grid.Row="2" Padding="24,8,24,20" Spacing="8">
-                <ProgressRing x:Name="ConnectionProgress" IsActive="False" Width="20" Height="20" HorizontalAlignment="Left" />
-                <Button x:Name="TestRoutesButton" Content="Test URL" Click="OnTestRoutes" HorizontalAlignment="Stretch" />
-                <Button
-                    x:Name="SaveRoutesButton"
-                    Content="Validate and save"
-                    Style="{StaticResource AccentButtonStyle}"
-                    Click="OnSaveRoutes"
-                    HorizontalAlignment="Stretch" />
-                <Button Content="Back" Click="OnCloseConnection" HorizontalAlignment="Stretch" />
-            </StackPanel>
         </Grid>
 
         <!-- Sensor settings view -->
@@ -472,29 +822,59 @@
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
-                <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
-            <StackPanel Grid.Row="0" Padding="24,16,24,8" Spacing="4">
-                <TextBlock Text="Sensors" Style="{StaticResource SubtitleTextBlockStyle}" />
-                <TextBlock
-                    Text="Choose what this PC reports to Home Assistant. Most enabled sensors send their latest value about once per minute. The Impact note explains extra checks, updates or internet use. Anything switched off is never collected or sent."
-                    TextWrapping="Wrap"
-                    Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-            </StackPanel>
-
-            <ScrollViewer Grid.Row="1" Padding="24,0,24,0">
-                <StackPanel x:Name="SensorList" AutomationProperties.AutomationId="Sensors.List" Spacing="4" />
-            </ScrollViewer>
-
-            <StackPanel Grid.Row="2" Padding="24,8,24,20" Spacing="12">
+            <Grid Grid.Row="0" Padding="24,12,24,12" ColumnSpacing="12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
                 <Button
-                    Content="Open Windows Location settings"
-                    Click="OnOpenLocationSettings"
-                    HorizontalAlignment="Stretch" />
-                <Button AutomationProperties.AutomationId="Sensors.Save"
-                        Content="Back" Click="OnCloseSensors" HorizontalAlignment="Stretch" />
-            </StackPanel>
+                    AutomationProperties.AutomationId="Sensors.Save"
+                    AutomationProperties.Name="Back"
+                    Width="40"
+                    Height="40"
+                    VerticalAlignment="Top"
+                    Click="OnCloseSensors">
+                    <FontIcon Glyph="&#xE72B;" FontSize="16" />
+                </Button>
+                <StackPanel Grid.Column="1" Spacing="2">
+                    <TextBlock Text="Sensors" Style="{StaticResource SubtitleTextBlockStyle}" />
+                    <TextBlock
+                        Text="Choose what this PC reports. Disabled sensors are never collected or sent."
+                        TextWrapping="Wrap"
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                </StackPanel>
+            </Grid>
+
+            <ScrollViewer Grid.Row="1" Padding="24,0,24,20">
+                <StackPanel MaxWidth="680" HorizontalAlignment="Center" Spacing="12">
+                    <StackPanel
+                        x:Name="SensorList"
+                        AutomationProperties.AutomationId="Sensors.List"
+                        Spacing="8" />
+                    <Border Style="{StaticResource SettingsCardStyle}" Margin="0,8,0,0">
+                        <Grid Padding="16,14" ColumnSpacing="16">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="184" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Spacing="3">
+                                <TextBlock Text="Windows location access" FontWeight="SemiBold" />
+                                <TextBlock
+                                    Text="Required for Windows to reveal the current Wi-Fi network name."
+                                    Style="{StaticResource SettingsDescriptionStyle}" />
+                            </StackPanel>
+                            <Button
+                                Grid.Column="1"
+                                Content="Windows settings"
+                                Style="{StaticResource SettingsActionButtonStyle}"
+                                VerticalAlignment="Center"
+                                Click="OnOpenLocationSettings" />
+                        </Grid>
+                    </Border>
+                </StackPanel>
+            </ScrollViewer>
         </Grid>
     </Grid>
 </Window>

@@ -639,7 +639,11 @@
                     IsOpen="False"
                     IsClosable="True"
                     Severity="Success">
-                    <StackPanel Orientation="Horizontal" Spacing="10">
+                    <Grid ColumnSpacing="10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
                         <ProgressRing
                             x:Name="SettingsActionProgress"
                             IsActive="False"
@@ -648,11 +652,12 @@
                             AutomationProperties.Name="Settings action in progress" />
                         <TextBlock
                             x:Name="SettingsActionStatus"
+                            Grid.Column="1"
                             AutomationProperties.AutomationId="Settings.ActionStatus"
                             VerticalAlignment="Center"
                             TextWrapping="Wrap"
                             AutomationProperties.LiveSetting="Polite" />
-                    </StackPanel>
+                    </Grid>
                 </InfoBar>
             </Grid>
         </Grid>

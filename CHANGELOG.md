@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.6.0](https://github.com/DevSecNinja/home-assistant-win-companion/compare/v0.5.0...v0.6.0) (2026-08-11)
+
+
+### Features
+
+* **ui:** refresh companion navigation and settings ([#143](https://github.com/DevSecNinja/home-assistant-win-companion/issues/143)) ([4589e07](https://github.com/DevSecNinja/home-assistant-win-companion/commit/4589e07873f6a8fcd1bcb55117bb4dab14f74244))
+
+
+### Bug Fixes
+
+* reliably activate background window from tray ([#142](https://github.com/DevSecNinja/home-assistant-win-companion/issues/142)) ([10b3884](https://github.com/DevSecNinja/home-assistant-win-companion/commit/10b388492cb382dc7135abac87edb1cf1304ef53))
+* **ui:** polish connection status layout ([#140](https://github.com/DevSecNinja/home-assistant-win-companion/issues/140)) ([6fd295a](https://github.com/DevSecNinja/home-assistant-win-companion/commit/6fd295a15ca7f2335e1085d3561fb971ee11977b))
+
 ## [0.5.0](https://github.com/DevSecNinja/home-assistant-win-companion/compare/v0.4.1...v0.5.0) (2026-08-10)
 
 

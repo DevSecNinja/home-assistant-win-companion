@@ -39,6 +39,7 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
     private readonly IStartupRegistration _startup;
     private readonly RestartManagerShutdownMonitor _restartManagerShutdown;
     private readonly MainWindowActivation _windowActivation;
+    private readonly nint _windowHandle;
     private readonly bool _startHidden;
     private bool _exiting;
     private bool _connected;
@@ -78,7 +79,8 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
             () => DispatchTrayAction(_controller.OpenHomeAssistant));
         TrayUpdateCommand = new ActionCommand(
             () => DispatchTrayAction(HandleUpdateTrayAction));
-        TrayShowWindowCommand = new ActionCommand(ActivateMainWindow);
+        TrayShowWindowCommand = new ActionCommand(
+            () => DispatchTrayAction(ActivateMainWindow));
         TrayDisconnectCommand = new ActionCommand(
             () => DispatchTrayAction(() => OnDisconnect(this, new RoutedEventArgs())));
         TrayExitCommand = new ActionCommand(
@@ -90,8 +92,8 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(AppTitleBar);
         AppWindow.SetIcon("Assets/AppIcon.ico");
-        var windowHandle = WinRT.Interop.WindowNative.GetWindowHandle(this);
-        var dpi = GetDpiForWindow(windowHandle);
+        _windowHandle = WinRT.Interop.WindowNative.GetWindowHandle(this);
+        var dpi = GetDpiForWindow(_windowHandle);
         AppWindow.Resize(new SizeInt32(
             ScaleForDpi(InitialWindowWidth, dpi),
             ScaleForDpi(InitialWindowHeight, dpi)));
@@ -132,7 +134,7 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
         AppWindow.Closing += OnWindowClosing;
         Activated += OnFirstActivated;
         _restartManagerShutdown = new RestartManagerShutdownMonitor(
-            windowHandle,
+            _windowHandle,
             () => ((App)Application.Current).RequestShutdown(AppShutdownReason.RestartManager));
     }
 
@@ -141,6 +143,10 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
 
     [DllImport("user32.dll")]
     private static extern uint GetDpiForWindow(nint window);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool SetForegroundWindow(nint window);
 
     private async void OnFirstActivated(object sender, WindowActivatedEventArgs args)
     {
@@ -529,7 +535,11 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
             presenter.Restore();
     }
 
-    void IMainWindowActivationTarget.BringToFront() => AppWindow.MoveInZOrderAtTop();
+    void IMainWindowActivationTarget.BringToFront()
+    {
+        AppWindow.MoveInZOrderAtTop();
+        SetForegroundWindow(_windowHandle);
+    }
 
     void IMainWindowActivationTarget.Activate() => Activate();
 

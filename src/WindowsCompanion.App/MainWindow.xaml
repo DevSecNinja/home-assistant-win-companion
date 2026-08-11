@@ -714,6 +714,11 @@
                                     x:Name="InternalUrlBox"
                                     Header="Internal address"
                                     PlaceholderText="https://ha.lan.example" />
+                                <TextBlock
+                                    Text="Plain HTTP is allowed only for the internal address. Anyone on the matched local network could read or modify Home Assistant traffic."
+                                    TextWrapping="Wrap"
+                                    FontSize="12"
+                                    Foreground="{ThemeResource SystemFillColorCautionBrush}" />
                                 <TextBox
                                     x:Name="ExternalUrlBox"
                                     Header="External address (HTTPS)"

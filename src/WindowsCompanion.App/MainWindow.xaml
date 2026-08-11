@@ -325,6 +325,7 @@
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
             <Grid Grid.Row="0" Padding="24,12,24,12" ColumnSpacing="12">
@@ -350,7 +351,7 @@
                 </StackPanel>
             </Grid>
 
-            <ScrollViewer Grid.Row="1" Padding="24,0,24,20">
+            <ScrollViewer Grid.Row="1" Padding="24,0,24,12">
                 <StackPanel MaxWidth="680" HorizontalAlignment="Center" Spacing="20">
                     <Border x:Name="ConnectionSettingsSection" Style="{StaticResource SettingsCardStyle}">
                         <Grid Padding="18,16" ColumnSpacing="16">
@@ -502,7 +503,13 @@
                                 </Grid.ColumnDefinitions>
                                 <StackPanel Spacing="3">
                                     <TextBlock Text="Updates" FontWeight="SemiBold" />
-                                    <StackPanel Orientation="Horizontal" Spacing="4">
+                                    <Grid ColumnSpacing="4">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
                                         <ProgressRing
                                             x:Name="SettingsUpdateProgress"
                                             Width="14"
@@ -511,14 +518,14 @@
                                             IsActive="False"
                                             Visibility="Collapsed"
                                             AutomationProperties.Name="Checking for updates" />
-                                        <TextBlock Text="Version" Style="{StaticResource SettingsDescriptionStyle}" />
-                                        <TextBlock x:Name="InstalledVersionText" Text="—" Style="{StaticResource SettingsDescriptionStyle}" />
-                                        <TextBlock Text="·" Style="{StaticResource SettingsDescriptionStyle}" />
+                                        <TextBlock Grid.Column="1" Text="Version" Style="{StaticResource SettingsDescriptionStyle}" />
+                                        <TextBlock Grid.Column="2" x:Name="InstalledVersionText" Text="—" Style="{StaticResource SettingsDescriptionStyle}" />
                                         <TextBlock
+                                            Grid.Column="3"
                                             x:Name="SettingsUpdateStatusText"
                                             AutomationProperties.LiveSetting="Polite"
                                             Style="{StaticResource SettingsDescriptionStyle}" />
-                                    </StackPanel>
+                                    </Grid>
                                     <TextBlock x:Name="LatestVersionText" Visibility="Collapsed" />
                                 </StackPanel>
                                 <StackPanel Grid.Column="1" Spacing="6" VerticalAlignment="Center">
@@ -619,28 +626,35 @@
                         </Border>
                     </StackPanel>
 
-                    <InfoBar
-                        x:Name="SettingsActionInfoBar"
-                        IsOpen="False"
-                        IsClosable="True"
-                        Severity="Success">
-                        <StackPanel Orientation="Horizontal" Spacing="10">
-                            <ProgressRing
-                                x:Name="SettingsActionProgress"
-                                IsActive="False"
-                                Width="20"
-                                Height="20"
-                                AutomationProperties.Name="Settings action in progress" />
-                            <TextBlock
-                                x:Name="SettingsActionStatus"
-                                AutomationProperties.AutomationId="Settings.ActionStatus"
-                                VerticalAlignment="Center"
-                                TextWrapping="Wrap"
-                                AutomationProperties.LiveSetting="Polite" />
-                        </StackPanel>
-                    </InfoBar>
                 </StackPanel>
             </ScrollViewer>
+            <Grid
+                Grid.Row="2"
+                Margin="24,0,24,20"
+                MaxWidth="680"
+                HorizontalAlignment="Center">
+                <InfoBar
+                    x:Name="SettingsActionInfoBar"
+                    HorizontalAlignment="Stretch"
+                    IsOpen="False"
+                    IsClosable="True"
+                    Severity="Success">
+                    <StackPanel Orientation="Horizontal" Spacing="10">
+                        <ProgressRing
+                            x:Name="SettingsActionProgress"
+                            IsActive="False"
+                            Width="20"
+                            Height="20"
+                            AutomationProperties.Name="Settings action in progress" />
+                        <TextBlock
+                            x:Name="SettingsActionStatus"
+                            AutomationProperties.AutomationId="Settings.ActionStatus"
+                            VerticalAlignment="Center"
+                            TextWrapping="Wrap"
+                            AutomationProperties.LiveSetting="Polite" />
+                    </StackPanel>
+                </InfoBar>
+            </Grid>
         </Grid>
 
         <!-- Connection settings view -->
@@ -761,7 +775,7 @@
                                 <StackPanel x:Name="TrustedNetworkList" Spacing="4" />
                                 <CheckBox
                                     x:Name="RequireBssidBox"
-                                    Content="Also require the exact Wi-Fi access point"
+                                    Content="Prefer the exact Wi-Fi access point when Windows can identify it; otherwise trust the Wi-Fi name"
                                     Checked="OnRequireBssidChanged"
                                     Unchecked="OnRequireBssidChanged" />
                                 <CheckBox x:Name="TrustWiredBox" Content="Trust wired networks" />

@@ -105,6 +105,7 @@ public sealed partial class MainWindow
 
     private void HandleUpdateTrayAction()
     {
+        UpdateBanner.Visibility = Visibility.Visible;
         var state = _controller.UpdateState;
         if (_updateActions.InvokeTrayAction(state))
             ApplyUpdateState(state, showKnownUpdate: true);
@@ -124,13 +125,21 @@ public sealed partial class MainWindow
 
     private void ShowReleaseLaunchFailure()
     {
+        const string message =
+            "Windows couldn't open the browser. You can retry or recheck for updates.";
+        if (PreferencesPanel.Visibility == Visibility.Visible)
+        {
+            ShowSettingsActionStatus(message, false);
+            return;
+        }
+
+        UpdateBanner.Visibility = Visibility.Visible;
         UpdateBannerTitleText.Text = "Couldn't open the release page";
         var messageChanged = !string.Equals(
             UpdateBannerMessage.Text,
-            "Windows couldn't open the browser. You can retry or recheck for updates.",
+            message,
             StringComparison.Ordinal);
-        UpdateBannerMessage.Text =
-            "Windows couldn't open the browser. You can retry or recheck for updates.";
+        UpdateBannerMessage.Text = message;
         UpdateBanner.Severity = InfoBarSeverity.Warning;
         UpdateBanner.IsOpen = true;
         ViewReleaseButton.Visibility = Visibility.Visible;

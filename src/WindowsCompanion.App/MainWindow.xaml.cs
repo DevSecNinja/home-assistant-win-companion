@@ -31,6 +31,7 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
     private const int InitialWindowHeight = 820;
     private const int MinimumWindowWidth = 520;
     private const int MinimumWindowHeight = 600;
+    private const int MaximumWindowWidth = 960;
 
     private readonly AppController _controller;
     private readonly DispatcherQueue _dispatcher;
@@ -77,8 +78,7 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
             () => DispatchTrayAction(_controller.OpenHomeAssistant));
         TrayUpdateCommand = new ActionCommand(
             () => DispatchTrayAction(HandleUpdateTrayAction));
-        TrayShowWindowCommand = new ActionCommand(
-            () => DispatchTrayAction(ActivateMainWindow));
+        TrayShowWindowCommand = new ActionCommand(ActivateMainWindow);
         TrayDisconnectCommand = new ActionCommand(
             () => DispatchTrayAction(() => OnDisconnect(this, new RoutedEventArgs())));
         TrayExitCommand = new ActionCommand(
@@ -99,6 +99,8 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
         {
             presenter.PreferredMinimumWidth = ScaleForDpi(MinimumWindowWidth, dpi);
             presenter.PreferredMinimumHeight = ScaleForDpi(MinimumWindowHeight, dpi);
+            presenter.PreferredMaximumWidth = ScaleForDpi(MaximumWindowWidth, dpi);
+            presenter.IsMaximizable = false;
         }
 
         _dispatcher = DispatcherQueue.GetForCurrentThread();
@@ -107,9 +109,13 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
         _controller.UpdateStateChanged += OnUpdateStateChanged;
         ApplyUpdateState(_controller.UpdateState);
 
-        var showWindowCommand = new XamlUICommand();
-        showWindowCommand.ExecuteRequested += (_, _) => ActivateMainWindow();
-        TrayIcon.LeftClickCommand = showWindowCommand;
+#if DEBUG
+        if (App.TestLaunchOptions is not { SuppressTrayLeftClick: true })
+            TrayIcon.LeftClickCommand = TrayShowWindowCommand;
+#else
+        TrayIcon.LeftClickCommand = TrayShowWindowCommand;
+#endif
+        TrayIcon.DoubleClickCommand = TrayShowWindowCommand;
 #if DEBUG
         if (App.TestLaunchOptions is { } testOptions)
             TrayIcon.ToolTipText = testOptions.TrayIdentity;
@@ -173,6 +179,7 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
                 ? DemoSession.ServerLabel
                 : _controller.BaseUrl ?? "—";
             UpdateHealth();
+            RefreshPreferencesSummary();
         });
 
     private void OnStateChanged(ConnectionState state) =>
@@ -199,6 +206,7 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
             }
 
             UpdateHealth();
+            RefreshPreferencesSummary();
         });
 
     /// <summary>
@@ -301,6 +309,7 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
         var serverActions = demo ? Visibility.Collapsed : Visibility.Visible;
         OpenHomeAssistantButton.Visibility = serverActions;
         ConnectionSettingsSection.Visibility = serverActions;
+        ConnectionManagementSection.Visibility = serverActions;
         SyncSensorsButton.Visibility = serverActions;
         TrayOpenHomeAssistantItem.Visibility = serverActions;
         TrayDisconnectItem.Visibility = serverActions;
@@ -341,13 +350,14 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
                     return;
                 }
                 _connected = true;
-                DisconnectButton.Content = "Stop connection";
+                DisconnectButton.Content = "Pause";
                 SyncSensorsButton.IsEnabled = true;
                 ChooseSensorsButton.IsEnabled = true;
                 IdleMinutesBox.IsEnabled = true;
                 _statusTimer.Start();
                 ShowSettingsActionStatus("Reconnected to Home Assistant.", true);
             }
+            RefreshPreferencesSummary();
         }
         catch (OperationCanceledException) when (_exiting)
         {
@@ -399,7 +409,7 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
             SetSettingsActionBusy(false);
         }
         _connected = false;
-        DisconnectButton.Content = "Stop connection";
+        DisconnectButton.Content = "Pause";
         SyncSensorsButton.IsEnabled = false;
         ChooseSensorsButton.IsEnabled = false;
         IdleMinutesBox.IsEnabled = false;
@@ -606,6 +616,7 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
                 : $"{last.Value.ToLocalTime():HH:mm:ss} ({Ago(DateTimeOffset.UtcNow - last.Value)})";
 
         UpdateHealth();
+        RefreshPreferencesSummary();
     }
 
     private void UpdateHealth()
@@ -665,6 +676,9 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
         PreferencesPanel.Visibility = view == View.Preferences ? Visibility.Visible : Visibility.Collapsed;
         SensorsPanel.Visibility = view == View.Sensors ? Visibility.Visible : Visibility.Collapsed;
         ConnectionPanel.Visibility = view == View.Connection ? Visibility.Visible : Visibility.Collapsed;
+        UpdateBanner.Visibility = view is View.Status or View.Connect
+            ? Visibility.Visible
+            : Visibility.Collapsed;
 
         if (view == View.Connect)
         {
@@ -690,6 +704,7 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
     private void OnCloseSensors(object sender, RoutedEventArgs e)
     {
         CancelSensorPreviews();
+        RefreshPreferencesSummary();
         ShowView(_sensorReturnView);
     }
 
@@ -713,8 +728,51 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
         IdleMinutesBox.IsEnabled = catalog is not null;
         ChooseSensorsButton.IsEnabled = catalog is not null;
         SyncSensorsButton.IsEnabled = _connected;
-        DisconnectButton.Content = _connected ? "Stop connection" : "Reconnect";
-        SettingsActionStatus.Visibility = Visibility.Collapsed;
+        DisconnectButton.Content = _connected ? "Pause" : "Reconnect";
+        SettingsActionInfoBar.IsOpen = false;
+        RefreshPreferencesSummary();
+    }
+
+    private void RefreshPreferencesSummary()
+    {
+        var state = _controller.State;
+        SettingsConnectionStatusText.Text = _controller.IsDemoMode
+            ? DemoSession.Title
+            : state switch
+            {
+                ConnectionState.Connecting => "Connecting to Home Assistant",
+                ConnectionState.Connected => "Connected to Home Assistant",
+                ConnectionState.Reconnecting => "Reconnecting to Home Assistant",
+                ConnectionState.AuthError => "Sign-in required",
+                _ => "Reporting paused"
+            };
+        SettingsConnectionStatusText.Foreground =
+            (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources[
+                state == ConnectionState.Connected
+                    ? "SystemFillColorSuccessBrush"
+                    : "TextFillColorPrimaryBrush"];
+
+        var baseUrl = _controller.BaseUrl;
+        SettingsServerText.Text = _controller.IsDemoMode
+            ? DemoSession.ServerLabel
+            : Uri.TryCreate(baseUrl, UriKind.Absolute, out var serverUri)
+                ? serverUri.Host
+                : baseUrl ?? "No server configured";
+        SettingsRouteText.Text = _controller.IsDemoMode
+            ? "Nothing is sent to Home Assistant"
+            : _controller.RouteSummary;
+
+        var catalog = _controller.Catalog;
+        EnabledSensorCountText.Text = catalog is null
+            ? "Sensor catalog unavailable"
+            : $"{catalog.EnabledIds.Count} of {catalog.Definitions.Count} enabled";
+
+        var lastSync = _controller.LastSyncedAt;
+        LastSensorSyncText.Text = _controller.IsDemoMode
+            ? "Sync is unavailable in demo mode"
+            : lastSync is null
+                ? "Not synced yet"
+                : $"Last synced {Ago(DateTimeOffset.UtcNow - lastSync.Value)}";
     }
 
     /// <summary>
@@ -761,6 +819,9 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
                 Tag = definition.UniqueId,
                 OnContent = string.Empty,
                 OffContent = string.Empty,
+                Width = 48,
+                MinWidth = 0,
+                HorizontalAlignment = HorizontalAlignment.Right,
                 VerticalAlignment = VerticalAlignment.Center
             };
             Microsoft.UI.Xaml.Automation.AutomationProperties.SetAutomationId(
@@ -836,11 +897,24 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
                 FontSize = 12,
                 Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"]
             });
+
+            var metadata = new Grid
+            {
+                Margin = new Thickness(0, 8, 0, 0),
+                ColumnSpacing = 12,
+                RowSpacing = 4
+            };
+            metadata.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(92) });
+            metadata.ColumnDefinitions.Add(new ColumnDefinition
+            {
+                Width = new GridLength(1, GridUnitType.Star)
+            });
+            var metadataRow = 0;
             if (!string.IsNullOrWhiteSpace(definition.ResourceUsage))
             {
-                text.Children.Add(new TextBlock
+                AddSensorMetadataRow(metadata, metadataRow++, "Impact", new TextBlock
                 {
-                    Text = $"Impact: {definition.ResourceUsage}",
+                    Text = definition.ResourceUsage,
                     TextWrapping = TextWrapping.Wrap,
                     FontSize = 12,
                     Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources[
@@ -850,33 +924,69 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
             var previewText = new TextBlock
             {
                 Text = previews.TryGetValue(definition.UniqueId, out var value)
-                    ? $"Current value: {value}"
+                    ? value
                     : definition.Privacy == SensorPrivacy.Sensitive
                       && !catalog.IsEnabled(definition.UniqueId)
-                        ? "Current value: read only once you enable this sensor"
-                        : "Current value: Unavailable",
+                        ? "Read only once you enable this sensor"
+                        : "Unavailable",
                 TextWrapping = TextWrapping.Wrap,
                 FontSize = 12,
                 Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"]
             };
-            text.Children.Add(previewText);
+            AddSensorMetadataRow(metadata, metadataRow, "Current value", previewText);
+            text.Children.Add(metadata);
             _sensorPreviewTexts[definition.UniqueId] = previewText;
 
             if (definition.UniqueId == FrontmostAppSensorSource.FrontmostAppId)
                 AddFrontmostAppDetailSetting(text, catalog);
 
-            var row = new Grid { Padding = new Thickness(0, 10, 0, 10) };
+            var row = new Grid
+            {
+                Padding = new Thickness(16, 14, 16, 14),
+                ColumnSpacing = 16
+            };
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(48) });
             Grid.SetColumn(text, 0);
             Grid.SetColumn(toggle, 1);
             row.Children.Add(text);
             row.Children.Add(toggle);
 
-            SensorList.Children.Add(row);
+            SensorList.Children.Add(new Border
+            {
+                Background = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources[
+                    "CardBackgroundFillColorDefaultBrush"],
+                BorderBrush = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources[
+                    "CardStrokeColorDefaultBrush"],
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(8),
+                Child = row
+            });
         }
 
         return true;
+    }
+
+    private static void AddSensorMetadataRow(
+        Grid metadata,
+        int row,
+        string label,
+        TextBlock value)
+    {
+        metadata.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        var labelText = new TextBlock
+        {
+            Text = label,
+            FontSize = 12,
+            FontWeight = FontWeights.SemiBold,
+            Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources[
+                "TextFillColorPrimaryBrush"]
+        };
+        Grid.SetRow(labelText, row);
+        Grid.SetRow(value, row);
+        Grid.SetColumn(value, 1);
+        metadata.Children.Add(labelText);
+        metadata.Children.Add(value);
     }
 
     private static TextBlock AutomationIdeaText(string text) => new()
@@ -1027,7 +1137,7 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
             {
                 var definition = catalog.Definitions.First(candidate =>
                     string.Equals(candidate.UniqueId, uniqueId, StringComparison.Ordinal));
-                disabledPreview.Text = "Current value: " + definition.DisabledPreview;
+                disabledPreview.Text = definition.DisabledPreview;
                 disabledPreview.Foreground =
                     (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources[
                         "TextFillColorSecondaryBrush"];
@@ -1065,7 +1175,7 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
 
             if (_sensorPreviewTexts.TryGetValue(uniqueId, out var previewText))
             {
-                previewText.Text = $"Current value: {refreshedPreview ?? "Unavailable"}";
+                previewText.Text = refreshedPreview ?? "Unavailable";
                 previewText.Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources[
                     "TextFillColorSecondaryBrush"];
             }
@@ -1212,7 +1322,7 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
     {
         if (!_sensorPreviewTexts.TryGetValue(uniqueId, out var previewText)) return;
 
-        previewText.Text = "Current value: " + message;
+        previewText.Text = message;
         previewText.Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources[
             "SystemFillColorCautionBrush"];
     }
@@ -1270,7 +1380,7 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
     {
         _connected = _controller.State
             is not (ConnectionState.Disconnected or ConnectionState.AuthError);
-        DisconnectButton.Content = _connected ? "Stop connection" : "Reconnect";
+        DisconnectButton.Content = _connected ? "Pause" : "Reconnect";
         var catalogAvailable = _controller.Catalog is not null;
         SyncSensorsButton.IsEnabled = _connected;
         ChooseSensorsButton.IsEnabled = catalogAvailable;
@@ -1290,10 +1400,10 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
             message,
             StringComparison.Ordinal);
         SettingsActionStatus.Text = message;
-        SettingsActionStatus.Foreground =
-            (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources[
-                positive ? "SystemFillColorSuccessBrush" : "SystemFillColorCautionBrush"];
-        SettingsActionStatus.Visibility = Visibility.Visible;
+        SettingsActionInfoBar.Severity = positive
+            ? InfoBarSeverity.Success
+            : InfoBarSeverity.Warning;
+        SettingsActionInfoBar.IsOpen = true;
         if (messageChanged)
         {
             var peer = FrameworkElementAutomationPeer.FromElement(SettingsActionStatus)

@@ -46,11 +46,12 @@ itself.
   and every completed result exposes **Recheck for updates**.
 - Browser launch failures replace the banner message with a clear retryable error
   without clearing the known release or affecting Home Assistant connectivity.
-- Double-clicking the tray icon and the tray's show/check/install commands share
-  one dispatcher-owned activation path. It idempotently handles hidden, minimized,
-  and already-visible windows. H.NotifyIcon.WinUI 2.4.1 is wired through
-  `DoubleClickCommand` and command-bound flyout items, not ignored XAML click
-  handlers.
+- Single-clicking or double-clicking the tray icon and the tray's show command
+  share one immediate activation path. It idempotently handles hidden, minimized,
+  and already-visible windows. The tray's check/install commands enter that same
+  activation sequence from their dispatcher-owned action path. H.NotifyIcon.WinUI
+  2.4.1 is wired through `LeftClickCommand`, `DoubleClickCommand`, and command-bound
+  flyout items, not ignored XAML click handlers.
 - The badge remains while the newer release is known, including after a failed
   recheck. Opening its page does not claim that it was downloaded or installed.
 - Only release artifacts built by `scripts/build-release.ps1` opt into update

@@ -84,6 +84,16 @@ internal static class UiCapabilities
     internal static bool IsWindowVisible(Window window) =>
         IsWindowVisible((nint)window.Properties.NativeWindowHandle.Value);
 
+    internal static bool IsForegroundWindow(Window window) =>
+        GetForegroundWindow() == (nint)window.Properties.NativeWindowHandle.Value;
+
+    internal static void FocusTaskbar()
+    {
+        var taskbar = FindWindow("Shell_TrayWnd", null);
+        if (taskbar == 0 || !SetForegroundWindow(taskbar))
+            throw new InvalidOperationException("The Windows taskbar could not be brought to the foreground.");
+    }
+
     internal static IReadOnlyList<AutomationElement> TrayAutomationRoots(AutomationBase automation)
     {
         var taskbar = FindWindow("Shell_TrayWnd", null);
@@ -124,6 +134,13 @@ internal static class UiCapabilities
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool IsWindowVisible(nint window);
+
+    [DllImport("user32.dll")]
+    private static extern nint GetForegroundWindow();
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool SetForegroundWindow(nint window);
 }
 
 internal sealed class UiFactAttribute : FactAttribute

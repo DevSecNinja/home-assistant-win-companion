@@ -18,12 +18,18 @@ public sealed class TestAppLaunchOptionsTests
             identity);
 
         var options = TestAppLaunchOptions.Parse(
-            [Encode(settingsDirectory, Guid.NewGuid().ToString("N"), identity, "http://127.0.0.1:8123/")]);
+            [Encode(
+                settingsDirectory,
+                Guid.NewGuid().ToString("N"),
+                identity,
+                "http://127.0.0.1:8123/",
+                suppressTrayLeftClick: true)]);
 
         Assert.NotNull(options);
         Assert.Equal(settingsDirectory, options.SettingsDirectory);
         Assert.True(options.ServerUrl.IsLoopback);
         Assert.True(options.AutoAuthorize);
+        Assert.True(options.SuppressTrayLeftClick);
     }
 
     [Theory]
@@ -78,7 +84,8 @@ public sealed class TestAppLaunchOptionsTests
         string settingsDirectory,
         string credentialResourceSuffix,
         string instanceIdentity,
-        string serverUrl)
+        string serverUrl,
+        bool suppressTrayLeftClick = false)
     {
         var json = JsonSerializer.Serialize(new
         {
@@ -86,7 +93,8 @@ public sealed class TestAppLaunchOptionsTests
             credentialResourceSuffix,
             instanceIdentity,
             serverUrl,
-            autoAuthorize = true
+            autoAuthorize = true,
+            suppressTrayLeftClick
         });
         var encoded = Convert.ToBase64String(Encoding.UTF8.GetBytes(json))
             .TrimEnd('=')

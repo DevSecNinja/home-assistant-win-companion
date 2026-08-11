@@ -32,6 +32,37 @@ public sealed class TrayUiTests
             "activate background window through tray double click",
             trayIcon => trayIcon.DoubleClick());
 
+    [UiTrayFact]
+    public Task Visible_background_window_is_activated_through_the_tray_menu() =>
+        UiScenarioFixture.RunAsync(
+            "ui-tray",
+            "activate background window through tray menu",
+            fixture =>
+            {
+                var status = Connect(fixture);
+                var trayIcon = FindTrayIcon(fixture);
+
+                UiCapabilities.FocusTaskbar();
+                AutomationWait.Until(
+                    () => !UiCapabilities.IsForegroundWindow(fixture.Window),
+                    "The application window did not move to the background.");
+
+                trayIcon.RightClick();
+                var showItem = AutomationWait.Element(
+                    () => fixture.Automation.GetDesktop().FindFirstDescendant(cf =>
+                        cf.ByAutomationId("Tray.Show")
+                            .And(cf.ByControlType(ControlType.MenuItem))),
+                    "Show Companion tray menu item");
+                showItem.AsMenuItem().Invoke();
+
+                status.WaitForConnection("Connected");
+                AutomationWait.Until(
+                    () => UiCapabilities.IsForegroundWindow(fixture.Window),
+                    "The application window did not return to the foreground.");
+                Assert.True(UiCapabilities.IsWindowVisible(fixture.Window));
+                return Task.CompletedTask;
+            });
+
     private static Task VisibleBackgroundWindowIsActivatedThroughTrayIcon(
         string scenarioName,
         Action<AutomationElement> activateTrayIcon) =>

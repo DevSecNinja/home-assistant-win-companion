@@ -145,38 +145,76 @@
         <StackPanel
             x:Name="StatusPanel"
             Grid.Row="2"
-            Width="380"
-            Padding="24"
-            VerticalAlignment="Center"
-            HorizontalAlignment="Center"
+            MaxWidth="460"
+            Margin="24,20,24,24"
+            VerticalAlignment="Top"
+            HorizontalAlignment="Stretch"
             Spacing="12"
             Visibility="Collapsed">
-            <TextBlock Text="Windows Companion for Home Assistant" Style="{StaticResource SubtitleTextBlockStyle}" />
-            <StackPanel Orientation="Horizontal" Spacing="8">
-                <TextBlock Text="Server:" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                <TextBlock x:Name="ServerText" AutomationProperties.AutomationId="Status.Server" Text="—" TextTrimming="CharacterEllipsis" />
-            </StackPanel>
-            <StackPanel Orientation="Horizontal" Spacing="8">
-                <TextBlock Text="Address in use:" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                <TextBlock x:Name="RouteText" Text="—" FontWeight="SemiBold" />
-            </StackPanel>
-            <StackPanel Orientation="Horizontal" Spacing="8">
-                <TextBlock Text="Status:" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                <TextBlock x:Name="StatusText" AutomationProperties.AutomationId="Status.Connection" Text="Connecting…" FontWeight="SemiBold" />
-            </StackPanel>
-            <StackPanel Orientation="Horizontal" Spacing="8">
-                <TextBlock Text="Health:" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                <TextBlock x:Name="HealthText" AutomationProperties.AutomationId="Status.Health" Text="—" FontWeight="SemiBold" TextWrapping="Wrap" />
-            </StackPanel>
-            <StackPanel Orientation="Horizontal" Spacing="8">
-                <TextBlock Text="Battery:" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                <TextBlock x:Name="BatteryText" Text="—" />
-            </StackPanel>
-            <StackPanel Orientation="Horizontal" Spacing="8">
-                <TextBlock Text="Last update:" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                <TextBlock x:Name="LastUpdateText" Text="—" />
-            </StackPanel>
-            <Button x:Name="OpenHomeAssistantButton" Content="Open Home Assistant" Click="OnOpenHomeAssistant" HorizontalAlignment="Stretch" />
+            <TextBlock Text="Connection status" Style="{StaticResource SubtitleTextBlockStyle}" />
+            <Grid ColumnSpacing="16" RowSpacing="10">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <TextBlock Grid.Row="0" Text="Server" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                <TextBlock
+                    x:Name="ServerText"
+                    Grid.Row="0"
+                    Grid.Column="1"
+                    AutomationProperties.AutomationId="Status.Server"
+                    Text="—"
+                    TextTrimming="CharacterEllipsis" />
+
+                <TextBlock Grid.Row="1" Text="Address in use" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                <TextBlock
+                    x:Name="RouteText"
+                    Grid.Row="1"
+                    Grid.Column="1"
+                    Text="—"
+                    FontWeight="SemiBold"
+                    TextWrapping="Wrap" />
+
+                <TextBlock Grid.Row="2" Text="Status" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                <TextBlock
+                    x:Name="StatusText"
+                    Grid.Row="2"
+                    Grid.Column="1"
+                    AutomationProperties.AutomationId="Status.Connection"
+                    Text="Connecting…"
+                    FontWeight="SemiBold" />
+
+                <TextBlock Grid.Row="3" Text="Health" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                <TextBlock
+                    x:Name="HealthText"
+                    Grid.Row="3"
+                    Grid.Column="1"
+                    AutomationProperties.AutomationId="Status.Health"
+                    Text="—"
+                    FontWeight="SemiBold"
+                    TextWrapping="Wrap" />
+
+                <TextBlock Grid.Row="4" Text="Battery" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                <TextBlock x:Name="BatteryText" Grid.Row="4" Grid.Column="1" Text="—" />
+
+                <TextBlock Grid.Row="5" Text="Last update" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                <TextBlock x:Name="LastUpdateText" Grid.Row="5" Grid.Column="1" Text="—" />
+            </Grid>
+            <Button
+                x:Name="OpenHomeAssistantButton"
+                Content="Open Home Assistant"
+                Style="{StaticResource AccentButtonStyle}"
+                Click="OnOpenHomeAssistant"
+                HorizontalAlignment="Stretch" />
             <Button AutomationProperties.AutomationId="Status.OpenSensors"
                     Content="Sensors" Click="OnShowSensors" HorizontalAlignment="Stretch" />
             <Button AutomationProperties.AutomationId="Status.OpenSettings"

@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.5.0](https://github.com/DevSecNinja/home-assistant-win-companion/compare/v0.4.1...v0.5.0) (2026-08-10)
+
+
+### Features
+
+* add dedicated settings page ([#132](https://github.com/DevSecNinja/home-assistant-win-companion/issues/132)) ([fff1f09](https://github.com/DevSecNinja/home-assistant-win-companion/commit/fff1f09e70dc90900b8833fc44ed1b14521cad85))
+
+
+### Bug Fixes
+
+* reduce microphone activity latency ([#131](https://github.com/DevSecNinja/home-assistant-win-companion/issues/131)) ([d30c660](https://github.com/DevSecNinja/home-assistant-win-companion/commit/d30c66068dd6242403ddffda05eb8d40c4840dd1))
+
 ## [0.4.1](https://github.com/DevSecNinja/home-assistant-win-companion/compare/v0.4.0...v0.4.1) (2026-08-10)
 
 

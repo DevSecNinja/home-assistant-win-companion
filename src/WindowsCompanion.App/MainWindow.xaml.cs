@@ -77,8 +77,7 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
             () => DispatchTrayAction(_controller.OpenHomeAssistant));
         TrayUpdateCommand = new ActionCommand(
             () => DispatchTrayAction(HandleUpdateTrayAction));
-        TrayShowWindowCommand = new ActionCommand(
-            () => DispatchTrayAction(ActivateMainWindow));
+        TrayShowWindowCommand = new ActionCommand(ActivateMainWindow);
         TrayDisconnectCommand = new ActionCommand(
             () => DispatchTrayAction(() => OnDisconnect(this, new RoutedEventArgs())));
         TrayExitCommand = new ActionCommand(
@@ -107,9 +106,8 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
         _controller.UpdateStateChanged += OnUpdateStateChanged;
         ApplyUpdateState(_controller.UpdateState);
 
-        var showWindowCommand = new XamlUICommand();
-        showWindowCommand.ExecuteRequested += (_, _) => ActivateMainWindow();
-        TrayIcon.LeftClickCommand = showWindowCommand;
+        TrayIcon.LeftClickCommand = TrayShowWindowCommand;
+        TrayIcon.DoubleClickCommand = TrayShowWindowCommand;
 #if DEBUG
         if (App.TestLaunchOptions is { } testOptions)
             TrayIcon.ToolTipText = testOptions.TrayIdentity;

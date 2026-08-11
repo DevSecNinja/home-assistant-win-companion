@@ -12,7 +12,7 @@ public sealed class TrayUiTests
     public Task Hidden_window_is_restored_through_the_tray_icon() =>
         HiddenWindowIsRestoredThroughTrayIcon(
             "hide and restore through tray single click",
-            trayIcon => trayIcon.AsButton().Invoke());
+            trayIcon => trayIcon.Click());
 
     [UiTrayFact]
     public Task Hidden_window_is_restored_by_double_clicking_the_tray_icon() =>
@@ -25,7 +25,7 @@ public sealed class TrayUiTests
     public Task Visible_background_window_is_activated_through_the_tray_icon() =>
         VisibleBackgroundWindowIsActivatedThroughTrayIcon(
             "activate background window through tray single click",
-            trayIcon => trayIcon.AsButton().Invoke());
+            trayIcon => trayIcon.Click());
 
     [UiTrayFact]
     public Task Visible_background_window_is_activated_by_double_clicking_the_tray_icon() =>

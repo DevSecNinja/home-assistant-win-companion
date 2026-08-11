@@ -282,12 +282,18 @@
                         <StackPanel Orientation="Horizontal" Spacing="8">
                             <TextBlock Text="Installed version:"
                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                            <TextBlock x:Name="InstalledVersionText" Text="—" />
+                            <TextBlock
+                                x:Name="InstalledVersionText"
+                                AutomationProperties.AutomationId="Settings.InstalledVersion"
+                                Text="—" />
                         </StackPanel>
                         <StackPanel Orientation="Horizontal" Spacing="8">
                             <TextBlock Text="Latest stable version:"
                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                            <TextBlock x:Name="LatestVersionText" Text="Not checked" />
+                            <TextBlock
+                                x:Name="LatestVersionText"
+                                AutomationProperties.AutomationId="Settings.LatestVersion"
+                                Text="Not checked" />
                         </StackPanel>
                         <TextBlock
                             x:Name="SettingsUpdateStatusText"

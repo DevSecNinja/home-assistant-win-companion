@@ -17,10 +17,14 @@ internal sealed class SettingsPage(Window window)
     internal void RemoveServer() => Button("Settings.RemoveServer").Invoke();
     internal void Back() => Button("Settings.Back").Invoke();
 
+    internal string InstalledVersion() => Find("Settings.InstalledVersion", ControlType.Text).Name;
+
     private Button Button(string automationId) =>
+        Find(automationId, ControlType.Button).AsButton();
+
+    private AutomationElement Find(string automationId, ControlType controlType) =>
         AutomationWait.Element(
-                () => window.FindFirstDescendant(cf =>
-                    cf.ByAutomationId(automationId).And(cf.ByControlType(ControlType.Button))),
-                automationId)
-            .AsButton();
+            () => window.FindFirstDescendant(cf =>
+                cf.ByAutomationId(automationId).And(cf.ByControlType(controlType))),
+            automationId);
 }

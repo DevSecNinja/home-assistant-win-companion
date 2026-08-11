@@ -19,6 +19,7 @@ public sealed class StatusUiTests
                 status.OpenSettings();
                 var settings = new SettingsPage(fixture.Window);
                 settings.WaitUntilVisible();
+                Assert.Equal("0.0.0", settings.InstalledVersion());
                 settings.DisconnectOrReconnect();
                 settings.Back();
                 status.WaitForConnection("Disconnected");

@@ -519,7 +519,12 @@
                                             Visibility="Collapsed"
                                             AutomationProperties.Name="Checking for updates" />
                                         <TextBlock Grid.Column="1" Text="Version" Style="{StaticResource SettingsDescriptionStyle}" />
-                                        <TextBlock Grid.Column="2" x:Name="InstalledVersionText" Text="—" Style="{StaticResource SettingsDescriptionStyle}" />
+                                        <TextBlock
+                                            Grid.Column="2"
+                                            x:Name="InstalledVersionText"
+                                            AutomationProperties.AutomationId="Settings.InstalledVersion"
+                                            Text="—"
+                                            Style="{StaticResource SettingsDescriptionStyle}" />
                                         <TextBlock
                                             Grid.Column="3"
                                             x:Name="SettingsUpdateStatusText"

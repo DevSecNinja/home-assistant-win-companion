@@ -110,6 +110,7 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
         var showWindowCommand = new XamlUICommand();
         showWindowCommand.ExecuteRequested += (_, _) => ActivateMainWindow();
         TrayIcon.LeftClickCommand = showWindowCommand;
+        TrayIcon.DoubleClickCommand = showWindowCommand;
 #if DEBUG
         if (App.TestLaunchOptions is { } testOptions)
             TrayIcon.ToolTipText = testOptions.TrayIdentity;

@@ -10,9 +10,22 @@ public sealed class TrayUiTests
 {
     [UiTrayFact]
     public Task Hidden_window_is_restored_through_the_tray_icon() =>
+        HiddenWindowIsRestoredThroughTrayIcon(
+            "hide and restore through tray single click",
+            trayIcon => trayIcon.AsButton().Invoke());
+
+    [UiTrayFact]
+    public Task Hidden_window_is_restored_by_double_clicking_the_tray_icon() =>
+        HiddenWindowIsRestoredThroughTrayIcon(
+            "hide and restore through tray double click",
+            trayIcon => trayIcon.DoubleClick());
+
+    private static Task HiddenWindowIsRestoredThroughTrayIcon(
+        string scenarioName,
+        Action<AutomationElement> activateTrayIcon) =>
         UiScenarioFixture.RunAsync(
             "ui-tray",
-            "hide and restore through tray",
+            scenarioName,
             fixture =>
             {
                 new ConnectPage(fixture.Window).EnterUrl(fixture.Scenario.BaseUrl!.AbsoluteUri);
@@ -31,7 +44,7 @@ public sealed class TrayUiTests
                                 .And(cf.ByControlType(ControlType.Button))))
                         .FirstOrDefault(element => element is not null),
                     fixture.TrayIdentity);
-                trayIcon.AsButton().Invoke();
+                activateTrayIcon(trayIcon);
 
                 status.WaitForConnection("Connected");
                 Assert.True(UiCapabilities.IsWindowVisible(fixture.Window));

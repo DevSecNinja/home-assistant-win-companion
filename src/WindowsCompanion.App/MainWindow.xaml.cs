@@ -45,10 +45,7 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
     private bool _connected;
     private int _sensorListBuildVersion;
     private bool _suppressSensorToggle;
-    private readonly object _sensorPreviewCancellationGate = new();
-    private CancellationTokenSource? _sensorListPreviewCancellation;
-    private readonly Dictionary<string, CancellationTokenSource> _sensorPreviewCancellations =
-        new(StringComparer.Ordinal);
+    private readonly SensorPreviewCancellation _sensorPreviewCancellation = new();
     private readonly Dictionary<string, TextBlock> _sensorPreviewTexts =
         new(StringComparer.Ordinal);
     private readonly List<Control> _sensorSettingControls = [];
@@ -713,7 +710,7 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
 
     private void OnCloseSensors(object sender, RoutedEventArgs e)
     {
-        CancelSensorPreviews();
+        _sensorPreviewCancellation.CancelAll();
         RefreshPreferencesSummary();
         ShowView(_sensorReturnView);
     }
@@ -795,7 +792,7 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
         if (catalog is null) return false;
 
         var buildVersion = ++_sensorListBuildVersion;
-        using var previewCancellation = BeginSensorListPreview();
+        using var previewCancellation = _sensorPreviewCancellation.BeginList();
         IReadOnlyDictionary<string, string> previews;
         try
         {
@@ -807,7 +804,7 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
         }
         finally
         {
-            EndSensorListPreview(previewCancellation);
+            _sensorPreviewCancellation.EndList(previewCancellation);
         }
 
         if (buildVersion != _sensorListBuildVersion
@@ -1113,7 +1110,7 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
 
         var wasEnabled = catalog.IsEnabled(uniqueId);
         toggle.IsEnabled = false;
-        using var previewCancellation = BeginSensorPreview(uniqueId);
+        using var previewCancellation = _sensorPreviewCancellation.BeginRow(uniqueId);
         Exception? refreshFailure = null;
         string? refreshedPreview = null;
         try
@@ -1199,7 +1196,7 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
         }
         finally
         {
-            EndSensorPreview(uniqueId, previewCancellation);
+            _sensorPreviewCancellation.EndRow(uniqueId, previewCancellation);
             if (ReferenceEquals(catalog, _controller.Catalog))
                 toggle.IsEnabled = !_settingsActionBusy;
         }
@@ -1260,72 +1257,6 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
         }
 
         return capability;
-    }
-
-    private CancellationTokenSource BeginSensorListPreview()
-    {
-        var next = new CancellationTokenSource();
-        CancellationTokenSource? previous;
-        lock (_sensorPreviewCancellationGate)
-        {
-            previous = _sensorListPreviewCancellation;
-            _sensorListPreviewCancellation = next;
-        }
-
-        previous?.Cancel();
-        return next;
-    }
-
-    private void EndSensorListPreview(CancellationTokenSource completed)
-    {
-        lock (_sensorPreviewCancellationGate)
-        {
-            if (ReferenceEquals(_sensorListPreviewCancellation, completed))
-                _sensorListPreviewCancellation = null;
-        }
-    }
-
-    private CancellationTokenSource BeginSensorPreview(string uniqueId)
-    {
-        var next = new CancellationTokenSource();
-        CancellationTokenSource? previous = null;
-        lock (_sensorPreviewCancellationGate)
-        {
-            _sensorPreviewCancellations.Remove(uniqueId, out previous);
-            _sensorPreviewCancellations[uniqueId] = next;
-        }
-
-        previous?.Cancel();
-        return next;
-    }
-
-    private void EndSensorPreview(string uniqueId, CancellationTokenSource completed)
-    {
-        lock (_sensorPreviewCancellationGate)
-        {
-            if (_sensorPreviewCancellations.TryGetValue(uniqueId, out var current)
-                && ReferenceEquals(current, completed))
-            {
-                _sensorPreviewCancellations.Remove(uniqueId);
-            }
-        }
-    }
-
-    private void CancelSensorPreviews()
-    {
-        CancellationTokenSource? listPreview;
-        List<CancellationTokenSource> rowPreviews;
-        lock (_sensorPreviewCancellationGate)
-        {
-            listPreview = _sensorListPreviewCancellation;
-            _sensorListPreviewCancellation = null;
-            rowPreviews = [.. _sensorPreviewCancellations.Values];
-            _sensorPreviewCancellations.Clear();
-        }
-
-        listPreview?.Cancel();
-        foreach (var cancellation in rowPreviews)
-            cancellation.Cancel();
     }
 
     private void ShowSensorPreviewError(string uniqueId, string message)

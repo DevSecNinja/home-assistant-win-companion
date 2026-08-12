@@ -118,8 +118,9 @@ Assistant; package names and versions remain in the local preview.
 ## Connecting from home and away
 
 Most users need only the URL entered during sign-in. If your Home Assistant server
-uses a LAN address at home and a public address elsewhere, open **Connection...**
-and enable **I use different internal and external URLs**.
+uses a LAN address at home and a public address elsewhere, select **Open settings**,
+then **Connection settings**, and enable
+**I use different internal and external URLs**.
 
 | Mode | Behavior |
 | --- | --- |

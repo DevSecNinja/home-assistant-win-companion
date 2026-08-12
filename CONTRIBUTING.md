@@ -41,6 +41,10 @@ supported build commands.
 - Never commit Home Assistant URLs, credentials, webhook IDs, logs, or local
   settings.
 - Keep direct GitHub Actions and reusable workflows pinned by commit digest.
+- Register test suites in `scripts\test-suites\`; keep `scripts\test.ps1` as the
+  stable discovery and execution entry point.
+- Put independently evolving CI implementation in a focused reusable workflow;
+  keep `.github/workflows/ci.yml` as the stable pull request and push dispatcher.
 
 ## Pull requests
 

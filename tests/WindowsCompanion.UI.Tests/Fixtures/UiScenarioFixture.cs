@@ -564,7 +564,7 @@ internal sealed class UiScenarioFixture : IAsyncDisposable
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
         while (directory is not null)
         {
-            if (File.Exists(Path.Combine(directory.FullName, "WindowsCompanion.sln")))
+            if (File.Exists(Path.Combine(directory.FullName, "WindowsCompanion.slnx")))
                 return directory.FullName;
             directory = directory.Parent;
         }

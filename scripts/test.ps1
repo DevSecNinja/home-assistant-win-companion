@@ -1,7 +1,7 @@
 #!/usr/bin/env pwsh
 <#
 .SYNOPSIS
-    Runs Core, App-boundary, and optional end-to-end or interactive UI suites.
+    Runs registered test suites through one repository entry point.
 #>
 [CmdletBinding()]
 param(
@@ -10,6 +10,8 @@ param(
     [switch]$EndToEnd,
 
     [switch]$Ui,
+
+    [string[]]$Suite,
 
     [string]$Filter,
 
@@ -34,12 +36,8 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
-$coreProject = Join-Path $repoRoot 'tests\WindowsCompanion.Core.Tests\WindowsCompanion.Core.Tests.csproj'
-$e2eProject = Join-Path $repoRoot 'tests\WindowsCompanion.E2E.Tests\WindowsCompanion.E2E.Tests.csproj'
-$uiProject = Join-Path $repoRoot 'tests\WindowsCompanion.UI.Tests\WindowsCompanion.UI.Tests.csproj'
-$appProject = Join-Path $repoRoot 'src\WindowsCompanion.App\WindowsCompanion.App.csproj'
-$appBoundaryProject = Join-Path $repoRoot 'tests\WindowsCompanion.App.Tests\WindowsCompanion.App.Tests.csproj'
-$dotnet = (Get-Command dotnet -ErrorAction SilentlyContinue)?.Source
+$dotnetCommand = Get-Command dotnet -ErrorAction SilentlyContinue
+$dotnet = if ($dotnetCommand) { $dotnetCommand.Source } else { $null }
 if (-not $dotnet) { $dotnet = 'C:\Program Files\dotnet\dotnet.exe' }
 if (-not (Test-Path $dotnet)) { throw 'Could not find dotnet. Install the .NET 10 SDK.' }
 
@@ -96,83 +94,60 @@ function Invoke-TestProject {
     if ($LASTEXITCODE -ne 0) { throw "$Name tests failed." }
 }
 
-if ($Coverage) {
-    $coverageDirectory = Join-Path $repoRoot 'Coverage'
-    if (Test-Path $coverageDirectory) {
-        Remove-Item $coverageDirectory -Recurse -Force
-    }
+$testSuites = [ordered]@{}
+function Register-TestSuite {
+    param(
+        [Parameter(Mandatory)]
+        [string]$Name,
 
-    $coverageArguments = @(
-        '--collect'
-        'XPlat Code Coverage'
-        '--results-directory'
-        $coverageDirectory
+        [string[]]$Aliases = @(),
+
+        [switch]$Default,
+
+        [Parameter(Mandatory)]
+        [scriptblock]$Run
     )
-    if ($Filter) { $coverageArguments += @('--filter', $Filter) }
 
-    & $dotnet test $coreProject --nologo @coverageArguments
-    if ($LASTEXITCODE -ne 0) { throw 'Core tests failed.' }
-
-    $report = Get-ChildItem $coverageDirectory -Recurse -Filter 'coverage.cobertura.xml' |
-        Select-Object -First 1
-    if (-not $report) { throw 'Coverage collection completed without a Cobertura report.' }
-
-    [xml]$document = Get-Content $report.FullName
-    $lineCoverage = [double]$document.coverage.'line-rate' * 100
-    $branchCoverage = [double]$document.coverage.'branch-rate' * 100
-
-    Write-Host ('Core coverage: {0:N2}% line, {1:N2}% branch' -f $lineCoverage, $branchCoverage)
-
-    if ($lineCoverage -lt $MinimumLineCoverage) {
-        throw ('Line coverage {0:N2}% is below the {1:N2}% threshold.' -f
-            $lineCoverage, $MinimumLineCoverage)
+    if ($testSuites.Contains($Name)) {
+        throw "A test suite named '$Name' is already registered."
     }
 
-    if ($branchCoverage -lt $MinimumBranchCoverage) {
-        throw ('Branch coverage {0:N2}% is below the {1:N2}% threshold.' -f
-            $branchCoverage, $MinimumBranchCoverage)
+    $testSuites[$Name] = [pscustomobject]@{
+        Name = $Name
+        Aliases = $Aliases
+        Default = $Default.IsPresent
+        Run = $Run
     }
+}
+
+$suiteDirectory = Join-Path $PSScriptRoot 'test-suites'
+$suiteFiles = Get-ChildItem $suiteDirectory -Filter '*.ps1' | Sort-Object Name
+if (-not $suiteFiles) { throw "No test suites were found in $suiteDirectory." }
+foreach ($suiteFile in $suiteFiles) {
+    . $suiteFile.FullName
+}
+
+$requestedSuites = if ($Suite) {
+    @($Suite)
 }
 else {
-    Invoke-TestProject -Project $coreProject -Name 'core'
+    @($testSuites.Values | Where-Object Default | ForEach-Object Name)
+}
+if ($EndToEnd) { $requestedSuites += 'end-to-end' }
+if ($Ui) { $requestedSuites += 'ui' }
+
+$selectedSuites = foreach ($requested in $requestedSuites) {
+    $match = $testSuites.Values | Where-Object {
+        $_.Name -eq $requested -or $_.Aliases -contains $requested
+    } | Select-Object -First 1
+    if (-not $match) {
+        $available = $testSuites.Keys -join ', '
+        throw "Unknown test suite '$requested'. Available suites: $available."
+    }
+    $match
 }
 
-Invoke-TestProject -Project $appBoundaryProject -Name 'app-boundary'
-
-if ($EndToEnd) {
-    foreach ($run in 1..$RepeatCount) {
-        Invoke-TestProject `
-            -Project $e2eProject `
-            -Name "end-to-end-$run" `
-            -Configuration 'Release' `
-            -AdditionalArguments @(
-                "-p:Platform=$Platform"
-                '-p:PublishReadyToRun=false'
-                '-r'
-                $runtimeIdentifier
-                '--blame-hang'
-                '--blame-hang-timeout'
-                '2m'
-                '--blame-hang-dump-type'
-                'none'
-            )
-    }
-}
-
-if ($Ui) {
-    & $dotnet build `
-        $appProject `
-        -c Debug `
-        "-p:Platform=$Platform" `
-        -r $runtimeIdentifier `
-        --nologo
-    if ($LASTEXITCODE -ne 0) { throw 'The Debug Windows app build failed.' }
-
-    foreach ($run in 1..$RepeatCount) {
-        Invoke-TestProject `
-            -Project $uiProject `
-            -Name "ui-$run" `
-            -Configuration 'Debug' `
-            -AdditionalArguments @("-p:Platform=$Platform", '-r', $runtimeIdentifier)
-    }
+foreach ($testSuite in $selectedSuites | Sort-Object Name -Unique) {
+    Write-Host "Running $($testSuite.Name) test suite..."
+    & $testSuite.Run
 }

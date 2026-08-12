@@ -44,12 +44,23 @@ dotnet build src\WindowsCompanion.App\WindowsCompanion.App.csproj `
 .\scripts\test.ps1 -Coverage
 .\scripts\test.ps1 -EndToEnd
 .\scripts\test.ps1 -Ui
+.\scripts\test.ps1 -Suite core,app-boundary
 ```
 
 Coverage applies to `WindowsCompanion.Core`; the gates are 85% line and 70%
 branch. End-to-end tests use a loopback Home Assistant substitute and synthetic
 credentials while exercising the real OAuth, REST, webhook, WebSocket,
 persistence, and connection stack.
+
+Test suites register themselves through `scripts\test-suites\*.ps1`. Add a suite
+there rather than adding another branch to `scripts\test.ps1`; the `-Suite`
+parameter accepts the registered name or alias. Core and App-boundary tests are
+the default suites, while `-EndToEnd` and `-Ui` remain compatibility shortcuts.
+
+The repository uses the XML-based `WindowsCompanion.slnx` solution format.
+Adding an SDK-style project normally requires only one `<Project Path="..." />`
+entry in the appropriate folder, without generated project GUID or configuration
+blocks.
 
 Native UI tests require an unlocked interactive Windows desktop. Hosted CI
 compiles them, while trusted main builds and manual runs execute them sequentially

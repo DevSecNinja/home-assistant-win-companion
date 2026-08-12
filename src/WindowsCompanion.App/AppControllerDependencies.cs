@@ -39,56 +39,8 @@ internal sealed class AppControllerDependencies
     public required Func<ILifecycleJournal> LifecycleJournalFactory { get; init; }
     public required Func<ILifecycleSignalSource> LifecycleSignalSourceFactory { get; init; }
 
-    public static AppControllerDependencies CreateProduction()
-    {
-        var status = new WindowsSystemStatusProvider();
-        var notifications = new ToastNotifier();
-        var loggerFactory = Microsoft.Extensions.Logging.LoggerFactory.Create(builder =>
-        {
-            builder.AddProvider(new FileLoggerProvider(LogLevel.Debug));
-            builder.SetMinimumLevel(LogLevel.Debug);
-        });
-        var winGet = new PowerShellWinGetUpdateProvider(
-            loggerFactory.CreateLogger<PowerShellWinGetUpdateProvider>());
-
-        return new AppControllerDependencies
-        {
-            HttpClient = new(new HttpClient(), true),
-            SecretStore = new(new WindowsSecretStore(), true),
-            SettingsStore = new(new SettingsStore(), true),
-            SystemStatus = new(status, true),
-            NotificationSink = new(notifications, true),
-            WinGetUpdates = new(winGet, true),
-            UriLauncher = new(new ShellUriLauncher(), true),
-            Network = new(new WindowsNetworkContextProvider(), true),
-            LoggerFactory = new(loggerFactory, true),
-            UpdateHttpClient = new(GitHubReleaseClient.CreateHttpClient(), true),
-            UpdateNotificationSink = new(notifications),
-            EnableStartupUpdates = true,
-            WebSocketFactory = static () => new ClientWebSocketAdapter(),
-            LifecycleJournalFactory = static () => new FileLifecycleJournal(),
-            LifecycleSignalSourceFactory = static () => new WindowsLifecycleSignalSource(),
-            SensorSourceFactory = (config, lifecycle, lifecycleSignals) =>
-            [
-                new BatterySensorSource(status),
-                new ActiveSensorSource(config.Sensors),
-                new NetworkSensorSource(config.Sensors),
-                new WifiSensorSource(config.Sensors),
-                new SystemSensorSource(),
-                new DomainSensorSource(config.Sensors),
-                new DisplaySensorSource(config.Sensors),
-                new WindowsThemeSensorSource(),
-                new LocaleSensorSource(),
-                new DiskUsageSensorSource(),
-                new NotificationStateSensorSource(),
-                new CapabilityUsageSensorSource(config.Sensors),
-                new AudioDeviceSensorSource(config.Sensors),
-                new FrontmostAppSensorSource(config.Sensors),
-                new WinGetUpdateSensorSource(winGet, config.Sensors),
-                new LifecycleSensorSource(lifecycle, lifecycleSignals)
-            ]
-        };
-    }
+    public static AppControllerDependencies CreateProduction() =>
+        ProductionAppComposition.CreateDependencies();
 
     public IEnumerable<object> OwnedValues()
     {

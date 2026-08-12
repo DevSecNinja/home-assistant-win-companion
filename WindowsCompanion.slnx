@@ -1,0 +1,30 @@
+<Solution>
+  <Configurations>
+    <Platform Name="Any CPU" />
+    <Platform Name="ARM64" />
+    <Platform Name="x64" />
+  </Configurations>
+  <Folder Name="/src/">
+    <Project Path="src/WindowsCompanion.App/WindowsCompanion.App.csproj">
+      <Platform Solution="*|Any CPU" Project="x64" />
+      <Platform Solution="*|ARM64" Project="ARM64" />
+      <Platform Solution="*|x64" Project="x64" />
+    </Project>
+    <Project Path="src/WindowsCompanion.Core/WindowsCompanion.Core.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/WindowsCompanion.App.Tests/WindowsCompanion.App.Tests.csproj" />
+    <Project Path="tests/WindowsCompanion.Core.Tests/WindowsCompanion.Core.Tests.csproj" />
+    <Project Path="tests/WindowsCompanion.E2E.Tests/WindowsCompanion.E2E.Tests.csproj">
+      <Platform Solution="*|Any CPU" Project="x64" />
+      <Platform Solution="*|ARM64" Project="ARM64" />
+      <Platform Solution="*|x64" Project="x64" />
+    </Project>
+    <Project Path="tests/WindowsCompanion.Testing/WindowsCompanion.Testing.csproj" />
+    <Project Path="tests/WindowsCompanion.UI.Tests/WindowsCompanion.UI.Tests.csproj">
+      <Platform Solution="*|Any CPU" Project="x64" />
+      <Platform Solution="*|ARM64" Project="ARM64" />
+      <Platform Solution="*|x64" Project="x64" />
+    </Project>
+  </Folder>
+</Solution>

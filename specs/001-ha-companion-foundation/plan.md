@@ -1,8 +1,8 @@
-# Implementation Plan: Home Assistant Windows Companion (MVP)
+# Implementation Plan: Home Assistant Windows Companion
 
-**Branch**: `001-ha-companion-mvp` | **Date**: 2026-08-06 | **Spec**: [spec.md](./spec.md)
+**Branch**: `001-ha-companion-foundation` | **Date**: 2026-08-06 | **Spec**: [spec.md](./spec.md)
 
-**Input**: Feature specification from `/specs/001-ha-companion-mvp/spec.md`
+**Input**: Feature specification from `/specs/001-ha-companion-foundation/spec.md`
 
 ## Summary
 
@@ -77,7 +77,7 @@ No violations — Complexity Tracking not required.
 ### Documentation (this feature)
 
 ```text
-specs/001-ha-companion-mvp/
+specs/001-ha-companion-foundation/
 ├── plan.md              # This file
 ├── research.md          # Phase 0 output
 ├── data-model.md        # Phase 1 output
@@ -123,7 +123,7 @@ layer and provides the concrete Windows implementations of the core abstractions
 
 ## Architecture & Key Decisions
 
-1. **Auth (MVP)**: OAuth2 (IndieAuth) with a loopback redirect. The app opens
+1. **Auth**: OAuth2 (IndieAuth) with a loopback redirect. The app opens
    `/auth/authorize` in the default browser with `client_id == redirect_uri ==
    http://localhost:<fixed-port>/`; a local `TcpListener` captures the returned
    `code`, which is exchanged at `/auth/token` for an access + refresh token. The

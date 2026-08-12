@@ -1,4 +1,4 @@
-# Phase 0 Research: Windows Companion for Home Assistant (MVP)
+# Phase 0 Research: Windows Companion for Home Assistant
 
 ## Decision: UI framework — WinUI 3 (Windows App SDK)
 
@@ -8,10 +8,10 @@ packaged/unpackaged deployment. The companion is lean and tray-resident, so it d
 not embed a browser; Home Assistant itself opens in the user's default browser.
 
 **Alternatives considered**: WPF (mature but older visuals), .NET MAUI (cross-platform
-overhead not needed for a Windows-only MVP). Rejected to keep the experience natively
+overhead not needed for a Windows-only app). Rejected to keep the experience natively
 Windows and modern.
 
-## Decision: Authentication — OAuth2 (IndieAuth) loopback (MVP)
+## Decision: Authentication — OAuth2 (IndieAuth) loopback
 
 **Rationale**: To avoid asking users to create and paste a long-lived token, the
 companion uses Home Assistant''s OAuth2 IndieAuth flow with a **loopback redirect**.
@@ -57,7 +57,7 @@ stable `device_id` (GUID) and the returned `webhook_id`.
 ## Decision: Sensors — webhook `register_sensor` / `update_sensor`
 
 **Rationale**: Documented. Register once per unique_id, then send periodic
-`update_sensor` batches. MVP sensors:
+`update_sensor` batches. Initial sensors:
 
 - `battery_level` — `type=sensor`, `device_class=battery`, `unit=%`,
   `state_class=measurement`, value 0–100.
@@ -120,7 +120,7 @@ enabling run-in-background with show/hide/exit and status.
 - Auth failures (401/invalid token) transition to an `AuthError` state that stops the
   retry loop and prompts re-authentication rather than hammering the server.
 
-## Open items (deferred, not MVP)
+## Open items deferred from the initial release
 
 - Encrypted webhook payloads (`supports_encryption=true`).
 - Zeroconf discovery of the HA instance.

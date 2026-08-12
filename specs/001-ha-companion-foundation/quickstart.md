@@ -1,4 +1,4 @@
-# Quickstart: Home Assistant Windows Companion (MVP)
+# Quickstart: Home Assistant Windows Companion
 
 ## Prerequisites
 

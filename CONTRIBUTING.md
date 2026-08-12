@@ -25,8 +25,9 @@ Run the Core tests through:
 dotnet test tests\WindowsCompanion.Core.Tests\WindowsCompanion.Core.Tests.csproj
 ```
 
-`dotnet run` is not supported for this unpackaged WinUI project. See the README for
-the runtime-resolution details.
+`dotnet run` is not supported for this unpackaged WinUI project. See the
+[developer guide](docs/development.md) for runtime-resolution details and the
+supported build commands.
 
 ## Repository conventions
 

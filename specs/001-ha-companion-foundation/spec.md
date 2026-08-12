@@ -1,12 +1,12 @@
-# Feature Specification: Home Assistant Windows Companion (MVP)
+# Feature Specification: Home Assistant Windows Companion
 
-**Feature Branch**: `001-ha-companion-mvp`
+**Feature Branch**: `001-ha-companion-foundation`
 
 **Created**: 2026-08-06
 
 **Status**: Shipped
 
-**Input**: User description: "Windows Home Assistant companion MVP: lean tray-resident companion (opens Home Assistant in the browser), OAuth2 loopback sign-in, system tray, toast notifications, and Windows status sensor reporting to Home Assistant"
+**Input**: User description: "Windows Home Assistant companion: lean tray-resident companion (opens Home Assistant in the browser), OAuth2 loopback sign-in, system tray, toast notifications, and Windows status sensor reporting to Home Assistant"
 
 ## Overview
 
@@ -199,7 +199,9 @@ appears with the title and message.
 - Notifications are delivered through Home Assistant's
   `mobile_app/push_notification_channel` local-push WebSocket command. Registration
   declares `app_data.push_websocket_channel = true`, and each delivery is confirmed.
-- Encrypted webhook payloads are optional for the MVP; the app MAY send sensor
-  updates unencrypted over TLS. Encryption can be added later.
+- Application-level webhook payload encryption is optional for the initial
+  release. HTTPS routes protect unencrypted payloads with TLS; an explicitly
+  accepted internal HTTP route does not provide transport encryption. Payload
+  encryption can be added later.
 - Target OS is Windows 10 (build 19041+) and Windows 11 on x64/ARM64.
-- Single Home Assistant server per app instance for the MVP (multi-server later).
+- Single Home Assistant server per app instance for the initial release (multi-server later).

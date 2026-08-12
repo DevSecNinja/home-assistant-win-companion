@@ -1,4 +1,4 @@
-# Phase 1 Data Model: Windows Companion for Home Assistant (MVP)
+# Phase 1 Data Model: Windows Companion for Home Assistant
 
 ## Entities
 
@@ -49,7 +49,7 @@ unregistered, register again, and leave a duplicate device in Home Assistant.
 | model               | string | System model (or "Windows PC")                 |
 | os_name             | string | `Windows`                                      |
 | os_version          | string | Windows version string                         |
-| supports_encryption | bool   | `false` (MVP)                                  |
+| supports_encryption | bool   | `false` (initial implementation)               |
 | app_data            | object | `{ "push_websocket_channel": true }`           |
 
 ### DeviceRegistrationResponse
@@ -76,7 +76,7 @@ unregistered, register again, and leave a duplicate device in Home Assistant.
 | EntityCategory      | string? | e.g. `diagnostic`                             |
 | Attributes          | object? | extra key/values                              |
 
-MVP sensor instances:
+Initial sensor instances:
 
 - **battery_level**: sensor, device_class `battery`, unit `%`, state_class
   `measurement`, entity_category `diagnostic`, state = integer 0–100.
@@ -106,6 +106,6 @@ or `AuthError` (terminal until re-auth). Surfaced to UI + tray tooltip.
 
 ## Relationships
 
-- One `ServerConfig` per app instance (MVP: single server).
+- One `ServerConfig` per app instance (initially a single server).
 - `ServerConfig` 1 → * `Sensor` (registered sensors tracked by UniqueId).
 - Secrets keyed by `BaseUrl`/`DeviceId` in the Credential Locker.

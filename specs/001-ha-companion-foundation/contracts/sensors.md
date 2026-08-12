@@ -7,7 +7,9 @@ Home Assistant native app integration — used by US2.
 `POST {BaseUrl}/api/webhook/{webhook_id}`
 
 No auth header required (the webhook_id is the capability). `Content-Type: application/json`.
-For the MVP payloads are sent unencrypted over TLS.
+The payload has no additional application-level encryption. HTTPS routes protect
+it with TLS; an explicitly accepted internal HTTP route sends it without transport
+encryption.
 
 ## Register a sensor (one at a time)
 

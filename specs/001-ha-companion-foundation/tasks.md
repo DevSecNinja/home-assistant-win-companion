@@ -10,7 +10,7 @@ description: "Task list for Home Assistant Windows Companion (MVP)"
 > outstanding work and are intentionally retained to avoid rewriting the original
 > execution plan as if it had predicted the final implementation.
 
-**Input**: Design documents from `/specs/001-ha-companion-mvp/`
+**Input**: Design documents from `/specs/001-ha-companion-foundation/`
 
 **Prerequisites**: plan.md, spec.md, research.md, data-model.md, contracts/
 

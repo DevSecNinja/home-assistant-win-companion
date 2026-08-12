@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.1](https://github.com/DevSecNinja/home-assistant-win-companion/compare/v0.6.0...v0.6.1) (2026-08-11)
+
+
+### Bug Fixes
+
+* restore overview icon and tray activation ([#146](https://github.com/DevSecNinja/home-assistant-win-companion/issues/146)) ([7ac9d37](https://github.com/DevSecNinja/home-assistant-win-companion/commit/7ac9d37ab454ea6f1b5f474b70c96334e7776584))
+
 ## [0.6.0](https://github.com/DevSecNinja/home-assistant-win-companion/compare/v0.5.0...v0.6.0) (2026-08-11)
 
 

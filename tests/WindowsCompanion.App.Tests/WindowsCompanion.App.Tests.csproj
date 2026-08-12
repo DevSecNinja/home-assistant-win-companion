@@ -36,6 +36,9 @@
       Include="..\..\src\WindowsCompanion.App\Services\MainWindowActivation.cs"
       Link="AppBoundary\MainWindowActivation.cs" />
     <Compile
+      Include="..\..\src\WindowsCompanion.App\Services\SensorPreviewCancellation.cs"
+      Link="AppBoundary\SensorPreviewCancellation.cs" />
+    <Compile
       Include="..\..\src\WindowsCompanion.App\Services\WindowsLifecycleSignalSource.cs"
       Link="AppBoundary\WindowsLifecycleSignalSource.cs" />
     <Compile

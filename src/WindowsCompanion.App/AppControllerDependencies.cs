@@ -27,6 +27,7 @@ internal sealed class AppControllerDependencies
     public required OwnedDependency<ISystemStatusProvider> SystemStatus { get; init; }
     public required OwnedDependency<INotificationSink> NotificationSink { get; init; }
     public required OwnedDependency<IWinGetUpdateProvider> WinGetUpdates { get; init; }
+    public required OwnedDependency<ILocationProvider> Location { get; init; }
     public required OwnedDependency<IUriLauncher> UriLauncher { get; init; }
     public required OwnedDependency<INetworkContextProvider> Network { get; init; }
     public required OwnedDependency<ILoggerFactory> LoggerFactory { get; init; }
@@ -52,6 +53,7 @@ internal sealed class AppControllerDependencies
             SystemStatus.IsOwned ? SystemStatus.Value : null,
             NotificationSink.IsOwned ? NotificationSink.Value : null,
             WinGetUpdates.IsOwned ? WinGetUpdates.Value : null,
+            Location.IsOwned ? Location.Value : null,
             UriLauncher.IsOwned ? UriLauncher.Value : null,
             Network.IsOwned ? Network.Value : null,
             LoggerFactory.IsOwned ? LoggerFactory.Value : null,

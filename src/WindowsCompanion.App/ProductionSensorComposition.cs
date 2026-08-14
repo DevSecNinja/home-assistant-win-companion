@@ -14,7 +14,8 @@ internal static class ProductionSensorComposition
         LifecycleCoordinator lifecycle,
         ILifecycleSignalSource lifecycleSignals,
         ISystemStatusProvider status,
-        IWinGetUpdateProvider winGet) =>
+        IWinGetUpdateProvider winGet,
+        ILocationProvider location) =>
     [
         new BatterySensorSource(status),
         new ActiveSensorSource(config.Sensors),
@@ -31,6 +32,7 @@ internal static class ProductionSensorComposition
         new AudioDeviceSensorSource(config.Sensors),
         new FrontmostAppSensorSource(config.Sensors),
         new WinGetUpdateSensorSource(winGet, config.Sensors),
+        new LocationSensorSource(location, config.Sensors),
         new LifecycleSensorSource(lifecycle, lifecycleSignals)
     ];
 }

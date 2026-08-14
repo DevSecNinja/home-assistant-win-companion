@@ -156,6 +156,7 @@ public sealed class CompositionContractTests
             SystemStatus = new(new FixedSystemStatus()),
             NotificationSink = new(new NoOpNotificationSink()),
             WinGetUpdates = new(new NoOpWinGetProvider()),
+            Location = new(new NoOpLocationProvider()),
             UriLauncher = launcher,
             Network = new(new FixedNetwork()),
             LoggerFactory = new(NullLoggerFactory.Instance),
@@ -219,6 +220,13 @@ public sealed class CompositionContractTests
         public Task<WinGetUpdateResult> CheckForUpdatesAsync(
             CancellationToken cancellationToken = default) =>
             Task.FromResult(new WinGetUpdateResult(WinGetUpdateStatus.Ready, []));
+    }
+
+    private sealed class NoOpLocationProvider : ILocationProvider
+    {
+        public Task<LocationResult> GetLocationAsync(
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(LocationResult.Unavailable());
     }
 
     private sealed class FixedNetwork : INetworkContextProvider

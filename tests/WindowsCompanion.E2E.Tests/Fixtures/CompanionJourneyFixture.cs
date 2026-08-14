@@ -222,6 +222,7 @@ internal sealed class CompanionJourneyFixture : IAsyncDisposable
             SystemStatus = new(new DeterministicSystemStatus()),
             NotificationSink = new(Notifications),
             WinGetUpdates = new(new DeterministicWinGetUpdates()),
+            Location = new(new DeterministicLocationProvider()),
             UriLauncher = new(UriLauncher),
             Network = new(Network),
             LoggerFactory = new(Evidence.LoggerFactory),
@@ -698,6 +699,13 @@ internal sealed class CompanionJourneyFixture : IAsyncDisposable
         public Task<WinGetUpdateResult> CheckForUpdatesAsync(
             CancellationToken cancellationToken = default) =>
             Task.FromResult(new WinGetUpdateResult(WinGetUpdateStatus.Ready, []));
+    }
+
+    private sealed class DeterministicLocationProvider : ILocationProvider
+    {
+        public Task<LocationResult> GetLocationAsync(
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(LocationResult.Unavailable());
     }
 
     private sealed class MemoryLifecycleJournal : ILifecycleJournal

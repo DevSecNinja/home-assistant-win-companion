@@ -13,13 +13,22 @@ namespace WindowsCompanion_App.Services;
 /// </summary>
 public sealed class WindowsLocationProvider : ILocationProvider
 {
-    private readonly DispatcherQueue _dispatcher;
+    private readonly DispatcherQueue? _dispatcher;
     private readonly Geolocator _geolocator = new();
     private bool _accessGranted;
 
-    public WindowsLocationProvider(DispatcherQueue dispatcher)
+    /// <summary>
+    /// Accepts a nullable dispatcher so composition code that constructs
+    /// production dependencies off the UI thread (for example, a test that
+    /// checks composition wiring without actually starting the app) does not
+    /// have to fail outright. A missing dispatcher simply means every query
+    /// reports <see cref="LocationStatus.Unavailable"/>, matching the
+    /// existing behavior when <see cref="DispatcherQueue.TryEnqueue"/> fails
+    /// below.
+    /// </summary>
+    public WindowsLocationProvider(DispatcherQueue? dispatcher)
     {
-        _dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
+        _dispatcher = dispatcher;
     }
 
     public Task<LocationResult> GetLocationAsync(
@@ -95,7 +104,7 @@ public sealed class WindowsLocationProvider : ILocationProvider
         using var registration = cancellationToken.Register(
             () => completion.TrySetCanceled(cancellationToken));
 
-        if (!_dispatcher.TryEnqueue(async () =>
+        if (_dispatcher is null || !_dispatcher.TryEnqueue(async () =>
             {
                 if (cancellationToken.IsCancellationRequested) return;
 

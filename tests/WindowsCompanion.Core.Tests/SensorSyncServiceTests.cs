@@ -74,8 +74,8 @@ public class SensorSyncServiceTests
         await svc.SyncAsync("wh", SensorReadContext.Periodic);
         await svc.SyncAsync("wh", SensorReadContext.Periodic);
 
-        // Two unique sensors registered exactly once each across two syncs.
-        Assert.Equal(2, client.Registered.Count);
+        // Three unique sensors registered exactly once each across two syncs.
+        Assert.Equal(3, client.Registered.Count);
         Assert.Equal(2, client.Updates);
     }
 
@@ -85,12 +85,12 @@ public class SensorSyncServiceTests
         var client = new FakeClient();
         var svc = new SensorSyncService(client, BatteryCatalog());
 
-        await svc.SyncAsync("wh", SensorReadContext.Periodic);                 // registers 2, update ok
+        await svc.SyncAsync("wh", SensorReadContext.Periodic);                 // registers 3, update ok
         client.FailNextUpdate = true;
         await Assert.ThrowsAsync<HttpRequestException>(() => svc.SyncAsync("wh", SensorReadContext.Periodic));
-        await svc.SyncAsync("wh", SensorReadContext.Periodic);                 // must re-register the 2 sensors
+        await svc.SyncAsync("wh", SensorReadContext.Periodic);                 // must re-register the 3 sensors
 
-        Assert.Equal(4, client.Registered.Count);  // 2 + 2 after the forced reset
+        Assert.Equal(6, client.Registered.Count);  // 3 + 3 after the forced reset
     }
 
     [Fact]
@@ -107,7 +107,7 @@ public class SensorSyncServiceTests
             () => svc.SyncAsync("wh", SensorReadContext.Periodic));
         await svc.SyncAsync("wh", SensorReadContext.Periodic);
 
-        Assert.Equal(4, client.Registered.Count);
+        Assert.Equal(6, client.Registered.Count);
     }
 
     [Fact]
@@ -124,7 +124,7 @@ public class SensorSyncServiceTests
             () => svc.SyncAsync("wh", SensorReadContext.Periodic));
         await svc.SyncAsync("wh", SensorReadContext.Periodic);
 
-        Assert.Equal(2, client.Registered.Count);
+        Assert.Equal(3, client.Registered.Count);
     }
 
     [Fact]
@@ -138,9 +138,13 @@ public class SensorSyncServiceTests
 
         await svc.SyncAsync("wh", SensorReadContext.Periodic);
 
-        Assert.Equal(new[] { BatterySensorProvider.BatteryLevelId }, client.Registered);
+        Assert.Equal(
+            new[] { BatterySensorProvider.BatteryLevelId, BatterySensorProvider.AcPowerId },
+            client.Registered);
         var batch = Assert.Single(client.Batches);
-        Assert.Equal(BatterySensorProvider.BatteryLevelId, Assert.Single(batch).UniqueId);
+        Assert.Equal(
+            new[] { BatterySensorProvider.BatteryLevelId, BatterySensorProvider.AcPowerId },
+            batch.Select(s => s.UniqueId));
     }
 
     [Fact]
@@ -182,7 +186,7 @@ public class SensorSyncServiceTests
         await svc.SyncAsync("wh", SensorReadContext.Periodic);
 
         Assert.Equal(
-            new[] { BatterySensorProvider.BatteryLevelId, BatterySensorProvider.BatteryStateId },
+            new[] { BatterySensorProvider.AcPowerId, BatterySensorProvider.BatteryLevelId, BatterySensorProvider.BatteryStateId },
             registered.Keys.OrderBy(k => k).ToArray());
         Assert.Equal("Battery Level", registered[BatterySensorProvider.BatteryLevelId].Name);
         Assert.Equal("sensor", registered[BatterySensorProvider.BatteryLevelId].Type);

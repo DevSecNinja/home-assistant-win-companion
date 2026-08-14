@@ -33,6 +33,36 @@ public class BatterySensorProviderTests
         Assert.Equal("mdi:battery-charging", level.Icon);
     }
 
+    [Theory]
+    [InlineData(PowerState.Charging, true)]
+    [InlineData(PowerState.Full, true)]
+    [InlineData(PowerState.NotCharging, true)]
+    [InlineData(PowerState.PluggedIn, true)]
+    [InlineData(PowerState.Discharging, false)]
+    public void AC_power_reflects_mains_connection_for_laptops(PowerState powerState, bool expectedAcOnline)
+    {
+        var status = new SystemStatus(HasBattery: true, BatteryPercent: 50, powerState);
+
+        var acPower = BatterySensorProvider.BuildAcPower(status);
+        var state = BatterySensorProvider.BuildBatteryState(status);
+
+        Assert.Equal("binary_sensor", acPower.Type);
+        Assert.Equal("plug", acPower.DeviceClass);
+        Assert.Equal(expectedAcOnline, acPower.State);
+        Assert.Equal(expectedAcOnline, state.Attributes!["ac_online"]);
+        Assert.Equal(expectedAcOnline ? "mdi:power-plug" : "mdi:power-plug-off", acPower.Icon);
+    }
+
+    [Fact]
+    public void Desktop_without_battery_reports_ac_power_connected()
+    {
+        var status = new SystemStatus(HasBattery: false, BatteryPercent: 255, PowerState.Unknown);
+
+        var acPower = BatterySensorProvider.BuildAcPower(status);
+
+        Assert.True((bool)acPower.State!);
+    }
+
     [Fact]
     public void Desktop_without_battery_is_reported_gracefully()
     {
@@ -61,8 +91,9 @@ public class BatterySensorProviderTests
     {
         var sensors = BatterySensorProvider.BuildAll(new SystemStatus(true, 50, PowerState.Charging));
 
-        Assert.Equal(2, sensors.Count);
+        Assert.Equal(3, sensors.Count);
         Assert.Contains(sensors, s => s.UniqueId == BatterySensorProvider.BatteryLevelId);
         Assert.Contains(sensors, s => s.UniqueId == BatterySensorProvider.BatteryStateId);
+        Assert.Contains(sensors, s => s.UniqueId == BatterySensorProvider.AcPowerId);
     }
 }

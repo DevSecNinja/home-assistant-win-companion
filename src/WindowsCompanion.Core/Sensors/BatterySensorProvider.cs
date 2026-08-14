@@ -10,6 +10,7 @@ public static class BatterySensorProvider
 {
     public const string BatteryLevelId = "battery_level";
     public const string BatteryStateId = "battery_state";
+    public const string AcPowerId = "ac_power";
 
     public static Sensor BuildBatteryLevel(SystemStatus status)
     {
@@ -46,15 +47,37 @@ public static class BatterySensorProvider
             // status separately gives automations a signal that does not flap.
             Attributes = new Dictionary<string, object>
             {
-                ["ac_online"] = status.PowerState is PowerState.Charging or PowerState.Full
-                    or PowerState.NotCharging or PowerState.PluggedIn,
+                ["ac_online"] = IsAcOnline(status),
                 ["has_battery"] = status.HasBattery
             }
         };
     }
 
+    public static Sensor BuildAcPower(SystemStatus status)
+    {
+        var acOnline = IsAcOnline(status);
+        return new Sensor
+        {
+            UniqueId = AcPowerId,
+            Type = "binary_sensor",
+            Name = "AC Power",
+            State = acOnline,
+            DeviceClass = "plug",
+            EntityCategory = "diagnostic",
+            Icon = acOnline ? "mdi:power-plug" : "mdi:power-plug-off"
+        };
+    }
+
     public static IReadOnlyList<Sensor> BuildAll(SystemStatus status) =>
-        new[] { BuildBatteryLevel(status), BuildBatteryState(status) };
+        new[] { BuildBatteryLevel(status), BuildBatteryState(status), BuildAcPower(status) };
+
+    // Windows can report AC online while the charging bit is clear (adaptive or
+    // conservation charging, or a thermal pause), which shows up as "not
+    // charging" even though the machine is plugged in. Mains status is derived
+    // from PowerState rather than the charging bit alone so it does not flap.
+    private static bool IsAcOnline(SystemStatus status) =>
+        !status.HasBattery || status.PowerState is PowerState.Charging or PowerState.Full
+            or PowerState.NotCharging or PowerState.PluggedIn;
 
     private static string BatteryIcon(SystemStatus status)
     {

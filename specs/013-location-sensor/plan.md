@@ -31,7 +31,7 @@ model, poll-driven sensor source) lives in `WindowsCompanion.Core` behind an
 
 **Project Type**: Desktop app (WinUI 3) with a platform-agnostic core library - existing `WindowsCompanion.Core` / `WindowsCompanion.App` / `WindowsCompanion.Core.Tests` / `WindowsCompanion.E2E.Tests` layout
 
-**Performance Goals**: Not latency-sensitive; one location query per poll interval, comparable in cost to the existing WinGet-update poll (network/OS-bound, not run on a UI thread)
+**Performance Goals**: Not latency-sensitive; one location query per poll interval, comparable in cost to the existing WinGet-update poll (network/OS-bound). Both WinRT calls (`RequestAccessAsync`, `GetGeopositionAsync`) are marshalled onto the UI `DispatcherQueue`, since `Geolocator` requires the calling thread to be foregrounded for the permission prompt; the poll interval is long enough that this brief hop does not create UI jank.
 
 **Constraints**: MUST NOT query location while the sensor is disabled (Core Principle II privacy); MUST NOT log a coordinate (benign vs. sensitive logging rule in `SensorDefinition.Loggable`); MUST cancel an in-flight query on disable/shutdown (existing `SensorPollLoop`/`IRefreshableSensorSource` contract already guarantees this once the source is built on top of it)
 

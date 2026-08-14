@@ -81,12 +81,16 @@ public sealed class WindowsLocationProvider : ILocationProvider
         }
     }
 
-    private Task<LocationResult> RunOnDispatcherAsync(
+    private async Task<LocationResult> RunOnDispatcherAsync(
         Func<CancellationToken, Task<LocationResult>> action,
         CancellationToken cancellationToken)
     {
         var completion = new TaskCompletionSource<LocationResult>(
             TaskCreationOptions.RunContinuationsAsynchronously);
+        // Keep the registration alive until completion.Task settles: disposing
+        // it as soon as this method returns (as a synchronous `using` would)
+        // would drop cancellation delivered after TryEnqueue succeeds but
+        // before the queued delegate runs, hanging the caller indefinitely.
         using var registration = cancellationToken.Register(
             () => completion.TrySetCanceled(cancellationToken));
 
@@ -111,6 +115,6 @@ public sealed class WindowsLocationProvider : ILocationProvider
             completion.TrySetResult(LocationResult.Unavailable());
         }
 
-        return completion.Task;
+        return await completion.Task.ConfigureAwait(false);
     }
 }

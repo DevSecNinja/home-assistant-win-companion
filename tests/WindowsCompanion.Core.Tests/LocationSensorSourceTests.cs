@@ -36,13 +36,14 @@ public class LocationSensorSourceTests
             // The second scheduled tick lands within the jitter threshold: the
             // cached reading still updates, but onChanged must not fire again.
             // The next call is gated behind AllowNextCall(), so no further tick
-            // can race ahead while this is checked.
+            // can race ahead while this is checked. Poll Read() itself (with a
+            // timeout) rather than a fixed delay, so the assertion waits for
+            // exactly as long as the in-flight tick needs to finish updating
+            // the cache instead of guessing at a "long enough" sleep.
             provider.AllowNextCall();
-            await WaitForCallCountAsync(provider, 2);
-            await Task.Delay(30); // let the in-flight tick finish updating the cache
+            var jittered = await WaitForStateAsync(
+                source, "47.000050,8.000050", TimeSpan.FromSeconds(2));
             Assert.Equal(0, changed.CurrentCount);
-            var jittered = Assert.Single(source.Read(
-                new HashSet<string> { LocationSensorSource.LocationId }, SensorReadContext.Periodic));
             Assert.Equal("47.000050,8.000050", jittered.State);
 
             // The third tick moves far enough to be real news again.
@@ -199,13 +200,26 @@ public class LocationSensorSourceTests
         return preferences;
     }
 
-    private static async Task WaitForCallCountAsync(GatedFakeProvider provider, int count)
+    /// <summary>
+    /// Polls <see cref="LocationSensorSource.Read"/> until it reports the
+    /// expected state or the timeout elapses, so the assertion waits for
+    /// exactly as long as an in-flight tick needs to settle instead of
+    /// guessing at a fixed delay (which raced the cache update under load).
+    /// </summary>
+    private static async Task<Sensor> WaitForStateAsync(
+        LocationSensorSource source, string expectedState, TimeSpan timeout)
     {
-        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(2);
-        while (provider.CallCount < count)
+        var deadline = DateTime.UtcNow + timeout;
+        while (true)
         {
+            var reading = Assert.Single(source.Read(
+                new HashSet<string> { LocationSensorSource.LocationId }, SensorReadContext.Periodic));
+            if (Equals(reading.State, expectedState)) return reading;
+
             if (DateTime.UtcNow > deadline)
-                throw new TimeoutException($"Provider was not called {count} times in time.");
+                throw new TimeoutException(
+                    $"Location sensor never reported state \"{expectedState}\" "
+                    + $"(last seen: \"{reading.State}\").");
             await Task.Delay(5);
         }
     }

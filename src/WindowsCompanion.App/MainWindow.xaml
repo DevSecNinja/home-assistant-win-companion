@@ -891,7 +891,7 @@
                             <StackPanel Spacing="3">
                                 <TextBlock Text="Windows location access" FontWeight="SemiBold" />
                                 <TextBlock
-                                    Text="Required for Windows to reveal the current Wi-Fi network name."
+                                    Text="Required for the Location sensor and for Windows to reveal the current Wi-Fi network name."
                                     Style="{StaticResource SettingsDescriptionStyle}" />
                             </StackPanel>
                             <Button

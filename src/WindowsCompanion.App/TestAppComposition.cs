@@ -42,6 +42,7 @@ internal static class TestAppComposition
             SystemStatus = new(status, true),
             NotificationSink = new(new ToastNotifier(), true),
             WinGetUpdates = new(new NoOpWinGetUpdateProvider(), true),
+            Location = new(new NoOpLocationProvider(), true),
             UriLauncher = new(launcher, true),
             Network = new(new OfflineNetworkContextProvider(), true),
             LoggerFactory = new(loggerFactory, ownsLoggerFactory),
@@ -195,6 +196,13 @@ internal static class TestAppComposition
         public Task<WinGetUpdateResult> CheckForUpdatesAsync(
             CancellationToken cancellationToken = default) =>
             Task.FromResult(new WinGetUpdateResult(WinGetUpdateStatus.Ready, []));
+    }
+
+    private sealed class NoOpLocationProvider : ILocationProvider
+    {
+        public Task<LocationResult> GetLocationAsync(
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(LocationResult.Unavailable());
     }
 
     private sealed class OfflineNetworkContextProvider : INetworkContextProvider

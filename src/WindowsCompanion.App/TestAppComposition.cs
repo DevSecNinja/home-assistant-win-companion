@@ -26,6 +26,7 @@ internal static class TestAppComposition
         ILoggerFactory? loggerFactory = null)
     {
         var status = new FixedSystemStatusProvider();
+        var location = new NoOpLocationProvider();
         var launcher = options.AutoAuthorize
             ? (IUriLauncher)new LoopbackFollowingUriLauncher(options.ServerUrl)
             : new LoopbackShellUriLauncher(options.ServerUrl);
@@ -42,12 +43,13 @@ internal static class TestAppComposition
             SystemStatus = new(status, true),
             NotificationSink = new(new ToastNotifier(), true),
             WinGetUpdates = new(new NoOpWinGetUpdateProvider(), true),
-            Location = new(new NoOpLocationProvider(), true),
+            Location = new(location, true),
             UriLauncher = new(launcher, true),
             Network = new(new OfflineNetworkContextProvider(), true),
             LoggerFactory = new(loggerFactory, ownsLoggerFactory),
             WebSocketFactory = static () => new ClientWebSocketAdapter(),
-            SensorSourceFactory = (_, _, _) => [new BatterySensorSource(status)],
+            SensorSourceFactory = (config, _, _) =>
+                [new BatterySensorSource(status), new LocationSensorSource(location, config.Sensors)],
             LifecycleJournalFactory = () => new FileLifecycleJournal(
                 Path.Combine(options.SettingsDirectory, "lifecycle.json")),
             LifecycleSignalSourceFactory = static () => new NoOpLifecycleSignalSource()

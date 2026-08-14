@@ -32,26 +32,26 @@ public sealed class WindowsLocationProvider : ILocationProvider
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        if (!_accessGranted)
-        {
-            // RequestAccessAsync must run on the UI thread while the app is
-            // foregrounded. Only cache success: if the window is hidden (e.g.
-            // during startup restore) the request can come back Denied or
-            // Unspecified without ever showing the prompt, so retry on the
-            // next poll once the window is foregrounded instead of latching
-            // a false permanent denial.
-            var access = await Geolocator.RequestAccessAsync().AsTask(cancellationToken)
-                .ConfigureAwait(false);
-            if (access != GeolocationAccessStatus.Allowed)
-                return LocationResult.Unavailable(LocationStatus.PermissionDenied);
-            _accessGranted = true;
-        }
-
-        if (_geolocator.LocationStatus == PositionStatus.Disabled)
-            return LocationResult.Unavailable(LocationStatus.PermissionDenied);
-
         try
         {
+            if (!_accessGranted)
+            {
+                // RequestAccessAsync must run on the UI thread while the app
+                // is foregrounded. Only cache success: if the window is
+                // hidden (e.g. during startup restore) the request can come
+                // back Denied or Unspecified without ever showing the
+                // prompt, so retry on the next poll once the window is
+                // foregrounded instead of latching a false permanent denial.
+                var access = await Geolocator.RequestAccessAsync().AsTask(cancellationToken)
+                    .ConfigureAwait(false);
+                if (access != GeolocationAccessStatus.Allowed)
+                    return LocationResult.Unavailable(LocationStatus.PermissionDenied);
+                _accessGranted = true;
+            }
+
+            if (_geolocator.LocationStatus == PositionStatus.Disabled)
+                return LocationResult.Unavailable(LocationStatus.PermissionDenied);
+
             var position = await _geolocator.GetGeopositionAsync().AsTask(cancellationToken)
                 .ConfigureAwait(false);
             var coordinate = position.Coordinate;
@@ -62,10 +62,11 @@ public sealed class WindowsLocationProvider : ILocationProvider
         }
         catch (UnauthorizedAccessException)
         {
-            // Permission can be revoked between the status check above and
-            // this call; report it distinctly so the UI still points at the
-            // Windows location settings remediation instead of a generic
-            // "unavailable".
+            // Both RequestAccessAsync and GetGeopositionAsync can throw this
+            // when the foreground precondition is not met or permission is
+            // revoked mid-session; report it distinctly so the UI still
+            // points at the Windows location settings remediation instead of
+            // a generic "unavailable", and retry the request next poll.
             _accessGranted = false;
             return LocationResult.Unavailable(LocationStatus.PermissionDenied);
         }

@@ -28,7 +28,9 @@ public class LocationSensorSourceTests
             // Start() always ticks immediately, and the default published state
             // differs from any real fix, so the very first fix is always news.
             provider.AllowNextCall();
-            await changed.WaitAsync(TimeSpan.FromSeconds(2));
+            Assert.True(
+                await changed.WaitAsync(TimeSpan.FromSeconds(2)),
+                "onChanged was not invoked for the initial scheduled fix.");
             var first = Assert.Single(source.Read(
                 new HashSet<string> { LocationSensorSource.LocationId }, SensorReadContext.Periodic));
             Assert.Equal("47.000000,8.000000", first.State);
@@ -48,7 +50,9 @@ public class LocationSensorSourceTests
 
             // The third tick moves far enough to be real news again.
             provider.AllowNextCall();
-            await changed.WaitAsync(TimeSpan.FromSeconds(2));
+            Assert.True(
+                await changed.WaitAsync(TimeSpan.FromSeconds(2)),
+                "onChanged was not invoked for the meaningfully moved fix.");
             var moved = Assert.Single(source.Read(
                 new HashSet<string> { LocationSensorSource.LocationId }, SensorReadContext.Periodic));
             Assert.Equal("47.010000,8.010000", moved.State);

@@ -5,9 +5,13 @@
 - Windows 10 19041+ or Windows 11 with Location Services available.
 - This repo checked out on Windows, .NET 10 SDK, matching Windows SDK, and
   Windows App Runtime 2.3 installed (see repo root instructions).
-- A reachable Home Assistant instance with the `mobile_app` integration (or
-  use the app's built-in demo/test-profile mode - see
-  `specs/010-mocked-ha-e2e-testing`).
+- A reachable Home Assistant instance with the `mobile_app` integration. The
+  app's built-in demo/test-profile mode (see `specs/010-mocked-ha-e2e-testing`)
+  wires the sensor to a no-op `ILocationProvider` and can validate that Location
+  appears in **Sensors**, is off by default, and reports "Unavailable" -
+  but it never returns a real coordinate, so it cannot exercise the
+  real-position checks in steps 3 and 5 below. Those require a real Home
+  Assistant instance and real Windows Location Services.
 
 ## Build and run
 

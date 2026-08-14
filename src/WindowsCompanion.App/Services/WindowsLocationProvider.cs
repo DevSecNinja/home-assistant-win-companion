@@ -15,59 +15,92 @@ public sealed class WindowsLocationProvider : ILocationProvider
 {
     private readonly DispatcherQueue _dispatcher;
     private readonly Geolocator _geolocator = new();
-    private bool _accessRequested;
+    private bool _accessGranted;
 
     public WindowsLocationProvider(DispatcherQueue dispatcher)
     {
         _dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
     }
 
-    public async Task<LocationResult> GetLocationAsync(
-        CancellationToken cancellationToken = default)
+    public Task<LocationResult> GetLocationAsync(
+        CancellationToken cancellationToken = default) =>
+        RunOnDispatcherAsync(
+            token => QueryAsync(token),
+            cancellationToken);
+
+    private async Task<LocationResult> QueryAsync(CancellationToken cancellationToken)
     {
-        return await RunOnDispatcherAsync(async () =>
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (!_accessGranted)
         {
-            if (!_accessRequested)
-            {
-                // RequestAccessAsync must run on the UI thread while the app is
-                // foregrounded, and only ever prompts once per app lifetime.
-                var access = await Geolocator.RequestAccessAsync();
-                _accessRequested = true;
-                if (access is GeolocationAccessStatus.Denied or GeolocationAccessStatus.Unspecified)
-                    return LocationResult.Unavailable(LocationStatus.PermissionDenied);
-            }
-
-            if (_geolocator.LocationStatus == PositionStatus.Disabled)
+            // RequestAccessAsync must run on the UI thread while the app is
+            // foregrounded. Only cache success: if the window is hidden (e.g.
+            // during startup restore) the request can come back Denied or
+            // Unspecified without ever showing the prompt, so retry on the
+            // next poll once the window is foregrounded instead of latching
+            // a false permanent denial.
+            var access = await Geolocator.RequestAccessAsync().AsTask(cancellationToken)
+                .ConfigureAwait(false);
+            if (access != GeolocationAccessStatus.Allowed)
                 return LocationResult.Unavailable(LocationStatus.PermissionDenied);
+            _accessGranted = true;
+        }
 
-            try
-            {
-                var position = await _geolocator.GetGeopositionAsync();
-                var coordinate = position.Coordinate;
-                return LocationResult.Ready(
-                    coordinate.Point.Position.Latitude,
-                    coordinate.Point.Position.Longitude,
-                    coordinate.Accuracy);
-            }
-            catch (Exception)
-            {
-                // GetGeopositionAsync throws on missing permission, timeout, or no
-                // data source; all of those are "no fix right now", not a crash.
-                return LocationResult.Unavailable();
-            }
-        }).ConfigureAwait(false);
+        if (_geolocator.LocationStatus == PositionStatus.Disabled)
+            return LocationResult.Unavailable(LocationStatus.PermissionDenied);
+
+        try
+        {
+            var position = await _geolocator.GetGeopositionAsync().AsTask(cancellationToken)
+                .ConfigureAwait(false);
+            var coordinate = position.Coordinate;
+            return LocationResult.Ready(
+                coordinate.Point.Position.Latitude,
+                coordinate.Point.Position.Longitude,
+                coordinate.Accuracy);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // Permission can be revoked between the status check above and
+            // this call; report it distinctly so the UI still points at the
+            // Windows location settings remediation instead of a generic
+            // "unavailable".
+            _accessGranted = false;
+            return LocationResult.Unavailable(LocationStatus.PermissionDenied);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception)
+        {
+            // Any other failure (timeout, no data source) is "no fix right
+            // now", not a crash.
+            return LocationResult.Unavailable();
+        }
     }
 
-    private Task<LocationResult> RunOnDispatcherAsync(Func<Task<LocationResult>> action)
+    private Task<LocationResult> RunOnDispatcherAsync(
+        Func<CancellationToken, Task<LocationResult>> action,
+        CancellationToken cancellationToken)
     {
         var completion = new TaskCompletionSource<LocationResult>(
             TaskCreationOptions.RunContinuationsAsynchronously);
+        using var registration = cancellationToken.Register(
+            () => completion.TrySetCanceled(cancellationToken));
 
         if (!_dispatcher.TryEnqueue(async () =>
             {
+                if (cancellationToken.IsCancellationRequested) return;
+
                 try
                 {
-                    completion.TrySetResult(await action().ConfigureAwait(false));
+                    completion.TrySetResult(await action(cancellationToken).ConfigureAwait(false));
+                }
+                catch (OperationCanceledException)
+                {
+                    completion.TrySetCanceled(cancellationToken);
                 }
                 catch (Exception ex)
                 {

@@ -68,10 +68,12 @@ like `WinGetUpdateSensorSource`:
   - `State`: `"{Latitude:F6},{Longitude:F6}"` when `Ready`; otherwise a short
     human string ("Unavailable" / "Location permission required") - never a
     stale coordinate once status has moved off `Ready`.
-  - `Attributes`: `{"gps_accuracy": AccuracyMeters}` when `Ready`; omitted
-    otherwise, following the existing "omit rather than send null/placeholder
-    attributes" pattern used elsewhere (e.g. `Sensor.Attributes` is
-    `JsonIgnoreCondition.WhenWritingNull`).
+  - `Attributes`: `{"latitude": Latitude, "longitude": Longitude, "gps_accuracy": AccuracyMeters}`
+    when `Ready` (numeric coordinates alongside the packed `State` string, so a
+    Home Assistant template sensor/automation can consume the position
+    without parsing `State`); omitted otherwise, following the existing "omit
+    rather than send null/placeholder attributes" pattern used elsewhere (e.g.
+    `Sensor.Attributes` is `JsonIgnoreCondition.WhenWritingNull`).
   - `Icon`: `"mdi:crosshairs-gps"` when `Ready`, `"mdi:crosshairs-question"`
     otherwise.
 - `PreviewAsync()` returns the disabled placeholder when the sensor is off

@@ -15,6 +15,8 @@ sensor in this app.
   "name": "Location",
   "state": "47.398000,8.545100",
   "attributes": {
+    "latitude": 47.398000,
+    "longitude": 8.545100,
     "gps_accuracy": 12.5
   },
   "icon": "mdi:crosshairs-gps"
@@ -27,6 +29,11 @@ sensor in this app.
   be a string; this keeps both coordinates in one entity, matching the
   Assumption in `spec.md` that this ships as one combined sensor rather than
   separate latitude/longitude entities.
+- `attributes.latitude` / `attributes.longitude`: the same coordinate as
+  numeric `double` values (not packed into a string), so a Home Assistant
+  template sensor, automation trigger, or `zone` distance calculation can
+  consume them directly without parsing `state`. Present only when `state`
+  reflects a real fix.
 - `attributes.gps_accuracy`: horizontal accuracy in meters, a `double`. Present
   only when `state` reflects a real fix.
 - No `device_class`/`unit_of_measurement`/`state_class` - a lat/long pair is

@@ -46,7 +46,9 @@ public sealed class LocationSensorSource : ISensorSource, IRefreshableSensorSour
             EnabledByDefault: false,
             ResourceUsage: "Low. Reads the current position when enabled and every 15 minutes. "
                            + "Sends an extra update only when the position meaningfully changes.",
-            AutomationIdea: "Use the coordinates in a Home Assistant zone to detect arriving home.",
+            AutomationIdea: "Use the latitude/longitude attributes in a Home Assistant "
+                            + "template sensor or automation trigger to build a zone-based "
+                            + "arrival/departure automation.",
             OptInPlaceholder: "Enable to read this device's location")
     ];
 
@@ -124,6 +126,8 @@ public sealed class LocationSensorSource : ISensorSource, IRefreshableSensorSour
                         + $"{result.Longitude!.Value.ToString("F6", CultureInfo.InvariantCulture)}",
                 Attributes = new Dictionary<string, object>
                 {
+                    ["latitude"] = result.Latitude!.Value,
+                    ["longitude"] = result.Longitude!.Value,
                     ["gps_accuracy"] = result.AccuracyMeters!.Value
                 },
                 Icon = "mdi:crosshairs-gps"

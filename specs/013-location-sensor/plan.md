@@ -35,7 +35,7 @@ model, poll-driven sensor source) lives in `WindowsCompanion.Core` behind an
 
 **Constraints**: MUST NOT query location while the sensor is disabled (Core Principle II privacy); MUST NOT log a coordinate (benign vs. sensitive logging rule in `SensorDefinition.Loggable`); MUST cancel an in-flight query on disable/shutdown (existing `SensorPollLoop`/`IRefreshableSensorSource` contract already guarantees this once the source is built on top of it)
 
-**Scale/Scope**: Single new sensor definition (`location`), one new Core abstraction, one new Core sensor source, one new App-side provider, wiring through `ProductionSensorComposition`/`ProductionAppComposition`/`TestAppComposition`, an appxmanifest capability, and a Sensors-page "open Location settings" action mirroring the existing Wi-Fi one
+**Scale/Scope**: Single new sensor definition (`location`), one new Core abstraction, one new Core sensor source, one new App-side provider, wiring through `ProductionSensorComposition`/`ProductionAppComposition`/`TestAppComposition`, and reuse of the existing Sensors-page "open Location settings" action that already mirrors the Wi-Fi one - no appxmanifest change, since `research.md` decides against declaring a `location` capability for this unpackaged app
 
 ## Constitution Check
 

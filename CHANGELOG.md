@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.7.0](https://github.com/DevSecNinja/home-assistant-win-companion/compare/v0.6.1...v0.7.0) (2026-08-14)
+
+
+### Features
+
+* add opt-in Location sensor ([#155](https://github.com/DevSecNinja/home-assistant-win-companion/issues/155)) ([4be4a0c](https://github.com/DevSecNinja/home-assistant-win-companion/commit/4be4a0c15b2592d2245a5fe6d83ea6ff246c3990))
+
+
+### Bug Fixes
+
+* **deps:** update dependency microsoft.win32.systemevents ( 10.0.0 ➔ 10.0.10 ) [automerge] ([#151](https://github.com/DevSecNinja/home-assistant-win-companion/issues/151)) ([f564a89](https://github.com/DevSecNinja/home-assistant-win-companion/commit/f564a899d1ed7e8d8a750f5f7311a5736b9cd16e))
+* **github-release:** update release jdx/mise ( v2026.7.14 ➔ v2026.7.18 ) [automerge] ([#152](https://github.com/DevSecNinja/home-assistant-win-companion/issues/152)) ([e147ee0](https://github.com/DevSecNinja/home-assistant-win-companion/commit/e147ee023a099de12e370b6b71f7cba8d94e3023))
+* **mise:** update tool node ( 24.18.0 ➔ 24.18.1 ) [automerge] ([#154](https://github.com/DevSecNinja/home-assistant-win-companion/issues/154)) ([f72e6cb](https://github.com/DevSecNinja/home-assistant-win-companion/commit/f72e6cbeec5aace30c89c10620719585421c793c))
+
 ## [0.6.1](https://github.com/DevSecNinja/home-assistant-win-companion/compare/v0.6.0...v0.6.1) (2026-08-11)
 
 

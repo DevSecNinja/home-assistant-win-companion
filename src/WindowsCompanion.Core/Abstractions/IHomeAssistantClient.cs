@@ -40,4 +40,10 @@ public interface IHomeAssistantClient
 
     /// <summary>Reads the instance's own internal/external URLs (GET /api/config).</summary>
     Task<HaConfigInfo?> GetConfigAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// Reads the HA OS version from the Supervisor API. Returns null when the
+    /// Supervisor is unavailable (Container/Core installs) or unauthorized.
+    /// </summary>
+    Task<string?> GetOsVersionAsync(CancellationToken ct = default);
 }

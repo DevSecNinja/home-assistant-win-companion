@@ -377,6 +377,11 @@
                                     Text="Home Assistant"
                                     TextTrimming="CharacterEllipsis" />
                                 <TextBlock
+                                    x:Name="SettingsVersionText"
+                                    Style="{StaticResource SettingsDescriptionStyle}"
+                                    Visibility="Collapsed"
+                                    TextTrimming="CharacterEllipsis" />
+                                <TextBlock
                                     x:Name="SettingsRouteText"
                                     Style="{StaticResource SettingsDescriptionStyle}"
                                     Text="Current route unavailable" />

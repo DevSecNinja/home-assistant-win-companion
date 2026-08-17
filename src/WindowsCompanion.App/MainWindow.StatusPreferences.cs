@@ -221,6 +221,17 @@ public sealed partial class MainWindow
             ? "Nothing is sent to Home Assistant"
             : _controller.RouteSummary;
 
+        var versionSummary = _controller.IsDemoMode ? null : _controller.VersionSummary;
+        if (!string.IsNullOrEmpty(versionSummary))
+        {
+            SettingsVersionText.Text = versionSummary;
+            SettingsVersionText.Visibility = Microsoft.UI.Xaml.Visibility.Visible;
+        }
+        else
+        {
+            SettingsVersionText.Visibility = Microsoft.UI.Xaml.Visibility.Collapsed;
+        }
+
         var catalog = _controller.Catalog;
         EnabledSensorCountText.Text = catalog is null
             ? "Sensor catalog unavailable"

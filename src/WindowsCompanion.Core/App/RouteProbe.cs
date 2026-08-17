@@ -38,7 +38,8 @@ public sealed record RouteProbeResult(
     string? ResolvedUrl = null,
     string? InstanceDeviceId = null,
     string? Message = null,
-    bool InsecureTransport = false)
+    bool InsecureTransport = false,
+    string? InstanceVersion = null)
 {
     public bool Ok => Status == RouteProbeStatus.Ok;
 
@@ -170,7 +171,11 @@ public sealed class HttpRouteProbe : IRouteProbe
                 };
             }
 
-            return identity with { InstanceDeviceId = info.DeviceId };
+            return identity with
+            {
+                InstanceDeviceId = info.DeviceId,
+                InstanceVersion = info.Version
+            };
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {

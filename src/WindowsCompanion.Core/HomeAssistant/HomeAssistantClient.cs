@@ -315,4 +315,34 @@ public sealed class HomeAssistantClient : IHomeAssistantClient
             return null;
         }
     }
+
+    /// <inheritdoc/>
+    public async Task<string?> GetOsVersionAsync(CancellationToken ct = default)
+    {
+        try
+        {
+            using var request = await AuthorizedAsync(HttpMethod.Get, "api/hassio/os/info", ct).ConfigureAwait(false);
+            using var response = await _http.SendAsync(request, ct).ConfigureAwait(false);
+            if (!response.IsSuccessStatusCode)
+            {
+                _log.LogDebug("Supervisor OS info returned {Status}; OS version will not be shown.", (int)response.StatusCode);
+                return null;
+            }
+
+            using var doc = await JsonDocument.ParseAsync(
+                await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false), cancellationToken: ct).ConfigureAwait(false);
+
+            if (doc.RootElement.TryGetProperty("data", out var data)
+                && data.TryGetProperty("version", out var version))
+            {
+                return version.GetString();
+            }
+            return null;
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+        catch
+        {
+            return null;
+        }
+    }
 }

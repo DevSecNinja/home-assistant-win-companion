@@ -100,6 +100,9 @@ public sealed class RouteSupervisor
     /// <summary>True while the active address is plain HTTP.</summary>
     public bool ActiveTransportIsInsecure { get; private set; }
 
+    /// <summary>HA Core version reported by the active route's last probe.</summary>
+    public string? ActiveInstanceVersion { get; private set; }
+
     /// <summary>Raised after a route has proved usable and become active.</summary>
     public event Action<RouteDecision>? RouteActivated;
 
@@ -240,6 +243,7 @@ public sealed class RouteSupervisor
         ActiveRoute = route;
         ActiveUrl = url;
         ActiveTransportIsInsecure = result.InsecureTransport;
+        ActiveInstanceVersion = result.InstanceVersion;
         Status = route == RouteKind.Internal ? RouteStatus.Internal : RouteStatus.External;
         _activatedAt = now;
 

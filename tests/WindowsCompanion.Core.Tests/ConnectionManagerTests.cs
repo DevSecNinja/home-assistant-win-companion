@@ -657,6 +657,9 @@ public class ConnectionManagerTests
         public Task<HaConfigInfo?> GetConfigAsync(CancellationToken ct = default) =>
             Task.FromResult<HaConfigInfo?>(null);
 
+        public Task<string?> GetOsVersionAsync(CancellationToken ct = default) =>
+            Task.FromResult<string?>(null);
+
         public async Task UpdatesReachedAsync(int count)
         {
             using var timeout = new CancellationTokenSource(Timeout);

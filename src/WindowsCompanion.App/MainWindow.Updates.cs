@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.IO;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Automation.Peers;
@@ -49,10 +50,7 @@ public sealed partial class MainWindow
             state,
             showKnownUpdate,
             _controller.InstallState);
-        TrayIcon.IconSource = new BitmapImage(new Uri(
-            state.AvailableUpdate is null
-                ? "ms-appx:///Assets/AppIcon.ico"
-                : "ms-appx:///Assets/UpdateIcon.ico"));
+        ApplyTrayIcon(state.AvailableUpdate is null);
         TrayUpdateItem.Text = presentation.TrayActionLabel;
         UpdateBannerTitleText.Text = presentation.BannerTitle;
         var messageChanged = !string.Equals(
@@ -157,6 +155,34 @@ public sealed partial class MainWindow
         var state = _controller.UpdateState;
         if (_updateActions.InvokeTrayAction(state))
             ApplyUpdateState(state, showKnownUpdate: true);
+    }
+
+    /// <summary>
+    /// Swaps the tray icon between the normal and "update available" glyph.
+    /// </summary>
+    /// <remarks>
+    /// This app ships unpackaged (see the "CopyToOutputDirectory" comment on the
+    /// Assets items in WindowsCompanion.App.csproj), so an "ms-appx:///" URI has
+    /// no package identity to resolve against and fails. Build an absolute
+    /// file:// URI against the app's own base directory instead, matching how
+    /// AppWindow.SetIcon and the XAML-declared icons resolve "Assets/*.ico".
+    /// Still wrapped defensively: a missing/corrupt icon file must not crash the
+    /// app, so a failure here just logs and leaves the previous icon in place.
+    /// </remarks>
+    private void ApplyTrayIcon(bool isDefault)
+    {
+        try
+        {
+            var fileName = isDefault ? "AppIcon.ico" : "UpdateIcon.ico";
+            var path = Path.Combine(AppContext.BaseDirectory, "Assets", fileName);
+            TrayIcon.IconSource = new BitmapImage(new Uri(path));
+        }
+        catch (Exception ex)
+        {
+            FileLoggerProvider.Write(
+                $"{DateTimeOffset.Now:yyyy-MM-dd HH:mm:ss.fff} ERR MainWindow: "
+                + $"Could not load the tray icon.{Environment.NewLine}{ex}");
+        }
     }
 
     private static void OpenReleasePage(Uri releasePage)

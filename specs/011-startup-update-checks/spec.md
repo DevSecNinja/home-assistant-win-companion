@@ -9,7 +9,7 @@ Released builds make one non-blocking request at process startup and also suppor
 fresh user-initiated checks. This spec covers the check-only behavior; downloading,
 verifying, and silently installing an update is a user-configurable, opt-in
 extension of this flow and is covered by
-`specs/014-auto-update-install/spec.md`.
+`specs/015-auto-update-install/spec.md`.
 
 ## Requirements
 
@@ -37,7 +37,7 @@ extension of this flow and is covered by
 - With a known newer release, the tray offers **Install update…**. It opens and
   focuses the app and shows the existing available-update surface. Whether this
   triggers a background download, or only opens the release page, depends on the
-  update mode described in `specs/014-auto-update-install/spec.md`.
+  update mode described in `specs/015-auto-update-install/spec.md`.
 - The toast names the installed and available versions and offers **View release**,
   which opens the exact trusted `html_url` returned for that release.
 - While an update is available, the notification-area icon uses the update variant:

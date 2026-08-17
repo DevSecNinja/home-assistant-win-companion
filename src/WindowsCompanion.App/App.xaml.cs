@@ -59,6 +59,30 @@ public partial class App : Application
         _instanceMutex = new Mutex(initiallyOwned: false, InstanceMutexName);
 #endif
         InitializeComponent();
+        UnhandledException += OnUnhandledException;
+    }
+
+    /// <summary>
+    /// Last-resort diagnostic hook for exceptions that escape UI event handlers
+    /// and dispatcher callbacks. Without this, an uncaught exception on the UI
+    /// thread (for example the tray-icon resource load this was added alongside)
+    /// surfaces as an unrecoverable native crash (STATUS_STOWED_EXCEPTION via
+    /// combase.dll) with nothing logged before the process dies.
+    /// </summary>
+    /// <remarks>
+    /// This only logs; it deliberately leaves <c>e.Handled</c> unset. The failing
+    /// handler or callback has already aborted, possibly after partially mutating
+    /// application or connection state, so continuing past an unrecognized
+    /// exception risks a silently corrupted process rather than a clean crash.
+    /// Known, recoverable failures (such as a missing icon file) should keep
+    /// being caught at their own operation boundary - see MainWindow.ApplyTrayIcon
+    /// - where the surrounding state is actually known to be safe to continue from.
+    /// </remarks>
+    private void OnUnhandledException(
+        object sender,
+        Microsoft.UI.Xaml.UnhandledExceptionEventArgs e)
+    {
+        _log.LogCritical(e.Exception, "Unhandled UI exception.");
     }
 
     private static ILoggerFactory CreateProductionLoggerFactory() =>

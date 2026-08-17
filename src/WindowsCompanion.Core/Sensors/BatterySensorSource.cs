@@ -31,7 +31,14 @@ public sealed class BatterySensorSource : ISensorSource
             "Whether this PC is charging, discharging or plugged in.",
             SensorPrivacy.Benign,
             EnabledByDefault: true,
-            AutomationIdea: "When charging starts, turn a desk indicator light green.")
+            AutomationIdea: "When charging starts, turn a desk indicator light green."),
+        new SensorDefinition(
+            BatterySensorProvider.AcPowerId,
+            "AC Power",
+            "Whether this PC is connected to mains power.",
+            SensorPrivacy.Benign,
+            EnabledByDefault: true,
+            AutomationIdea: "When AC power is disconnected, notify that the laptop is now running on battery.")
     };
 
     public IReadOnlyList<Sensor> Read(IReadOnlySet<string> enabled, SensorReadContext context) =>

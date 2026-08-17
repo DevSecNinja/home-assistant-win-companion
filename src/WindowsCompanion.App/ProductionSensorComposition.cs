@@ -32,6 +32,7 @@ internal static class ProductionSensorComposition
         new CapabilityUsageSensorSource(config.Sensors),
         new AudioDeviceSensorSource(config.Sensors),
         new FrontmostAppSensorSource(config.Sensors),
+        new MediaSensorSource(config.Sensors),
         new WinGetUpdateSensorSource(winGet, config.Sensors),
         new LocationSensorSource(location, config.Sensors),
         new LifecycleSensorSource(lifecycle, lifecycleSignals)

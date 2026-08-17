@@ -39,6 +39,7 @@ public class BatterySensorProviderTests
     [InlineData(PowerState.NotCharging, true)]
     [InlineData(PowerState.PluggedIn, true)]
     [InlineData(PowerState.Discharging, false)]
+    [InlineData(PowerState.Unknown, false)]
     public void AC_power_reflects_mains_connection_for_laptops(PowerState powerState, bool expectedAcOnline)
     {
         var status = new SystemStatus(HasBattery: true, BatteryPercent: 50, powerState);
@@ -56,11 +57,30 @@ public class BatterySensorProviderTests
     [Fact]
     public void Desktop_without_battery_reports_ac_power_connected()
     {
-        var status = new SystemStatus(HasBattery: false, BatteryPercent: 255, PowerState.Unknown);
+        // The production provider normalizes a genuine battery-less desktop to
+        // PowerState.PluggedIn (never Unknown), so that is the representative
+        // fixture here.
+        var status = new SystemStatus(HasBattery: false, BatteryPercent: 100, PowerState.PluggedIn);
 
         var acPower = BatterySensorProvider.BuildAcPower(status);
 
         Assert.True((bool)acPower.State!);
+    }
+
+    [Fact]
+    public void Unavailable_power_status_does_not_falsely_report_ac_connected()
+    {
+        // HasBattery: false combined with PowerState.Unknown is the provider's
+        // GetSystemPowerStatus failure sentinel, not a real desktop reading.
+        // Without a genuine reading, ac_power/ac_online must not claim a
+        // confirmed AC connection.
+        var status = new SystemStatus(HasBattery: false, BatteryPercent: 100, PowerState.Unknown);
+
+        var acPower = BatterySensorProvider.BuildAcPower(status);
+        var state = BatterySensorProvider.BuildBatteryState(status);
+
+        Assert.False((bool)acPower.State!);
+        Assert.False((bool)state.Attributes!["ac_online"]);
     }
 
     [Fact]

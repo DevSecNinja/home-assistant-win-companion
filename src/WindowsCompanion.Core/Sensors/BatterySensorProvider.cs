@@ -76,13 +76,14 @@ public static class BatterySensorProvider
     // charging" even though the machine is plugged in. Mains status is derived
     // from PowerState rather than the charging bit alone so it does not flap.
     //
-    // !HasBattery also covers the case where GetSystemPowerStatus itself fails
-    // (HasBattery: false, PowerState: Unknown) - failing toward "AC connected"
-    // matches this provider's existing fail-safe default (BatteryPercent also
-    // falls back to 100 on the same failure), so a transient read failure does
-    // not surface as a false "unplugged" signal to automations.
+    // Deliberately PowerState-only (no HasBattery shortcut): the provider
+    // already normalizes a genuine battery-less desktop to PowerState.PluggedIn,
+    // so that case is covered by the list below. HasBattery: false can also
+    // arise from PowerState.Unknown when GetSystemPowerStatus itself fails; that
+    // combination intentionally falls through to "not online" rather than
+    // reporting a confirmed AC connection without having actually read one.
     private static bool IsAcOnline(SystemStatus status) =>
-        !status.HasBattery || status.PowerState is PowerState.Charging or PowerState.Full
+        status.PowerState is PowerState.Charging or PowerState.Full
             or PowerState.NotCharging or PowerState.PluggedIn;
 
     private static string BatteryIcon(SystemStatus status)

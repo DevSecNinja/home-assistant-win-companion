@@ -931,6 +931,19 @@
 
             <ScrollViewer Grid.Row="1" Padding="24,0,24,20">
                 <StackPanel MaxWidth="680" HorizontalAlignment="Center" Spacing="12">
+                    <AutoSuggestBox
+                        x:Name="SensorSearchBox"
+                        AutomationProperties.AutomationId="Sensors.SearchBox"
+                        PlaceholderText="Filter sensors…"
+                        QueryIcon="Find"
+                        TextChanged="OnSensorFilterChanged" />
+                    <TextBlock
+                        x:Name="SensorSearchEmpty"
+                        Text="No sensors match your search"
+                        Visibility="Collapsed"
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        HorizontalAlignment="Center"
+                        Margin="0,12,0,12" />
                     <StackPanel
                         x:Name="SensorList"
                         AutomationProperties.AutomationId="Sensors.List"

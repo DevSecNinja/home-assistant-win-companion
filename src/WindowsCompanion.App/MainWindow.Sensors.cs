@@ -36,9 +36,31 @@ public sealed partial class MainWindow
 
     private void OnCloseSensors(object sender, RoutedEventArgs e)
     {
+        SensorSearchBox.Text = string.Empty;
         _sensorPreviewCancellation.CancelAll();
         RefreshPreferencesSummary();
         ShowView(_sensorReturnView);
+    }
+
+    private void OnSensorFilterChanged(AutoSuggestBox sender, AutoSuggestBoxTextChangedEventArgs args)
+    {
+        var filter = sender.Text?.Trim() ?? string.Empty;
+        var anyVisible = false;
+
+        foreach (var child in SensorList.Children)
+        {
+            if (child is Border border && border.Tag is string name)
+            {
+                var matches = filter.Length == 0
+                    || name.Contains(filter, StringComparison.OrdinalIgnoreCase);
+                border.Visibility = matches ? Visibility.Visible : Visibility.Collapsed;
+                if (matches) anyVisible = true;
+            }
+        }
+
+        SensorSearchEmpty.Visibility = anyVisible || filter.Length == 0
+            ? Visibility.Collapsed
+            : Visibility.Visible;
     }
 
     /// <summary>
@@ -75,6 +97,8 @@ public sealed partial class MainWindow
         }
 
         SensorList.Children.Clear();
+        SensorSearchBox.Text = string.Empty;
+        SensorSearchEmpty.Visibility = Visibility.Collapsed;
         _sensorPreviewTexts.Clear();
         _sensorSettingControls.Clear();
         foreach (var definition in catalog.Definitions)
@@ -220,6 +244,7 @@ public sealed partial class MainWindow
 
             SensorList.Children.Add(new Border
             {
+                Tag = definition.Name,
                 Background = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources[
                     "CardBackgroundFillColorDefaultBrush"],
                 BorderBrush = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources[

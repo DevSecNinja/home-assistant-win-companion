@@ -276,16 +276,23 @@ public sealed class MediaSensorSourceTests
 
         public int ReadCount;
 
-        public Task<MediaSnapshot> CaptureAsync(IReadOnlySet<string> requested, CancellationToken cancellationToken)
+        public async Task<MediaSnapshot> CaptureAsync(
+            IReadOnlySet<string> requested, CancellationToken cancellationToken)
         {
-            if (Interlocked.Increment(ref ReadCount) == 1) return Task.FromResult(MediaSnapshot.Empty);
+            if (Interlocked.Increment(ref ReadCount) == 1) return MediaSnapshot.Empty;
 
             Entered.TrySetResult();
             try
             {
-                cancellationToken.WaitHandle.WaitOne();
-                cancellationToken.ThrowIfCancellationRequested();
-                return Task.FromResult(MediaSnapshot.Empty);
+                // A real, synchronous WaitHandle.WaitOne() here would pin a
+                // thread-pool thread for as long as the flight is in-flight,
+                // which risks thread-pool starvation (and, on a constrained CI
+                // runner, a hung/crashed test host) instead of just this test.
+                // Task.Delay with an infinite timeout waits the same way but
+                // yields the thread back to the pool.
+                await Task.Delay(System.Threading.Timeout.InfiniteTimeSpan, cancellationToken)
+                    .ConfigureAwait(false);
+                return MediaSnapshot.Empty;
             }
             catch (OperationCanceledException)
             {

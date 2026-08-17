@@ -52,4 +52,14 @@ public static class PendingRebootFormatter
             ["component_based_servicing_reboot_pending"] = state.ComponentBasedServicingRebootPending,
             ["pending_file_rename_operations"] = state.PendingFileRenameOperations
         };
+
+    /// <summary>
+    /// Whether a new reading is worth a push: only the aggregate on/off state
+    /// matters, not which underlying signal tripped. Record equality alone would
+    /// notify on a signal swap (e.g. Windows Update clearing while Component-Based
+    /// Servicing takes over) even though <see cref="PendingRebootState.IsRebootPending"/>
+    /// never changed.
+    /// </summary>
+    public static bool HasMeaningfullyChanged(PendingRebootState previous, PendingRebootState current) =>
+        previous.IsRebootPending != current.IsRebootPending;
 }

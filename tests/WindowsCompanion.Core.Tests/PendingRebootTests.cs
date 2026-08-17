@@ -50,4 +50,28 @@ public class PendingRebootTests
         Assert.Equal(false, attributes["component_based_servicing_reboot_pending"]);
         Assert.Equal(true, attributes["pending_file_rename_operations"]);
     }
+
+    [Fact]
+    public void Swapping_which_signal_is_set_while_still_pending_is_not_a_meaningful_change()
+    {
+        // Record equality alone would report this as changed (different field
+        // values), but the aggregate on/off state - the only thing the entity
+        // and its notifications expose - stays true throughout.
+        var windowsUpdateOnly = new PendingRebootState(true, false, false);
+        var componentBasedServicingOnly = new PendingRebootState(false, true, false);
+
+        Assert.False(
+            PendingRebootFormatter.HasMeaningfullyChanged(windowsUpdateOnly, componentBasedServicingOnly));
+    }
+
+    [Fact]
+    public void Flipping_the_aggregate_state_is_a_meaningful_change()
+    {
+        Assert.True(PendingRebootFormatter.HasMeaningfullyChanged(
+            PendingRebootState.None,
+            new PendingRebootState(true, false, false)));
+        Assert.True(PendingRebootFormatter.HasMeaningfullyChanged(
+            new PendingRebootState(true, false, false),
+            PendingRebootState.None));
+    }
 }

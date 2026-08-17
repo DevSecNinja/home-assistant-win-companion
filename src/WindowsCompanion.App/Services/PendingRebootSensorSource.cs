@@ -35,7 +35,8 @@ public sealed class PendingRebootSensorSource : ISensorSource, IRefreshableSenso
 
     private readonly Func<PendingRebootState> _read;
     private readonly SensorPollLoop _loop;
-    private readonly ChangeGate<PendingRebootState> _state = new(PendingRebootState.None);
+    private readonly ChangeGate<PendingRebootState> _state =
+        new(PendingRebootState.None, PendingRebootFormatter.HasMeaningfullyChanged);
 
     private Action? _onChanged;
 

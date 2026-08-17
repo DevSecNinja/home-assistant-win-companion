@@ -163,25 +163,77 @@ public sealed class PendingRebootSensorSourceTests
         }
     }
 
+    [Fact]
+    public async Task Swapping_the_active_signal_while_still_pending_does_not_notify_again()
+    {
+        // Windows Update clearing its key while Component-Based Servicing's takes
+        // over (or vice versa) must not look like a second transition: the entity
+        // stays "on" throughout, so only the first flip should notify.
+        var probe = new RebootProbe();
+        using var changed = new SemaphoreSlim(0);
+        var notifications = 0;
+        var source = new PendingRebootSensorSource(probe.Read, TimeSpan.FromMilliseconds(10));
+
+        source.Start(() =>
+        {
+            Interlocked.Increment(ref notifications);
+            changed.Release();
+        });
+        try
+        {
+            probe.Signal = RebootSignal.WindowsUpdate;
+            await changed.WaitAsync(Timeout);
+            Assert.Equal(1, Volatile.Read(ref notifications));
+
+            probe.Signal = RebootSignal.ComponentBasedServicing;
+            await probe.WaitForReadAsync();
+            await probe.WaitForReadAsync();
+            Assert.Equal(1, Volatile.Read(ref notifications));
+
+            var sensor = Assert.Single(source.Read(Enabled, SensorReadContext.Periodic));
+            Assert.Equal(true, sensor.State);
+        }
+        finally
+        {
+            source.Stop();
+        }
+    }
+
     private sealed class RebootProbe
     {
         private readonly Channel<bool> _reads = Channel.CreateUnbounded<bool>();
-        private bool _pending;
+        private int _signal;
+
+        public RebootSignal Signal
+        {
+            get => (RebootSignal)Volatile.Read(ref _signal);
+            set => Volatile.Write(ref _signal, (int)value);
+        }
 
         public bool Pending
         {
-            get => Volatile.Read(ref _pending);
-            set => Volatile.Write(ref _pending, value);
+            get => Signal != RebootSignal.None;
+            set => Signal = value ? RebootSignal.WindowsUpdate : RebootSignal.None;
         }
 
         public PendingRebootState Read()
         {
-            var pending = Pending;
+            var signal = Signal;
             _reads.Writer.TryWrite(true);
-            return new PendingRebootState(pending, false, false);
+            return new PendingRebootState(
+                signal == RebootSignal.WindowsUpdate,
+                signal == RebootSignal.ComponentBasedServicing,
+                false);
         }
 
         public async Task WaitForReadAsync() =>
             await _reads.Reader.ReadAsync().AsTask().WaitAsync(Timeout);
+    }
+
+    private enum RebootSignal
+    {
+        None,
+        WindowsUpdate,
+        ComponentBasedServicing
     }
 }

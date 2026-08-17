@@ -32,6 +32,7 @@ internal sealed class AppControllerDependencies
     public required OwnedDependency<INetworkContextProvider> Network { get; init; }
     public required OwnedDependency<ILoggerFactory> LoggerFactory { get; init; }
     public OwnedDependency<HttpClient>? UpdateHttpClient { get; init; }
+    public OwnedDependency<HttpClient>? UpdateAssetHttpClient { get; init; }
     public OwnedDependency<IUpdateNotificationSink>? UpdateNotificationSink { get; init; }
     public bool EnableStartupUpdates { get; init; }
     public required Func<IHaSocket> WebSocketFactory { get; init; }
@@ -58,6 +59,7 @@ internal sealed class AppControllerDependencies
             Network.IsOwned ? Network.Value : null,
             LoggerFactory.IsOwned ? LoggerFactory.Value : null,
             UpdateHttpClient is { IsOwned: true } ? UpdateHttpClient.Value : null,
+            UpdateAssetHttpClient is { IsOwned: true } ? UpdateAssetHttpClient.Value : null,
             UpdateNotificationSink is { IsOwned: true } ? UpdateNotificationSink.Value : null
         };
 

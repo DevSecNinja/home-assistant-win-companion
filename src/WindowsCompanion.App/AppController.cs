@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using Microsoft.Extensions.Logging;
 using WindowsCompanion.Core.Abstractions;
 using WindowsCompanion.Core.App;
@@ -30,6 +31,7 @@ public sealed partial class AppController : IAsyncDisposable
     private readonly HttpClient _http;
     private readonly ISecretStore _secrets;
     private readonly HttpClient _updateHttp;
+    private readonly HttpClient _updateAssetHttp;
     private readonly IUpdateNotificationSink _updateNotifications;
     private readonly bool _enableStartupUpdates;
     private readonly SessionStore _settings;
@@ -51,6 +53,9 @@ public sealed partial class AppController : IAsyncDisposable
     private readonly HttpRouteProbe _probe;
     private readonly StartupUpdateService _startupUpdates;
     private readonly CancellationTokenSource _updateCheckCancellation = new();
+    private readonly UpdateInstaller _updateInstaller;
+    private readonly UpdateArchitecture _updateArchitecture;
+    private readonly LastInstallResult? _lastInstallResult;
 
     private ServerConfig? _config;
     private ConnectionManager? _connection;
@@ -85,6 +90,7 @@ public sealed partial class AppController : IAsyncDisposable
         _lifecycleSignalSourceFactory = dependencies.LifecycleSignalSourceFactory;
         _ownedDependencies = dependencies.OwnedValues().ToArray();
         _updateHttp = dependencies.UpdateHttpClient?.Value ?? _http;
+        _updateAssetHttp = dependencies.UpdateAssetHttpClient?.Value ?? _updateHttp;
         _updateNotifications = dependencies.UpdateNotificationSink?.Value
             ?? new NoOpUpdateNotificationSink();
         _enableStartupUpdates = dependencies.EnableStartupUpdates;
@@ -97,6 +103,19 @@ public sealed partial class AppController : IAsyncDisposable
             new UpdateNotificationSink(NotifyUpdateAvailable),
             _loggerFactory.CreateLogger<StartupUpdateService>());
         _startupUpdates.StateChanged += OnUpdateStateChanged;
+        _updateArchitecture = RuntimeInformation.ProcessArchitecture == Architecture.Arm64
+            ? UpdateArchitecture.Arm64
+            : UpdateArchitecture.X64;
+        _updateInstaller = new UpdateInstaller(
+            new UpdatePackageDownloader(_updateAssetHttp),
+            new UpdatePackageVerifier(
+                _updateHttp,
+                installedBuild.Version?.ToString() ?? "0.0.0",
+                _loggerFactory.CreateLogger<UpdatePackageVerifier>(),
+                _updateAssetHttp),
+            new SilentUpdateInstaller());
+        _updateInstaller.StateChanged += OnUpdateInstallStateChanged;
+        _lastInstallResult = SilentUpdateInstaller.TakeLastInstallResult();
         _login = new OAuthLoginService(_http, _uriLauncher);
         _settings = new SessionStore(dependencies.SettingsStore.Value, _secrets);
         _lifecycle = new ConnectionLifecycle(_loggerFactory.CreateLogger<ConnectionLifecycle>());

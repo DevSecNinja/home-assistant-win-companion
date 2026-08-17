@@ -72,4 +72,30 @@ public class SettingsStoreTests
         Assert.False(new ServerConfig { BaseUrl = "not-a-url" }.IsValid());
         Assert.True(new ServerConfig { BaseUrl = "https://ha.local:8123" }.IsValid());
     }
+
+    [Fact]
+    public void Update_preferences_default_to_auto_install_and_round_trip()
+    {
+        var path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"ha-{Guid.NewGuid():N}.json");
+        try
+        {
+            Assert.Equal(
+                Updates.UpdateMode.AutoInstall,
+                new ServerConfig().Updates.Mode);
+
+            var store = new SettingsStore(path);
+            var config = new ServerConfig { BaseUrl = "https://ha.local:8123" };
+            config.Updates.Mode = Updates.UpdateMode.Disabled;
+
+            store.Save(config);
+            var loaded = store.Load();
+
+            Assert.NotNull(loaded);
+            Assert.Equal(Updates.UpdateMode.Disabled, loaded!.Updates.Mode);
+        }
+        finally
+        {
+            if (File.Exists(path)) File.Delete(path);
+        }
+    }
 }

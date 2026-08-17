@@ -22,11 +22,18 @@ internal sealed record UpdateStatusPresentation(
     string LatestVersionText,
     string SettingsStatusText,
     string SettingsCheckLabel,
-    bool IsSettingsInstallVisible)
+    bool IsSettingsInstallVisible,
+    string SettingsInstallLabel = "Install update…",
+    bool IsSettingsInstallEnabled = true,
+    bool IsSettingsInstallActionInstall = false,
+    bool IsInstallBannerActionVisible = false,
+    bool IsSettingsCheckEnabled = true)
 {
     internal static UpdateStatusPresentation Create(
         UpdateCheckState state,
-        bool showKnownUpdate = false)
+        bool showKnownUpdate = false,
+        UpdateInstallState? install = null,
+        UpdateMode mode = UpdateMode.AutoInstall)
     {
         var update = state.AvailableUpdate;
         var status = showKnownUpdate && update is not null
@@ -66,15 +73,19 @@ internal sealed record UpdateStatusPresentation(
         var latestVersion = state.LatestKnownStableVersion
             ?? update?.AvailableVersion
             ?? (status == UpdateCheckStatus.Current ? state.InstalledVersion : null);
-        var settingsStatus = status switch
-        {
-            UpdateCheckStatus.Checking => "Checking for the latest stable release…",
-            UpdateCheckStatus.Current => "You're up to date.",
-            UpdateCheckStatus.Available when update is not null =>
-                $"Version {update.AvailableVersion} is available.",
-            UpdateCheckStatus.Error => state.ErrorMessage ?? "The update check failed.",
-            _ => "Updates have not been checked yet."
-        };
+
+        var relevantInstall = install is not null
+            && update is not null
+            && install.Version.Equals(update.AvailableVersion)
+            ? install
+            : null;
+
+        var (settingsStatus, installLabel, installEnabled, installAction) = DescribeInstall(
+            status,
+            update,
+            state.ErrorMessage,
+            relevantInstall,
+            mode);
 
         return new(
             update is null ? "Check for updates…" : "Install update…",
@@ -84,11 +95,82 @@ internal sealed record UpdateStatusPresentation(
             status == UpdateCheckStatus.Available || userVisible,
             update is not null,
             status != UpdateCheckStatus.Idle,
-            status is not (UpdateCheckStatus.Idle or UpdateCheckStatus.Checking),
+            status is not (UpdateCheckStatus.Idle or UpdateCheckStatus.Checking)
+                && mode != UpdateMode.Disabled,
             state.InstalledVersion.ToString(),
             latestVersion?.ToString() ?? "Not checked",
             settingsStatus,
             status == UpdateCheckStatus.Idle ? "Check for updates" : "Recheck for updates",
-            update is not null);
+            update is not null,
+            installLabel,
+            installEnabled,
+            installAction,
+            relevantInstall?.Phase == UpdateInstallPhase.ReadyToInstall,
+            mode != UpdateMode.Disabled);
+    }
+
+    private static (string Status, string Label, bool Enabled, bool IsInstallAction) DescribeInstall(
+        UpdateCheckStatus status,
+        AvailableUpdate? update,
+        string? errorMessage,
+        UpdateInstallState? install,
+        UpdateMode mode)
+    {
+        var fallbackStatus = status switch
+        {
+            UpdateCheckStatus.Checking => "Checking for the latest stable release…",
+            UpdateCheckStatus.Current => "You're up to date.",
+            UpdateCheckStatus.Available when update is not null =>
+                $"Version {update.AvailableVersion} is available.",
+            UpdateCheckStatus.Error => errorMessage ?? "The update check failed.",
+            _ => "Updates have not been checked yet."
+        };
+
+        // No download is in progress (or none will ever start, e.g. Notify-only
+        // or Disabled mode): the settings action can only open the release page
+        // for the user to install manually, never claim it can "Install update…".
+        if (install is null || update is null)
+        {
+            return mode == UpdateMode.AutoInstall
+                ? (fallbackStatus, "Install update…", true, false)
+                : (fallbackStatus, "View release", update is not null, false);
+        }
+
+        return install.Phase switch
+        {
+            UpdateInstallPhase.Downloading => (
+                $"Downloading version {update.AvailableVersion} ({install.DownloadProgress:P0})…",
+                "Downloading…",
+                false,
+                false),
+            UpdateInstallPhase.Verifying => (
+                $"Verifying version {update.AvailableVersion}…",
+                "Verifying…",
+                false,
+                false),
+            UpdateInstallPhase.ReadyToInstall => (
+                $"Version {update.AvailableVersion} is downloaded and verified.",
+                "Install now",
+                true,
+                true),
+            UpdateInstallPhase.Installing => (
+                "Installing… the app will restart automatically.",
+                "Installing…",
+                false,
+                false),
+            UpdateInstallPhase.Installed => (
+                $"Version {update.AvailableVersion} installed. Restarting…",
+                "Installed",
+                false,
+                false),
+            UpdateInstallPhase.Failed => (
+                install.ErrorMessage ?? fallbackStatus,
+                "View release",
+                true,
+                false),
+            _ => mode == UpdateMode.AutoInstall
+                ? (fallbackStatus, "Install update…", true, false)
+                : (fallbackStatus, "View release", true, false)
+        };
     }
 }

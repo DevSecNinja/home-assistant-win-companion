@@ -13,15 +13,55 @@ namespace WindowsCompanion_App;
 public sealed partial class MainWindow
 {
     private readonly UpdateUiActions _updateActions;
+    private bool _settingsInstallActionIsInstall;
+
+    /// <summary>
+    /// True while the one-time silent-install result banner is showing. An
+    /// automatic update check that completes immediately after startup (before
+    /// the user has seen or acted on that banner) must not silently overwrite
+    /// it via <see cref="ApplyUpdateState"/> - the banner is dismissed only by
+    /// the user closing it or acting on one of its buttons.
+    /// </summary>
+    private bool _showingLastInstallResult;
+
+    private void ShowLastInstallResultIfAny()
+    {
+        var result = _controller.LastInstallResult;
+        if (result is null) return;
+
+        UpdateBannerTitleText.Text = result.Success
+            ? "Update installed"
+            : "The update could not be installed";
+        UpdateBannerMessage.Text = result.Success
+            ? $"Windows Companion was updated to version {result.Version}."
+            : "The silent install failed. You can open the release page and install it manually.";
+        UpdateBanner.Severity = result.Success
+            ? InfoBarSeverity.Success
+            : InfoBarSeverity.Warning;
+        ViewReleaseButton.Visibility = result.Success ? Visibility.Collapsed : Visibility.Visible;
+        InstallNowButton.Visibility = Visibility.Collapsed;
+        RecheckUpdatesButton.Visibility = Visibility.Visible;
+        RecheckUpdatesButton.IsEnabled = true;
+        _showingLastInstallResult = true;
+        UpdateBanner.IsOpen = true;
+    }
 
     private void OnUpdateStateChanged(UpdateCheckState state) =>
         _dispatcher.TryEnqueue(() => ApplyUpdateState(state));
 
+    private void OnInstallStateChanged(UpdateInstallState state) =>
+        _dispatcher.TryEnqueue(() => ApplyUpdateState(_controller.UpdateState));
+
     private void ApplyUpdateState(UpdateCheckState state, bool showKnownUpdate = false)
     {
         if (_exiting || state.Revision < _controller.UpdateState.Revision) return;
+        if (_showingLastInstallResult) return;
 
-        var presentation = UpdateStatusPresentation.Create(state, showKnownUpdate);
+        var presentation = UpdateStatusPresentation.Create(
+            state,
+            showKnownUpdate,
+            _controller.InstallState,
+            _controller.CurrentUpdateMode);
         ApplyTrayIcon(state.AvailableUpdate is null);
         TrayUpdateItem.Text = presentation.TrayActionLabel;
         UpdateBannerTitleText.Text = presentation.BannerTitle;
@@ -38,6 +78,10 @@ public sealed partial class MainWindow
         };
         UpdateBanner.IsOpen = presentation.IsBannerOpen;
         ViewReleaseButton.Visibility = presentation.IsReleaseActionVisible
+            && !presentation.IsInstallBannerActionVisible
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+        InstallNowButton.Visibility = presentation.IsInstallBannerActionVisible
             ? Visibility.Visible
             : Visibility.Collapsed;
         RecheckUpdatesButton.Visibility = presentation.IsRecheckVisible
@@ -57,10 +101,13 @@ public sealed partial class MainWindow
             : Visibility.Collapsed;
         SettingsCheckUpdatesButton.Content = presentation.SettingsCheckLabel;
         SettingsCheckUpdatesButton.IsEnabled =
-            state.Status != UpdateCheckStatus.Checking;
+            state.Status != UpdateCheckStatus.Checking && presentation.IsSettingsCheckEnabled;
         SettingsInstallUpdateButton.Visibility = presentation.IsSettingsInstallVisible
             ? Visibility.Visible
             : Visibility.Collapsed;
+        SettingsInstallUpdateButton.Content = presentation.SettingsInstallLabel;
+        SettingsInstallUpdateButton.IsEnabled = presentation.IsSettingsInstallEnabled;
+        _settingsInstallActionIsInstall = presentation.IsSettingsInstallActionInstall;
         if (presentation.IsBannerOpen && messageChanged)
         {
             var peer = FrameworkElementAutomationPeer.FromElement(UpdateBannerMessage)
@@ -80,6 +127,7 @@ public sealed partial class MainWindow
 
     private void OnViewRelease(object sender, RoutedEventArgs e)
     {
+        _showingLastInstallResult = false;
         try
         {
             _updateActions.OpenRelease(_controller.UpdateState);
@@ -98,8 +146,42 @@ public sealed partial class MainWindow
         }
     }
 
-    private void OnRecheckUpdates(object sender, RoutedEventArgs e) =>
+    private void OnInstallNow(object sender, RoutedEventArgs e)
+    {
+        _showingLastInstallResult = false;
+        _ = RunInstallAsync();
+    }
+
+    private void OnSettingsInstallUpdate(object sender, RoutedEventArgs e)
+    {
+        if (_settingsInstallActionIsInstall)
+        {
+            _showingLastInstallResult = false;
+            _ = RunInstallAsync();
+            return;
+        }
+
+        OnViewRelease(sender, e);
+    }
+
+    /// <summary>
+    /// Runs the silent install and, once the detached helper has been handed
+    /// off successfully, requests our own graceful shutdown so the helper's
+    /// wait for this process to exit does not stall indefinitely on the user
+    /// closing the app manually.
+    /// </summary>
+    private async Task RunInstallAsync()
+    {
+        var handoffSucceeded = await _controller.InstallUpdateAsync();
+        if (handoffSucceeded)
+            ((App)Application.Current).RequestShutdown(AppShutdownReason.UpdateInstall);
+    }
+
+    private void OnRecheckUpdates(object sender, RoutedEventArgs e)
+    {
+        _showingLastInstallResult = false;
         _updateActions.Recheck();
+    }
 
     private void HandleUpdateTrayAction()
     {

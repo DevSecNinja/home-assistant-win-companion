@@ -6,8 +6,10 @@
 "Improve tray update actions and app activation".
 
 Released builds make one non-blocking request at process startup and also support
-fresh user-initiated checks. The companion never downloads, installs or restarts
-itself.
+fresh user-initiated checks. This spec covers the check-only behavior; downloading,
+verifying, and silently installing an update is a user-configurable, opt-in
+extension of this flow and is covered by
+`specs/015-auto-update-install/spec.md`.
 
 ## Requirements
 
@@ -33,8 +35,9 @@ itself.
   opens, restores, and focuses the main window, immediately shows **Checking for
   updates…**, and then presents the current, available, or nonfatal error result.
 - With a known newer release, the tray offers **Install update…**. It opens and
-  focuses the app and shows the existing available-update surface; it does not
-  download or install anything.
+  focuses the app and shows the existing available-update surface. Whether this
+  triggers a background download, or only opens the release page, depends on the
+  update mode described in `specs/015-auto-update-install/spec.md`.
 - The toast names the installed and available versions and offers **View release**,
   which opens the exact trusted `html_url` returned for that release.
 - While an update is available, the notification-area icon uses the update variant:

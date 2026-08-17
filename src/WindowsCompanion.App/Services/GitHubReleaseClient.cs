@@ -107,4 +107,24 @@ internal sealed class GitHubReleaseClient : IReleaseSource
         {
             Timeout = Timeout.InfiniteTimeSpan
         };
+
+    /// <summary>
+    /// Creates the client used to fetch release assets (setup ZIPs and checksum
+    /// sidecars) from their published <c>browser_download_url</c>. Unlike
+    /// <see cref="CreateHttpClient"/>, which pins the GitHub Releases REST API
+    /// to same-host responses, GitHub always answers asset download requests
+    /// with a redirect to a signed, time-limited URL on its object storage
+    /// host, so this client must follow redirects to succeed.
+    /// </summary>
+    internal static HttpClient CreateAssetDownloadHttpClient() =>
+        new(new SocketsHttpHandler
+        {
+            AllowAutoRedirect = true,
+            AutomaticDecompression =
+                DecompressionMethods.GZip | DecompressionMethods.Deflate | DecompressionMethods.Brotli,
+            PooledConnectionLifetime = TimeSpan.FromMinutes(10)
+        })
+        {
+            Timeout = Timeout.InfiniteTimeSpan
+        };
 }

@@ -193,6 +193,128 @@ public class UpdateUiTests
         Assert.Equal(1, executions);
     }
 
+    [Fact]
+    public void A_ready_to_install_update_offers_the_install_now_action()
+    {
+        var update = Available();
+        var install = new UpdateInstallState(
+            UpdateInstallPhase.ReadyToInstall,
+            update.AvailableVersion,
+            1);
+
+        var presentation = UpdateStatusPresentation.Create(
+            State(UpdateCheckStatus.Available, UpdateCheckTrigger.Automatic, update),
+            install: install);
+
+        Assert.Equal("Install now", presentation.SettingsInstallLabel);
+        Assert.True(presentation.IsSettingsInstallEnabled);
+        Assert.True(presentation.IsSettingsInstallActionInstall);
+        Assert.True(presentation.IsInstallBannerActionVisible);
+    }
+
+    [Theory]
+    [InlineData(UpdateInstallPhase.Downloading, "Downloading…")]
+    [InlineData(UpdateInstallPhase.Verifying, "Verifying…")]
+    [InlineData(UpdateInstallPhase.Installing, "Installing…")]
+    public void In_progress_installs_disable_the_install_action(
+        UpdateInstallPhase phase,
+        string expectedLabel)
+    {
+        var update = Available();
+        var install = new UpdateInstallState(phase, update.AvailableVersion, 0.5);
+
+        var presentation = UpdateStatusPresentation.Create(
+            State(UpdateCheckStatus.Available, UpdateCheckTrigger.Automatic, update),
+            install: install);
+
+        Assert.Equal(expectedLabel, presentation.SettingsInstallLabel);
+        Assert.False(presentation.IsSettingsInstallEnabled);
+        Assert.False(presentation.IsSettingsInstallActionInstall);
+    }
+
+    [Fact]
+    public void A_failed_install_falls_back_to_viewing_the_release_manually()
+    {
+        var update = Available();
+        var install = new UpdateInstallState(
+            UpdateInstallPhase.Failed,
+            update.AvailableVersion,
+            ErrorMessage: "The downloaded update could not be verified and was discarded.");
+
+        var presentation = UpdateStatusPresentation.Create(
+            State(UpdateCheckStatus.Available, UpdateCheckTrigger.Automatic, update),
+            install: install);
+
+        Assert.Equal("View release", presentation.SettingsInstallLabel);
+        Assert.True(presentation.IsSettingsInstallEnabled);
+        Assert.False(presentation.IsSettingsInstallActionInstall);
+        Assert.Contains("could not be verified", presentation.SettingsStatusText);
+    }
+
+    [Fact]
+    public void An_install_for_a_different_version_than_the_available_update_is_ignored()
+    {
+        var update = Available();
+        var install = new UpdateInstallState(
+            UpdateInstallPhase.ReadyToInstall,
+            Version("3.0.0"),
+            1);
+
+        var presentation = UpdateStatusPresentation.Create(
+            State(UpdateCheckStatus.Available, UpdateCheckTrigger.Automatic, update),
+            install: install);
+
+        Assert.False(presentation.IsInstallBannerActionVisible);
+        Assert.Equal("Install update…", presentation.SettingsInstallLabel);
+    }
+
+    [Fact]
+    public void Notify_only_mode_offers_view_release_instead_of_install()
+    {
+        var update = Available();
+
+        var presentation = UpdateStatusPresentation.Create(
+            State(UpdateCheckStatus.Available, UpdateCheckTrigger.Automatic, update),
+            mode: UpdateMode.NotifyOnly);
+
+        Assert.Equal("View release", presentation.SettingsInstallLabel);
+        Assert.True(presentation.IsSettingsInstallEnabled);
+        Assert.False(presentation.IsSettingsInstallActionInstall);
+    }
+
+    [Fact]
+    public void Disabled_mode_offers_view_release_and_disables_rechecking()
+    {
+        var update = Available();
+
+        var presentation = UpdateStatusPresentation.Create(
+            State(UpdateCheckStatus.Available, UpdateCheckTrigger.Automatic, update),
+            mode: UpdateMode.Disabled);
+
+        Assert.Equal("View release", presentation.SettingsInstallLabel);
+        Assert.False(presentation.IsRecheckEnabled);
+        Assert.False(presentation.IsSettingsCheckEnabled);
+    }
+
+    [Fact]
+    public void A_ready_to_install_update_still_offers_install_now_even_when_leaving_auto_install_mode()
+    {
+        var update = Available();
+        var install = new UpdateInstallState(
+            UpdateInstallPhase.ReadyToInstall,
+            update.AvailableVersion,
+            1);
+
+        var presentation = UpdateStatusPresentation.Create(
+            State(UpdateCheckStatus.Available, UpdateCheckTrigger.Automatic, update),
+            install: install,
+            mode: UpdateMode.NotifyOnly);
+
+        Assert.Equal("Install now", presentation.SettingsInstallLabel);
+        Assert.True(presentation.IsSettingsInstallEnabled);
+        Assert.True(presentation.IsSettingsInstallActionInstall);
+    }
+
     private static UpdateCheckState State(
         UpdateCheckStatus status,
         UpdateCheckTrigger trigger,

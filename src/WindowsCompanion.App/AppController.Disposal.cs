@@ -16,10 +16,12 @@ public sealed partial class AppController
         {
             await _updateCheckCancellation.CancelAsync().ConfigureAwait(false);
             await _startupUpdates.CancelAsync().ConfigureAwait(false);
+            await _updateInstaller.CancelAsync().ConfigureAwait(false);
             if (_updateCheckTask is not null)
                 await _updateCheckTask.ConfigureAwait(false);
 
             _startupUpdates.StateChanged -= OnUpdateStateChanged;
+            _updateInstaller.StateChanged -= OnUpdateInstallStateChanged;
             _network.NetworkChanged -= OnNetworkChanged;
             _network.Stop();
             Interlocked.Exchange(ref _networkSettle, null)?.Cancel();

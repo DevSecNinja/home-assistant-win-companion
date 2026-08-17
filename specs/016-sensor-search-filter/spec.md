@@ -44,7 +44,7 @@ The filter updates the visible list in real time as the user types each characte
 ### Edge Cases
 
 - What happens when the user types only whitespace? The filter treats it as empty and shows all sensors.
-- What happens if the sensor list is rebuilt (e.g., reconnection) while a filter is active? The filter is re-applied to the new list.
+- What happens if the sensor list is rebuilt (e.g., reconnection) while a filter is active? The filter text is preserved and re-applied to the new list.
 - What happens if the user navigates away and returns? The search box is cleared and the full list is shown.
 
 ## Requirements *(mandatory)*

@@ -18,11 +18,11 @@ _(No foundational tasks — no shared prerequisites)_
 
 **Independent Test**: Open sensors page, type a partial name, verify list filters; clear search, verify all sensors return.
 
-- [ ] T001 [US1] Add AutoSuggestBox to the sensors panel header in `src/WindowsCompanion.App/MainWindow.xaml` between the header StackPanel and the ScrollViewer (inside `SensorsPanel` Grid row 0 area). Give it `x:Name="SensorSearchBox"`, `AutomationProperties.AutomationId="Sensors.SearchBox"`, placeholder text "Filter sensors…", `QueryIcon` as Find, and wire `TextChanged` to `OnSensorFilterChanged`.
-- [ ] T002 [US1] Add a "no results" TextBlock (`x:Name="SensorSearchEmpty"`, `Visibility="Collapsed"`) inside the `SensorList` parent StackPanel showing "No sensors match your search" when filter yields zero visible items.
-- [ ] T003 [US1] Implement `OnSensorFilterChanged` in `src/WindowsCompanion.App/MainWindow.Sensors.cs`: iterate `SensorList.Children`, compare each card's sensor name (stored as `Tag` or extracted from the first `TextBlock` heading) against the search text using `Contains` with `StringComparison.OrdinalIgnoreCase`, set `Visibility` to `Visible` or `Collapsed`. Show/hide `SensorSearchEmpty` based on whether any cards are visible.
-- [ ] T004 [US1] Store the sensor name on each card's `Tag` property (or a wrapper) during `BuildSensorListAsync` so the filter can access it without walking the visual tree.
-- [ ] T005 [US1] Clear `SensorSearchBox.Text` in `BuildSensorListAsync` (when list is rebuilt) and in `OnCloseSensors` (when leaving the page) to reset filter state on re-entry.
+- [x] T001 [US1] Add AutoSuggestBox to the sensors panel header in `src/WindowsCompanion.App/MainWindow.xaml` between the header StackPanel and the ScrollViewer (inside `SensorsPanel` Grid row 0 area). Give it `x:Name="SensorSearchBox"`, `AutomationProperties.AutomationId="Sensors.SearchBox"`, placeholder text "Filter sensors…", `QueryIcon` as Find, and wire `TextChanged` to `OnSensorFilterChanged`.
+- [x] T002 [US1] Add a "no results" TextBlock (`x:Name="SensorSearchEmpty"`, `Visibility="Collapsed"`) inside the `SensorList` parent StackPanel showing "No sensors match your search" when filter yields zero visible items.
+- [x] T003 [US1] Implement `OnSensorFilterChanged` in `src/WindowsCompanion.App/MainWindow.Sensors.cs`: iterate `SensorList.Children`, compare each card's sensor name (stored as `Tag` or extracted from the first `TextBlock` heading) against the search text using `Contains` with `StringComparison.OrdinalIgnoreCase`, set `Visibility` to `Visible` or `Collapsed`. Show/hide `SensorSearchEmpty` based on whether any cards are visible.
+- [x] T004 [US1] Store the sensor name on each card's `Tag` property (or a wrapper) during `BuildSensorListAsync` so the filter can access it without walking the visual tree.
+- [x] T005 [US1] Clear `SensorSearchBox.Text` in `OnCloseSensors` (when leaving the page) to reset filter state on re-entry. Re-apply active filter after `BuildSensorListAsync` rebuilds the list.
 
 ## Phase 4: User Story 2 — Instant feedback while typing (P2)
 

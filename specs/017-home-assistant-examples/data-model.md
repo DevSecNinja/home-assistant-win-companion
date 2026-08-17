@@ -31,7 +31,7 @@ recent communication.
 
 | Field | Description | Validation |
 | --- | --- | --- |
-| Device name | Home Assistant device name | Must resolve by exact name |
+| Device name | Home Assistant device name | Must be unique and resolve by exact name |
 | Sensor entities | Enabled sensors associated with the device | At least one must have reported |
 | Latest report | Newest server-maintained report time across sensor entities | Must be available on a state object |
 | Sync cadence | Expected interval between reports | Timeout must exceed ordinary cadence |

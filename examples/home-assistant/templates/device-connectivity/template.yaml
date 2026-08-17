@@ -6,7 +6,9 @@ template:
         unique_id: windows_pc_connectivity
         device_class: connectivity
         state: >-
-          {%- set companion_device = 'Replace with your device name' -%}
+          {%- set companion_device -%}
+            Replace with your device name
+          {%- endset -%}
           {%- set offline_after_seconds = 180 -%}
           {%- set heartbeat = namespace(last_reported=none) -%}
           {%- set companion_device_id = device_id(companion_device) -%}

@@ -81,7 +81,7 @@ category and confirm its purpose and installation path fit the guidance.
 - **FR-002**: Examples MUST be grouped by Home Assistant artifact type, with entity templates separate from automations.
 - **FR-003**: The initial entity-template example MUST derive connected status from the newest server-recorded report among the companion device's sensor entities.
 - **FR-004**: The offline status example MUST NOT require the client to transmit a timestamp or an additional high-frequency heartbeat.
-- **FR-005**: The offline status example MUST let users choose both the companion device by name and the offline timeout without requiring an entity ID.
+- **FR-005**: The offline status example MUST let users choose both the companion device by a unique exact name and the offline timeout without requiring an entity ID.
 - **FR-006**: Every example MUST state its prerequisites, installation procedure, customization points, expected behavior, and removal procedure.
 - **FR-007**: The examples index MUST reserve and document a destination for future importable automation examples.
 - **FR-008**: Examples MUST use placeholders rather than personal server addresses, device identifiers, or sensor values.

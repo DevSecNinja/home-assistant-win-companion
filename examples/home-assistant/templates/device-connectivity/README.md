@@ -28,7 +28,8 @@ change: `last_reported` advances whenever Home Assistant receives a report.
    `binary_sensor` entry into that section instead of adding a second
    top-level `template:` key.
 3. Replace `Replace with your device name` with this PC's exact Home Assistant
-   device name, including capitalization and spaces.
+   device name, including capitalization and spaces. The name must be unique in
+   Home Assistant; rename or remove duplicate device registrations first.
 4. Change `windows_pc_connectivity` if another PC already uses that unique ID.
 5. Check the configuration, then restart Home Assistant or reload Template
    entities.
@@ -70,7 +71,7 @@ power or network loss.
 
 Home Assistant resolves the device name exactly. If the device is renamed, update
 `companion_device` in the template. Custom device names take precedence over
-default names.
+default names. Duplicate names can resolve to the wrong device.
 
 ### Remove
 

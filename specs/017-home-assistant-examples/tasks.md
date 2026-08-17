@@ -111,3 +111,4 @@ paths.
 
 - [X] T010 Resolve the heartbeat by exact device name and newest sensor report in `examples/home-assistant/templates/device-connectivity/template.yaml`
 - [X] T011 Trim control-block whitespace from the rendered state in `examples/home-assistant/templates/device-connectivity/template.yaml`
+- [X] T012 Accept apostrophes in device names and document name uniqueness in `examples/home-assistant/templates/device-connectivity/`

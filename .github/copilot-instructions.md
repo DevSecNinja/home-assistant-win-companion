@@ -122,13 +122,14 @@ unsigned artifacts, and runs Core tests. Linting is delegated by
 ## Feature development workflow
 
 - New features must follow the speckit pipeline before implementation:
-  specify → clarify → plan → tasks → implement.
+  specify → clarify → plan → tasks → analyze → implement.
+- Run `speckit-analyze` after `speckit-tasks` and before implementation to catch
+  inconsistencies early.
 - Run `speckit-converge` after implementation to verify completeness.
-- Run `speckit-analyze` periodically to check consistency across spec/plan/tasks.
 - Feature artifacts (spec.md, plan.md, tasks.md) live under `specs/<feature-name>/`.
 - Do not skip steps. If a feature was started without speckit, first produce the
-  missing artifacts (`speckit-specify`, then `speckit-plan`, then `speckit-tasks`)
-  before running `speckit-converge` to reconcile the codebase.
+  missing artifacts (`speckit-specify`, then `speckit-clarify`, then `speckit-plan`,
+  then `speckit-tasks`) before running `speckit-converge` to reconcile the codebase.
 
 ## Repository workflow
 

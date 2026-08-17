@@ -4,7 +4,8 @@ namespace WindowsCompanion.Core.Sensors;
 
 /// <summary>
 /// Maps an OS <see cref="SystemStatus"/> snapshot into the Home Assistant
-/// battery-level and battery-state sensors. Pure and fully unit-testable.
+/// battery-level, battery-state, and AC-power sensors. Pure and fully
+/// unit-testable.
 /// </summary>
 public static class BatterySensorProvider
 {

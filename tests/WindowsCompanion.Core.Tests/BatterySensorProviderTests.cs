@@ -107,7 +107,7 @@ public class BatterySensorProviderTests
     }
 
     [Fact]
-    public void BuildAll_returns_both_sensors()
+    public void BuildAll_returns_all_three_sensors()
     {
         var sensors = BatterySensorProvider.BuildAll(new SystemStatus(true, 50, PowerState.Charging));
 

@@ -159,17 +159,25 @@ public sealed class HomeAssistantClient : IHomeAssistantClient
 
     public async Task UpdateLocationAsync(string webhookId, LocationUpdate location, CancellationToken ct = default)
     {
-        var payload = new
+        object data;
+        if (location.HasFix)
         {
-            type = "update_location",
             data = new
             {
-                gps = new[] { location.Latitude, location.Longitude },
-                gps_accuracy = location.GpsAccuracy
-            }
-        };
+                gps = new[] { location.Latitude!.Value, location.Longitude!.Value },
+                gps_accuracy = location.GpsAccuracy!.Value
+            };
+        }
+        else
+        {
+            // No fix: send location_name so HA clears the GPS and shows a
+            // meaningful state instead of keeping the last stale coordinate.
+            data = new { location_name = location.LocationName ?? "not_home" };
+        }
+
+        var payload = new { type = "update_location", data };
         await PostWebhookAsync(webhookId, payload, ct).ConfigureAwait(false);
-        _log.LogDebug("Location update sent.");
+        _log.LogDebug("Location update sent (hasFix={HasFix}).", location.HasFix);
     }
 
     /// <summary>

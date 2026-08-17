@@ -6,6 +6,11 @@ namespace WindowsCompanion.Core.Models;
 /// zone-based states (e.g. "Home") instead of raw coordinates.
 /// </summary>
 public sealed record LocationUpdate(
-    double Latitude,
-    double Longitude,
-    int GpsAccuracy);
+    double? Latitude,
+    double? Longitude,
+    int? GpsAccuracy,
+    string? LocationName = null)
+{
+    /// <summary>True when a real fix is available.</summary>
+    public bool HasFix => Latitude.HasValue && Longitude.HasValue;
+}

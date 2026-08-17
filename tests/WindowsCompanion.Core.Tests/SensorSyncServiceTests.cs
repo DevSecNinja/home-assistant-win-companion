@@ -19,6 +19,7 @@ public class SensorSyncServiceTests
         public readonly List<string> Registered = new();
         public readonly List<(string Id, bool? Disabled)> RegisterCalls = new();
         public readonly List<IReadOnlyList<Sensor>> Batches = new();
+        public readonly List<LocationUpdate> LocationUpdates = new();
         public int Updates;
         public bool FailNextUpdate;
         public HomeAssistantRejectedException? RejectNextUpdate;
@@ -59,7 +60,10 @@ public class SensorSyncServiceTests
             => Task.FromResult<HaInstanceInfo?>(new HaInstanceInfo { DeviceId = "device" });
 
         public Task UpdateLocationAsync(string webhookId, LocationUpdate location, CancellationToken ct = default)
-            => Task.CompletedTask;
+        {
+            LocationUpdates.Add(location);
+            return Task.CompletedTask;
+        }
 
         public Task<HaConfigInfo?> GetConfigAsync(CancellationToken ct = default)
             => Task.FromResult<HaConfigInfo?>(null);
@@ -264,5 +268,100 @@ public class SensorSyncServiceTests
 
         public void Start(Action onChanged) { }
         public void Stop() { }
+    }
+
+    private sealed class FakeLocationProvider : ILocationProvider
+    {
+        public LocationResult Result = LocationResult.Ready(47.398, 8.5451, 12.0);
+        public Task<LocationResult> GetLocationAsync(CancellationToken ct = default) =>
+            Task.FromResult(Result);
+    }
+
+    private static SensorCatalog LocationPlusBatteryCatalog(
+        FakeLocationProvider locationProvider, SensorPreferences? prefs = null)
+    {
+        var p = prefs ?? new SensorPreferences();
+        // Location is sensitive+opt-in, so enable it explicitly for tests.
+        p.Set(LocationSensorSource.LocationId, true);
+        return new SensorCatalog(
+            new ISensorSource[]
+            {
+                new BatterySensorSource(new FakeStatus()),
+                new LocationSensorSource(locationProvider, p)
+            }, p);
+    }
+
+    [Fact]
+    public async Task Location_is_excluded_from_sensor_batch_and_sent_via_update_location()
+    {
+        var locProvider = new FakeLocationProvider();
+        var client = new FakeClient();
+        var catalog = LocationPlusBatteryCatalog(locProvider);
+        catalog.Start(() => { });
+        // Give the poll loop time to fetch the first reading.
+        await catalog.RefreshAsync();
+        var svc = new SensorSyncService(client, catalog);
+
+        await svc.SyncAsync("wh", SensorReadContext.Periodic);
+
+        // Location must not appear in the sensor registration or update batch.
+        Assert.DoesNotContain(client.Registered, id => id == LocationSensorSource.LocationId);
+        Assert.All(client.Batches, batch =>
+            Assert.DoesNotContain(batch, s => s.UniqueId == LocationSensorSource.LocationId));
+
+        // Location should be sent via update_location.
+        var loc = Assert.Single(client.LocationUpdates);
+        Assert.True(loc.HasFix);
+        Assert.Equal(47.398, loc.Latitude);
+        Assert.Equal(8.5451, loc.Longitude);
+        Assert.Equal(12, loc.GpsAccuracy);
+
+        catalog.Stop();
+    }
+
+    [Fact]
+    public async Task Location_sends_location_name_when_no_fix_available()
+    {
+        var locProvider = new FakeLocationProvider
+        {
+            Result = LocationResult.Unavailable(LocationStatus.PermissionDenied)
+        };
+        var client = new FakeClient();
+        var catalog = LocationPlusBatteryCatalog(locProvider);
+        catalog.Start(() => { });
+        await catalog.RefreshAsync();
+        var svc = new SensorSyncService(client, catalog);
+
+        await svc.SyncAsync("wh", SensorReadContext.Periodic);
+
+        var loc = Assert.Single(client.LocationUpdates);
+        Assert.False(loc.HasFix);
+        Assert.Equal("not_home", loc.LocationName);
+
+        catalog.Stop();
+    }
+
+    [Fact]
+    public async Task Legacy_location_sensor_in_registry_is_retired()
+    {
+        var locProvider = new FakeLocationProvider();
+        var registered = new Dictionary<string, RegisteredSensor>(StringComparer.Ordinal)
+        {
+            [LocationSensorSource.LocationId] = new() { Type = "sensor", Name = "Location" }
+        };
+        var client = new FakeClient();
+        var catalog = LocationPlusBatteryCatalog(locProvider);
+        catalog.Start(() => { });
+        await catalog.RefreshAsync();
+        var svc = new SensorSyncService(client, catalog, registered);
+
+        await svc.SyncAsync("wh", SensorReadContext.Periodic);
+
+        // The legacy sensor entry should be retired (disabled).
+        var retire = Assert.Single(client.RegisterCalls, c => c.Id == LocationSensorSource.LocationId);
+        Assert.True(retire.Disabled);
+        Assert.False(registered.ContainsKey(LocationSensorSource.LocationId));
+
+        catalog.Stop();
     }
 }

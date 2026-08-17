@@ -46,9 +46,9 @@ public sealed class LocationSensorSource : ISensorSource, IRefreshableSensorSour
             EnabledByDefault: false,
             ResourceUsage: "Low. Reads the current position when enabled and every 15 minutes. "
                            + "Sends an extra update only when the position meaningfully changes.",
-            AutomationIdea: "Use the latitude/longitude attributes in a Home Assistant "
-                            + "template sensor or automation trigger to build a zone-based "
-                            + "arrival/departure automation.",
+            AutomationIdea: "The device tracker entity created by this sensor enables "
+                            + "zone-based automations (arrival/departure) directly in Home "
+                            + "Assistant without additional templates.",
             OptInPlaceholder: "Enable to read this device's location")
     ];
 

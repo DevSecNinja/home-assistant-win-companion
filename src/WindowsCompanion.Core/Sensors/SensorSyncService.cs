@@ -145,13 +145,24 @@ public sealed class SensorSyncService
 
         // Send location via update_location so Home Assistant updates the device
         // tracker entity (shows zone names on the map, not raw coordinates).
-        if (locationReading?.Attributes is { } attrs
-            && attrs.TryGetValue("latitude", out var latObj) && latObj is double lat
-            && attrs.TryGetValue("longitude", out var lngObj) && lngObj is double lng
-            && attrs.TryGetValue("gps_accuracy", out var accObj) && accObj is double acc)
+        if (locationReading is not null)
         {
-            await _client.UpdateLocationAsync(webhookId,
-                new Models.LocationUpdate(lat, lng, (int)acc), ct).ConfigureAwait(false);
+            Models.LocationUpdate locationUpdate;
+            if (locationReading.Attributes is { } attrs
+                && attrs.TryGetValue("latitude", out var latObj) && latObj is double lat
+                && attrs.TryGetValue("longitude", out var lngObj) && lngObj is double lng
+                && attrs.TryGetValue("gps_accuracy", out var accObj) && accObj is double acc)
+            {
+                locationUpdate = new Models.LocationUpdate(lat, lng, (int)acc);
+            }
+            else
+            {
+                // No fix (permission denied or unavailable): clear GPS so HA does
+                // not keep showing the last stale position (FR-005).
+                locationUpdate = new Models.LocationUpdate(null, null, null, "not_home");
+            }
+
+            await _client.UpdateLocationAsync(webhookId, locationUpdate, ct).ConfigureAwait(false);
         }
     }
 }

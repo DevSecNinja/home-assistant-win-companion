@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.8.0](https://github.com/DevSecNinja/home-assistant-win-companion/compare/v0.7.0...v0.8.0) (2026-08-17)
+
+
+### Features
+
+* **github-release:** update release jdx/mise ( v2026.7.18 ➔ v2026.8.0 ) [automerge] ([#164](https://github.com/DevSecNinja/home-assistant-win-companion/issues/164)) ([9b6b34f](https://github.com/DevSecNinja/home-assistant-win-companion/commit/9b6b34f80d32550b62d6ef605643837e804e764a))
+* **mise:** update tool zizmor ( 1.28.0 ➔ 1.29.0 ) [automerge] ([#165](https://github.com/DevSecNinja/home-assistant-win-companion/issues/165)) ([b19c170](https://github.com/DevSecNinja/home-assistant-win-companion/commit/b19c170adcdf2b5566c34a2019087063ef80826b))
+* **sensors:** add AC power / battery charging state sensor ([#162](https://github.com/DevSecNinja/home-assistant-win-companion/issues/162)) ([1fb5cfa](https://github.com/DevSecNinja/home-assistant-win-companion/commit/1fb5cfad787d3d64c367b651effd47d0742fa41e))
+* **sensors:** add currently playing media title/app sensor ([#171](https://github.com/DevSecNinja/home-assistant-win-companion/issues/171)) ([b415a1c](https://github.com/DevSecNinja/home-assistant-win-companion/commit/b415a1cb6b34cb2b4139b27d0aa43463c9a51393))
+* **sensors:** add pending reboot binary_sensor ([#169](https://github.com/DevSecNinja/home-assistant-win-companion/issues/169)) ([c43c664](https://github.com/DevSecNinja/home-assistant-win-companion/commit/c43c664414541ef7a799747dce26d4fffacd3f30))
+* **updating:** implement auto-update download, verification, and install ([#172](https://github.com/DevSecNinja/home-assistant-win-companion/issues/172)) ([d7fb279](https://github.com/DevSecNinja/home-assistant-win-companion/commit/d7fb2791b517279b9cd6ef617b2f42466eebfe40))
+
+
+### Bug Fixes
+
+* **app:** prevent crash on unhandled UI exceptions in update check ([#170](https://github.com/DevSecNinja/home-assistant-win-companion/issues/170)) ([02c5eac](https://github.com/DevSecNinja/home-assistant-win-companion/commit/02c5eac88a9e4759ea3bf711cded091b1526696a))
+* **mise:** update tool pipx:checkov ( 3.3.8 ➔ 3.3.9 ) [automerge] ([#168](https://github.com/DevSecNinja/home-assistant-win-companion/issues/168)) ([8191501](https://github.com/DevSecNinja/home-assistant-win-companion/commit/819150111cf6d0f61d1644043d0acab77c47c81d))
+* **sensor:** use update_location webhook for device tracker ([#173](https://github.com/DevSecNinja/home-assistant-win-companion/issues/173)) ([1276796](https://github.com/DevSecNinja/home-assistant-win-companion/commit/1276796a15283d7778d91e7f93982d5decc07bc9))
+
 ## [0.7.0](https://github.com/DevSecNinja/home-assistant-win-companion/compare/v0.6.1...v0.7.0) (2026-08-14)
 
 

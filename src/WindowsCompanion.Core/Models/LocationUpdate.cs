@@ -12,5 +12,5 @@ public sealed record LocationUpdate(
     string? LocationName = null)
 {
     /// <summary>True when a real fix is available.</summary>
-    public bool HasFix => Latitude.HasValue && Longitude.HasValue;
+    public bool HasFix => Latitude.HasValue && Longitude.HasValue && GpsAccuracy.HasValue;
 }

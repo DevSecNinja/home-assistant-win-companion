@@ -610,6 +610,10 @@
                                     <HyperlinkButton Content="License" NavigateUri="https://github.com/DevSecNinja/home-assistant-win-companion/blob/main/LICENSE" />
                                     <HyperlinkButton Content="SBOM" NavigateUri="https://github.com/DevSecNinja/home-assistant-win-companion/dependency-graph" />
                                 </StackPanel>
+                                <TextBlock
+                                    Text="Enjoying the app? Star the repo on GitHub to show your support ⭐"
+                                    Style="{StaticResource SettingsDescriptionStyle}"
+                                    Margin="0,4,0,0" />
                             </StackPanel>
                         </Border>
                     </StackPanel>

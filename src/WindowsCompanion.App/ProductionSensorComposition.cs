@@ -27,6 +27,7 @@ internal static class ProductionSensorComposition
         new WindowsThemeSensorSource(),
         new LocaleSensorSource(),
         new DiskUsageSensorSource(),
+        new PendingRebootSensorSource(),
         new NotificationStateSensorSource(),
         new CapabilityUsageSensorSource(config.Sensors),
         new AudioDeviceSensorSource(config.Sensors),

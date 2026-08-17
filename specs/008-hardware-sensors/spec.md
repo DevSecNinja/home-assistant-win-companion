@@ -20,6 +20,7 @@ inventory agent.
 | `disk_usage` | sensor | on | benign | `DriveInfo` for the system drive |
 | `disk_free_space` | sensor | off | benign | `DriveInfo` for the system drive |
 | `disk_used_space` | sensor | off | benign | `DriveInfo` for the system drive |
+| `pending_reboot` | binary_sensor | on | benign | WU/CBS reboot registry keys, `PendingFileRenameOperations` |
 
 ## Requirements
 
@@ -60,6 +61,23 @@ inventory agent.
 - Every new sensor is diagnostic, has a description, an icon, and a local preview.
 - Disabled sensors register no hooks: display and locale event subscriptions and
   the disk poller only exist while one of their sensors is enabled.
+- Report `pending_reboot` from three standard, cheap-to-read signals: the Windows
+  Update `RebootRequired` key, the Component-Based Servicing `RebootPending` key
+  (both key-existence checks; no value inspection), and a non-empty
+  `PendingFileRenameOperations` multi-string value. No PowerShell, no Update Agent
+  COM calls, no elevation. `on` means at least one signal is set.
+- A registry read that fails (permissions, security software, corruption) reports
+  that individual signal as `false` rather than surfacing an error state, so a
+  locked-down environment cannot crash or hang the sensor; this is a deliberate
+  fail-closed default matching `disk_usage`'s "unavailable rather than absurd"
+  posture, not a silent error swallow.
+- Poll the three registry values every 10 minutes, matching `disk_usage`'s cadence,
+  and only replace the published reading (and push) when `IsRebootPending` actually
+  flips, since there is no OS change-notification event for these keys equivalent
+  to `UserPreferenceChanged` for the dark-mode sensor.
+- `pending_reboot` is a `binary_sensor` with `device_class: problem`, is
+  `diagnostic`, benign, and on by default: it reveals nothing about machine
+  identity, location or installed software, unlike `winget_updates`.
 
 ## Focus / Do Not Disturb decision
 

@@ -63,26 +63,26 @@ public partial class App : Application
     }
 
     /// <summary>
-    /// Last-resort safety net for exceptions that escape UI event handlers and
-    /// dispatcher callbacks. Without this, an uncaught exception on the UI thread
-    /// (for example from a XAML/WinRT resource load) surfaces as an unrecoverable
-    /// native crash (STATUS_STOWED_EXCEPTION via combase.dll) instead of a normal
-    /// .NET exception, and nothing gets logged before the process dies.
+    /// Last-resort diagnostic hook for exceptions that escape UI event handlers
+    /// and dispatcher callbacks. Without this, an uncaught exception on the UI
+    /// thread (for example the tray-icon resource load this was added alongside)
+    /// surfaces as an unrecoverable native crash (STATUS_STOWED_EXCEPTION via
+    /// combase.dll) with nothing logged before the process dies.
     /// </summary>
     /// <remarks>
-    /// This is deliberately a blanket catch-all, not a substitute for fixing known
-    /// bugs at their source (see ApplyTrayIcon for the actual defect this was
-    /// added alongside). For a tray-resident background app that keeps a live
-    /// Home Assistant connection, losing that connection and all app state to an
-    /// unrelated UI glitch is worse than continuing with a possibly stale view;
-    /// the exception is always logged at Critical so it still gets fixed.
+    /// This only logs; it deliberately leaves <c>e.Handled</c> unset. The failing
+    /// handler or callback has already aborted, possibly after partially mutating
+    /// application or connection state, so continuing past an unrecognized
+    /// exception risks a silently corrupted process rather than a clean crash.
+    /// Known, recoverable failures (such as a missing icon file) should keep
+    /// being caught at their own operation boundary - see MainWindow.ApplyTrayIcon
+    /// - where the surrounding state is actually known to be safe to continue from.
     /// </remarks>
     private void OnUnhandledException(
         object sender,
         Microsoft.UI.Xaml.UnhandledExceptionEventArgs e)
     {
-        _log.LogCritical(e.Exception, "Unhandled UI exception; keeping the app alive.");
-        e.Handled = true;
+        _log.LogCritical(e.Exception, "Unhandled UI exception.");
     }
 
     private static ILoggerFactory CreateProductionLoggerFactory() =>

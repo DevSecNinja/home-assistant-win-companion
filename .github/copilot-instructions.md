@@ -126,8 +126,9 @@ unsigned artifacts, and runs Core tests. Linting is delegated by
 - Run `speckit-converge` after implementation to verify completeness.
 - Run `speckit-analyze` periodically to check consistency across spec/plan/tasks.
 - Feature artifacts (spec.md, plan.md, tasks.md) live under `specs/<feature-name>/`.
-- Do not skip steps. If a feature was started without speckit, run `speckit-converge`
-  to reconcile the codebase with the expected design before continuing.
+- Do not skip steps. If a feature was started without speckit, first produce the
+  missing artifacts (`speckit-specify`, then `speckit-plan`, then `speckit-tasks`)
+  before running `speckit-converge` to reconcile the codebase.
 
 ## Repository workflow
 

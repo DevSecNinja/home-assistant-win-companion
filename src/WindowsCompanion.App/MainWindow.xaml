@@ -606,14 +606,16 @@
                                 <TextBlock Text="Project" FontWeight="SemiBold" />
                                 <StackPanel Orientation="Horizontal" Spacing="12">
                                     <HyperlinkButton Content="Source code" NavigateUri="https://github.com/DevSecNinja/home-assistant-win-companion" />
-                                    <HyperlinkButton Content="Issues" NavigateUri="https://github.com/DevSecNinja/home-assistant-win-companion/issues" />
+                                    <HyperlinkButton Content="Issues &amp; feature requests" NavigateUri="https://github.com/DevSecNinja/home-assistant-win-companion/issues" />
                                     <HyperlinkButton Content="License" NavigateUri="https://github.com/DevSecNinja/home-assistant-win-companion/blob/main/LICENSE" />
-                                    <HyperlinkButton Content="SBOM" NavigateUri="https://github.com/DevSecNinja/home-assistant-win-companion/dependency-graph" />
+                                    <HyperlinkButton Content="SBOM" NavigateUri="https://github.com/DevSecNinja/home-assistant-win-companion/network/dependencies" />
                                 </StackPanel>
-                                <TextBlock
-                                    Text="Enjoying the app? Star the repo on GitHub to show your support ⭐"
-                                    Style="{StaticResource SettingsDescriptionStyle}"
-                                    Margin="0,4,0,0" />
+                                <HyperlinkButton
+                                    Content="Enjoying the app? Star the repo on GitHub to show your support ⭐"
+                                    NavigateUri="https://github.com/DevSecNinja/home-assistant-win-companion"
+                                    Margin="0,4,0,0"
+                                    Padding="0"
+                                    FontSize="12" />
                             </StackPanel>
                         </Border>
                     </StackPanel>

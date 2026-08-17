@@ -87,7 +87,7 @@ public sealed partial class MainWindow
             : "No battery (desktop)";
 
         var demo = _controller.IsDemoMode;
-        ServerText.Text = demo ? DemoSession.ServerLabel : _controller.BaseUrl ?? "—";
+        ServerText.Text = demo ? DemoSession.ServerLabel : _controller.BaseUrl?.TrimEnd('/') ?? "—";
         RouteText.Text = _controller.RouteSummary;
         if (demo) StatusText.Text = DemoSession.Title;
 

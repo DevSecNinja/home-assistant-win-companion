@@ -163,7 +163,7 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
             RouteText.Text = _controller.RouteSummary;
             ServerText.Text = _controller.IsDemoMode
                 ? DemoSession.ServerLabel
-                : _controller.BaseUrl ?? "—";
+                : _controller.BaseUrl?.TrimEnd('/') ?? "—";
             UpdateHealth();
             RefreshPreferencesSummary();
         });

@@ -601,6 +601,17 @@
                                     Click="OnOpenLog" />
                             </Grid>
                         </Border>
+                        <Border Style="{StaticResource SettingsCardStyle}">
+                            <StackPanel Padding="16,14" Spacing="8">
+                                <TextBlock Text="Project" FontWeight="SemiBold" />
+                                <StackPanel Orientation="Horizontal" Spacing="12">
+                                    <HyperlinkButton Content="Source code" NavigateUri="https://github.com/DevSecNinja/home-assistant-win-companion" />
+                                    <HyperlinkButton Content="Issues" NavigateUri="https://github.com/DevSecNinja/home-assistant-win-companion/issues" />
+                                    <HyperlinkButton Content="License" NavigateUri="https://github.com/DevSecNinja/home-assistant-win-companion/blob/main/LICENSE" />
+                                    <HyperlinkButton Content="SBOM" NavigateUri="https://github.com/DevSecNinja/home-assistant-win-companion/dependency-graph" />
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
                     </StackPanel>
 
                     <StackPanel x:Name="ConnectionManagementSection" Spacing="8">

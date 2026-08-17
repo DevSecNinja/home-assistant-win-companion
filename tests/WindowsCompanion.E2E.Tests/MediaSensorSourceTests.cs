@@ -165,6 +165,71 @@ public sealed class MediaSensorSourceTests
         }
     }
 
+    [Fact]
+    public async Task Refreshing_while_a_narrower_scheduled_poll_is_in_flight_still_captures_the_new_scope()
+    {
+        var preferences = new SensorPreferences();
+        var probe = new GatedMediaProbe();
+        var source = new MediaSensorSource(preferences, probe.CaptureAsync, TimeSpan.FromMinutes(10));
+        var catalog = new SensorCatalog([source], preferences);
+        catalog.Start(() => { });
+
+        try
+        {
+            // Enabling media_playing starts the source, whose immediate
+            // Scheduled tick takes an enabled-ids snapshot of {media_playing}
+            // only and then blocks mid-capture.
+            catalog.SetEnabled(MediaSensorSource.PlayingId, true);
+            await probe.FirstCaptureStarted.Task.WaitAsync(Timeout);
+
+            // The Now Playing refresh has to join that already in-flight,
+            // narrower-scoped capture (SensorPollLoop's single-flight gate),
+            // so a naive RefreshAsync would settle for its stale result. This
+            // release happens after the refresh call is already blocked
+            // inside RunOnceAsync, awaiting the very same in-flight capture.
+            var refreshTask = catalog.SetEnabledAndRefreshAsync(MediaSensorSource.NowPlayingId, true);
+            probe.ReleaseFirstCapture();
+
+            var preview = await refreshTask.WaitAsync(Timeout);
+            Assert.Equal("Fresh Track", preview);
+
+            var reading = catalog.Read(new SensorReadContext("Test"))
+                .Single(sensor => sensor.UniqueId == MediaSensorSource.NowPlayingId);
+            Assert.Equal("Fresh Track", reading.State);
+            Assert.True(Volatile.Read(ref probe.CallCount) >= 2, "the stale, joined capture must be followed by a fresh one");
+        }
+        finally
+        {
+            catalog.Stop();
+        }
+    }
+
+    private sealed class GatedMediaProbe
+    {
+        private readonly SemaphoreSlim _release = new(0);
+
+        public TaskCompletionSource FirstCaptureStarted { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public int CallCount;
+
+        public async Task<MediaSnapshot> CaptureAsync(IReadOnlySet<string> requested, CancellationToken cancellationToken)
+        {
+            var call = Interlocked.Increment(ref CallCount);
+
+            if (call == 1)
+            {
+                FirstCaptureStarted.TrySetResult();
+                await _release.WaitAsync(cancellationToken).ConfigureAwait(false);
+                return MediaSnapshot.Empty;
+            }
+
+            return new MediaSnapshot("Fresh Track", "Fresh Artist", "Fresh Player", MediaPlaybackStatus.Playing);
+        }
+
+        public void ReleaseFirstCapture() => _release.Release();
+    }
+
     private sealed class ScopeRecordingProbe
     {
         private readonly List<IReadOnlySet<string>> _requests = [];

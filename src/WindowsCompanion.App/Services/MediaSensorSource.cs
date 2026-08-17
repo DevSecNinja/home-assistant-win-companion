@@ -39,6 +39,7 @@ public sealed class MediaSensorSource : ISensorSource, IRefreshableSensorSource
     private readonly ChangeGate<MediaSnapshot> _snapshot = new(MediaSnapshot.Empty);
 
     private Action? _onChanged;
+    private volatile IReadOnlySet<string> _lastCapturedIds = new HashSet<string>();
 
     public MediaSensorSource(
         SensorPreferences preferences,
@@ -127,12 +128,30 @@ public sealed class MediaSensorSource : ISensorSource, IRefreshableSensorSource
     /// calls <c>onChanged</c> itself (see <see cref="PollAsync"/>) because the
     /// caller already reads the fresh value directly.
     /// </summary>
-    public Task RefreshAsync(CancellationToken cancellationToken = default) =>
-        _loop.RunOnceAsync(cancellationToken);
+    /// <remarks>
+    /// <see cref="SensorPollLoop.RunOnceAsync"/> shares its single-flight gate
+    /// with the timer: if a scheduled poll is already in flight, this joins
+    /// that poll rather than starting a new one. That poll may have captured
+    /// with a narrower, now-stale set of enabled ids (e.g. one taken just
+    /// before this call's sensor was switched on), so after joining/running
+    /// once, a second run is issued whenever the ids it actually captured
+    /// with do not cover what this refresh needs - by then no poll can still
+    /// be in flight with the stale scope, so the second run is guaranteed to
+    /// capture fresh.
+    /// </remarks>
+    public async Task RefreshAsync(CancellationToken cancellationToken = default)
+    {
+        var needed = EnabledIds();
+        await _loop.RunOnceAsync(cancellationToken).ConfigureAwait(false);
+
+        if (!_lastCapturedIds.IsSupersetOf(needed))
+            await _loop.RunOnceAsync(cancellationToken).ConfigureAwait(false);
+    }
 
     private async Task PollAsync(SensorPollReason reason, CancellationToken cancellationToken)
     {
         var enabled = EnabledIds();
+        _lastCapturedIds = enabled;
         var current = await _capture(enabled, cancellationToken).ConfigureAwait(false);
         cancellationToken.ThrowIfCancellationRequested();
 

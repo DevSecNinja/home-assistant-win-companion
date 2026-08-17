@@ -651,6 +651,9 @@ public class ConnectionManagerTests
             string webhookId, CancellationToken ct = default) =>
             Task.FromResult<HaInstanceInfo?>(new HaInstanceInfo { DeviceId = "device" });
 
+        public Task UpdateLocationAsync(string webhookId, LocationUpdate location, CancellationToken ct = default) =>
+            Task.CompletedTask;
+
         public Task<HaConfigInfo?> GetConfigAsync(CancellationToken ct = default) =>
             Task.FromResult<HaConfigInfo?>(null);
 

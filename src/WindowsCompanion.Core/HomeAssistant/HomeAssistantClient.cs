@@ -157,6 +157,21 @@ public sealed class HomeAssistantClient : IHomeAssistantClient
         _log.LogDebug("Sensor update accepted ({Count} sensors).", sensors.Count);
     }
 
+    public async Task UpdateLocationAsync(string webhookId, LocationUpdate location, CancellationToken ct = default)
+    {
+        var payload = new
+        {
+            type = "update_location",
+            data = new
+            {
+                gps = new[] { location.Latitude, location.Longitude },
+                gps_accuracy = location.GpsAccuracy
+            }
+        };
+        await PostWebhookAsync(webhookId, payload, ct).ConfigureAwait(false);
+        _log.LogDebug("Location update sent.");
+    }
+
     /// <summary>
     /// Reads the per-sensor results. Parsed rather than string-matched, so it does
     /// not depend on Home Assistant's JSON spacing and cannot be fooled by a sensor

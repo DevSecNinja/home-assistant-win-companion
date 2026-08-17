@@ -12,7 +12,7 @@ namespace WindowsCompanion_App.Services;
 /// <remarks>
 /// The three signals are simple key/value existence checks - no PowerShell,
 /// no Update Agent COM calls, no elevation - so like
-/// <see cref="DiskUsageSensorSource"/> the drive is read every ten minutes
+/// <see cref="DiskUsageSensorSource"/> the registry is read every ten minutes
 /// rather than on every sync, and the published snapshot only changes (and
 /// pushes) when the pending-reboot state actually flips.
 /// </remarks>

@@ -44,23 +44,7 @@ public sealed partial class MainWindow
 
     private void OnSensorFilterChanged(AutoSuggestBox sender, AutoSuggestBoxTextChangedEventArgs args)
     {
-        var filter = sender.Text?.Trim() ?? string.Empty;
-        var anyVisible = false;
-
-        foreach (var child in SensorList.Children)
-        {
-            if (child is Border border && border.Tag is string name)
-            {
-                var matches = filter.Length == 0
-                    || name.Contains(filter, StringComparison.OrdinalIgnoreCase);
-                border.Visibility = matches ? Visibility.Visible : Visibility.Collapsed;
-                if (matches) anyVisible = true;
-            }
-        }
-
-        SensorSearchEmpty.Visibility = anyVisible || filter.Length == 0
-            ? Visibility.Collapsed
-            : Visibility.Visible;
+        ApplySensorFilter();
     }
 
     /// <summary>
@@ -97,7 +81,6 @@ public sealed partial class MainWindow
         }
 
         SensorList.Children.Clear();
-        SensorSearchBox.Text = string.Empty;
         SensorSearchEmpty.Visibility = Visibility.Collapsed;
         _sensorPreviewTexts.Clear();
         _sensorSettingControls.Clear();
@@ -261,7 +244,29 @@ public sealed partial class MainWindow
             });
         }
 
+        ApplySensorFilter();
         return true;
+    }
+
+    private void ApplySensorFilter()
+    {
+        var filter = SensorSearchBox.Text?.Trim() ?? string.Empty;
+        var anyVisible = false;
+
+        foreach (var child in SensorList.Children)
+        {
+            if (child is Border border && border.Tag is string text)
+            {
+                var matches = filter.Length == 0
+                    || text.Contains(filter, StringComparison.OrdinalIgnoreCase);
+                border.Visibility = matches ? Visibility.Visible : Visibility.Collapsed;
+                if (matches) anyVisible = true;
+            }
+        }
+
+        SensorSearchEmpty.Visibility = anyVisible || filter.Length == 0
+            ? Visibility.Collapsed
+            : Visibility.Visible;
     }
 
     private static void AddSensorMetadataRow(

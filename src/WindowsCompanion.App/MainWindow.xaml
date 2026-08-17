@@ -934,11 +934,14 @@
                     <AutoSuggestBox
                         x:Name="SensorSearchBox"
                         AutomationProperties.AutomationId="Sensors.SearchBox"
+                        AutomationProperties.Name="Filter sensors"
                         PlaceholderText="Filter sensors…"
                         QueryIcon="Find"
                         TextChanged="OnSensorFilterChanged" />
                     <TextBlock
                         x:Name="SensorSearchEmpty"
+                        AutomationProperties.AutomationId="Sensors.SearchEmpty"
+                        AutomationProperties.LiveSetting="Polite"
                         Text="No sensors match your search"
                         Visibility="Collapsed"
                         Foreground="{ThemeResource TextFillColorSecondaryBrush}"

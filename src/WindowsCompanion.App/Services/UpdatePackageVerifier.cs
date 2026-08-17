@@ -20,6 +20,7 @@ internal sealed class UpdatePackageVerifier : IUpdatePackageVerifier
     internal const string Owner = "DevSecNinja";
     internal const string Repository = "home-assistant-win-companion";
     internal const string WorkflowFileName = ".github/workflows/release.yml";
+    internal const string DefaultBranch = "main";
 
     private const long MaxChecksumSidecarBytes = 4_096;
     private const long MaxAttestationResponseBytes = 4_194_304;
@@ -130,7 +131,7 @@ internal sealed class UpdatePackageVerifier : IUpdatePackageVerifier
                 $"No GitHub build-provenance attestation is published for {asset.Package.Name}.");
         }
 
-        var policy = CreatePolicy(asset);
+        var policies = CreatePolicies(asset);
 
         foreach (var bundleJson in bundles)
         {
@@ -145,22 +146,26 @@ internal sealed class UpdatePackageVerifier : IUpdatePackageVerifier
             }
 
             await using var artifact = File.OpenRead(packagePath);
-            var (verified, result) = await _sigstore
-                .TryVerifyStreamAsync(artifact, bundle, policy, cancellationToken)
-                .ConfigureAwait(false);
-            if (verified)
+            foreach (var policy in policies)
             {
-                _log.LogInformation(
-                    "Verified the build-provenance attestation for {Package} ({Version}).",
-                    asset.Package.Name,
-                    _productVersion);
-                return;
-            }
+                artifact.Position = 0;
+                var (verified, result) = await _sigstore
+                    .TryVerifyStreamAsync(artifact, bundle, policy, cancellationToken)
+                    .ConfigureAwait(false);
+                if (verified)
+                {
+                    _log.LogInformation(
+                        "Verified the build-provenance attestation for {Package} ({Version}).",
+                        asset.Package.Name,
+                        _productVersion);
+                    return;
+                }
 
-            _log.LogDebug(
-                "An attestation for {Package} did not match the expected GitHub Actions build identity: {Reason}",
-                asset.Package.Name,
-                result?.FailureReason);
+                _log.LogDebug(
+                    "An attestation for {Package} did not match the expected GitHub Actions build identity: {Reason}",
+                    asset.Package.Name,
+                    result?.FailureReason);
+            }
         }
 
         throw new UpdatePackageVerificationException(
@@ -169,22 +174,37 @@ internal sealed class UpdatePackageVerifier : IUpdatePackageVerifier
 
     /// <summary>
     /// Pins the attestation to this exact repository, the GitHub Actions OIDC
-    /// issuer, and the exact release workflow file and tag - not merely "some
-    /// workflow in this repo" - so a compromised, unrelated workflow in the same
-    /// repository could not forge a trusted update.
+    /// issuer, and the exact release workflow file - not merely "some workflow
+    /// in this repo" - so a compromised, unrelated workflow in the same
+    /// repository could not forge a trusted update. The release workflow can
+    /// legitimately produce a build from two different refs (see
+    /// <c>.github/workflows/release.yml</c>): a <c>push</c> to the release tag
+    /// itself, whose provenance's Build Config URI is pinned to
+    /// <c>refs/tags/&lt;tag&gt;</c>; or a manual <c>workflow_dispatch</c> run
+    /// (used to re-publish an existing tag), whose provenance instead reflects
+    /// the ref the workflow *run* started from - the repository's default
+    /// branch, since that is where the workflow is dispatched from. Both are
+    /// accepted here without weakening the repository/workflow binding; a
+    /// bundle must still match one of these exact refs.
     /// </summary>
-    private static VerificationPolicy CreatePolicy(SelectedUpdateAsset asset)
+    private static IReadOnlyList<VerificationPolicy> CreatePolicies(SelectedUpdateAsset asset)
     {
         var tag = ExtractTag(asset.Package.Name);
-        var identity = CertificateIdentity.ForGitHubActions(Owner, Repository);
-        identity.Extensions = new CertificateExtensionPolicy
-        {
-            BuildConfigUri = tag is null
-                ? null
-                : $"https://github.com/{Owner}/{Repository}/{WorkflowFileName}@refs/tags/{tag}"
-        };
+        var candidateRefs = new List<string> { $"refs/heads/{DefaultBranch}" };
+        if (tag is not null) candidateRefs.Insert(0, $"refs/tags/{tag}");
 
-        return new VerificationPolicy { CertificateIdentity = identity };
+        var policies = new List<VerificationPolicy>(candidateRefs.Count);
+        foreach (var gitRef in candidateRefs)
+        {
+            var identity = CertificateIdentity.ForGitHubActions(Owner, Repository);
+            identity.Extensions = new CertificateExtensionPolicy
+            {
+                BuildConfigUri = $"https://github.com/{Owner}/{Repository}/{WorkflowFileName}@{gitRef}"
+            };
+            policies.Add(new VerificationPolicy { CertificateIdentity = identity });
+        }
+
+        return policies;
     }
 
     /// <summary>Extracts "v1.2.3" from "WindowsCompanion-1.2.3-win-x64-setup.zip".</summary>

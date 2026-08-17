@@ -69,6 +69,14 @@ public partial class App : Application
     /// native crash (STATUS_STOWED_EXCEPTION via combase.dll) instead of a normal
     /// .NET exception, and nothing gets logged before the process dies.
     /// </summary>
+    /// <remarks>
+    /// This is deliberately a blanket catch-all, not a substitute for fixing known
+    /// bugs at their source (see ApplyTrayIcon for the actual defect this was
+    /// added alongside). For a tray-resident background app that keeps a live
+    /// Home Assistant connection, losing that connection and all app state to an
+    /// unrelated UI glitch is worse than continuing with a possibly stale view;
+    /// the exception is always logged at Critical so it still gets fixed.
+    /// </remarks>
     private void OnUnhandledException(
         object sender,
         Microsoft.UI.Xaml.UnhandledExceptionEventArgs e)

@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.IO.Compression;
+using System.Text;
 using System.Text.Json;
 using WindowsCompanion.Core.App;
 using WindowsCompanion.Core.Updates;
@@ -43,12 +44,12 @@ internal sealed class SilentUpdateInstaller : IUpdatePackageInstaller
         ZipFile.ExtractToDirectory(packagePath, extractDirectory);
 
         var setupExePath = Directory
-            .EnumerateFiles(extractDirectory, "setup.exe", SearchOption.AllDirectories)
+            .EnumerateFiles(extractDirectory, "*-setup.exe", SearchOption.AllDirectories)
             .FirstOrDefault();
         if (setupExePath is null)
         {
             throw new FileNotFoundException(
-                "The downloaded update package does not contain a setup.exe.");
+                "The downloaded update package does not contain a *-setup.exe.");
         }
 
         var exePath = Environment.ProcessPath
@@ -63,7 +64,7 @@ internal sealed class SilentUpdateInstaller : IUpdatePackageInstaller
             resultPath,
             version.ToString());
 
-        File.WriteAllText(scriptPath, script);
+        File.WriteAllText(scriptPath, script, new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
 
         using var helper = Process.Start(new ProcessStartInfo
         {
@@ -74,6 +75,12 @@ internal sealed class SilentUpdateInstaller : IUpdatePackageInstaller
             CreateNoWindow = true,
             WindowStyle = ProcessWindowStyle.Hidden
         });
+
+        if (helper is null)
+        {
+            throw new InvalidOperationException(
+                "The detached relaunch helper (powershell.exe) could not be started.");
+        }
 
         return Task.CompletedTask;
     }

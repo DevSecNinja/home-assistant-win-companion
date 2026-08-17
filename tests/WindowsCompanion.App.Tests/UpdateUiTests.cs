@@ -268,6 +268,53 @@ public class UpdateUiTests
         Assert.Equal("Install update…", presentation.SettingsInstallLabel);
     }
 
+    [Fact]
+    public void Notify_only_mode_offers_view_release_instead_of_install()
+    {
+        var update = Available();
+
+        var presentation = UpdateStatusPresentation.Create(
+            State(UpdateCheckStatus.Available, UpdateCheckTrigger.Automatic, update),
+            mode: UpdateMode.NotifyOnly);
+
+        Assert.Equal("View release", presentation.SettingsInstallLabel);
+        Assert.True(presentation.IsSettingsInstallEnabled);
+        Assert.False(presentation.IsSettingsInstallActionInstall);
+    }
+
+    [Fact]
+    public void Disabled_mode_offers_view_release_and_disables_rechecking()
+    {
+        var update = Available();
+
+        var presentation = UpdateStatusPresentation.Create(
+            State(UpdateCheckStatus.Available, UpdateCheckTrigger.Automatic, update),
+            mode: UpdateMode.Disabled);
+
+        Assert.Equal("View release", presentation.SettingsInstallLabel);
+        Assert.False(presentation.IsRecheckEnabled);
+        Assert.False(presentation.IsSettingsCheckEnabled);
+    }
+
+    [Fact]
+    public void A_ready_to_install_update_still_offers_install_now_even_when_leaving_auto_install_mode()
+    {
+        var update = Available();
+        var install = new UpdateInstallState(
+            UpdateInstallPhase.ReadyToInstall,
+            update.AvailableVersion,
+            1);
+
+        var presentation = UpdateStatusPresentation.Create(
+            State(UpdateCheckStatus.Available, UpdateCheckTrigger.Automatic, update),
+            install: install,
+            mode: UpdateMode.NotifyOnly);
+
+        Assert.Equal("Install now", presentation.SettingsInstallLabel);
+        Assert.True(presentation.IsSettingsInstallEnabled);
+        Assert.True(presentation.IsSettingsInstallActionInstall);
+    }
+
     private static UpdateCheckState State(
         UpdateCheckStatus status,
         UpdateCheckTrigger trigger,

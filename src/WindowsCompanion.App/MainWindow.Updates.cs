@@ -15,6 +15,15 @@ public sealed partial class MainWindow
     private readonly UpdateUiActions _updateActions;
     private bool _settingsInstallActionIsInstall;
 
+    /// <summary>
+    /// True while the one-time silent-install result banner is showing. An
+    /// automatic update check that completes immediately after startup (before
+    /// the user has seen or acted on that banner) must not silently overwrite
+    /// it via <see cref="ApplyUpdateState"/> - the banner is dismissed only by
+    /// the user closing it or acting on one of its buttons.
+    /// </summary>
+    private bool _showingLastInstallResult;
+
     private void ShowLastInstallResultIfAny()
     {
         var result = _controller.LastInstallResult;
@@ -33,6 +42,7 @@ public sealed partial class MainWindow
         InstallNowButton.Visibility = Visibility.Collapsed;
         RecheckUpdatesButton.Visibility = Visibility.Visible;
         RecheckUpdatesButton.IsEnabled = true;
+        _showingLastInstallResult = true;
         UpdateBanner.IsOpen = true;
     }
 
@@ -45,11 +55,13 @@ public sealed partial class MainWindow
     private void ApplyUpdateState(UpdateCheckState state, bool showKnownUpdate = false)
     {
         if (_exiting || state.Revision < _controller.UpdateState.Revision) return;
+        if (_showingLastInstallResult) return;
 
         var presentation = UpdateStatusPresentation.Create(
             state,
             showKnownUpdate,
-            _controller.InstallState);
+            _controller.InstallState,
+            _controller.CurrentUpdateMode);
         ApplyTrayIcon(state.AvailableUpdate is null);
         TrayUpdateItem.Text = presentation.TrayActionLabel;
         UpdateBannerTitleText.Text = presentation.BannerTitle;
@@ -89,7 +101,7 @@ public sealed partial class MainWindow
             : Visibility.Collapsed;
         SettingsCheckUpdatesButton.Content = presentation.SettingsCheckLabel;
         SettingsCheckUpdatesButton.IsEnabled =
-            state.Status != UpdateCheckStatus.Checking;
+            state.Status != UpdateCheckStatus.Checking && presentation.IsSettingsCheckEnabled;
         SettingsInstallUpdateButton.Visibility = presentation.IsSettingsInstallVisible
             ? Visibility.Visible
             : Visibility.Collapsed;
@@ -115,6 +127,7 @@ public sealed partial class MainWindow
 
     private void OnViewRelease(object sender, RoutedEventArgs e)
     {
+        _showingLastInstallResult = false;
         try
         {
             _updateActions.OpenRelease(_controller.UpdateState);
@@ -133,21 +146,42 @@ public sealed partial class MainWindow
         }
     }
 
-    private void OnInstallNow(object sender, RoutedEventArgs e) => _ = _controller.InstallUpdateAsync();
+    private void OnInstallNow(object sender, RoutedEventArgs e)
+    {
+        _showingLastInstallResult = false;
+        _ = RunInstallAsync();
+    }
 
     private void OnSettingsInstallUpdate(object sender, RoutedEventArgs e)
     {
         if (_settingsInstallActionIsInstall)
         {
-            _ = _controller.InstallUpdateAsync();
+            _showingLastInstallResult = false;
+            _ = RunInstallAsync();
             return;
         }
 
         OnViewRelease(sender, e);
     }
 
-    private void OnRecheckUpdates(object sender, RoutedEventArgs e) =>
+    /// <summary>
+    /// Runs the silent install and, once the detached helper has been handed
+    /// off successfully, requests our own graceful shutdown so the helper's
+    /// wait for this process to exit does not stall indefinitely on the user
+    /// closing the app manually.
+    /// </summary>
+    private async Task RunInstallAsync()
+    {
+        var handoffSucceeded = await _controller.InstallUpdateAsync();
+        if (handoffSucceeded)
+            ((App)Application.Current).RequestShutdown(AppShutdownReason.UpdateInstall);
+    }
+
+    private void OnRecheckUpdates(object sender, RoutedEventArgs e)
+    {
+        _showingLastInstallResult = false;
         _updateActions.Recheck();
+    }
 
     private void HandleUpdateTrayAction()
     {

@@ -167,6 +167,38 @@ public class UpdateInstallerTests
         Assert.Equal("1.5.0", installer.State.Version.ToString());
     }
 
+    [Fact]
+    public async Task A_new_download_is_refused_while_an_install_is_in_progress()
+    {
+        var installGate = new TaskCompletionSource();
+        var downloadStarted = false;
+        var installer = Installer(
+            downloader: new ScriptedDownloader((_, _, _) =>
+            {
+                downloadStarted = true;
+                return Task.FromResult("C:\\fake\\package.zip");
+            }),
+            installer: new ScriptedInstaller(async (_, ct) =>
+            {
+                await installGate.Task.WaitAsync(ct);
+            }));
+
+        await installer.DownloadAsync(Update("1.4.0"), UpdateArchitecture.X64);
+        var install = installer.InstallAsync();
+        downloadStarted = false;
+
+        // A new version becoming available mid-install must not be allowed to
+        // start a new download and clobber the in-progress install's state.
+        await installer.DownloadAsync(Update("1.5.0"), UpdateArchitecture.X64);
+
+        Assert.False(downloadStarted);
+        Assert.Equal(UpdateInstallPhase.Installing, installer.State.Phase);
+        Assert.Equal("1.4.0", installer.State.Version.ToString());
+
+        installGate.TrySetResult();
+        await install;
+    }
+
     private static async Task<string> BlockUntilGateAsync(
         TaskCompletionSource gate, CancellationToken ct)
     {

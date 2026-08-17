@@ -25,6 +25,7 @@ internal sealed class UpdatePackageVerifier : IUpdatePackageVerifier
     private const long MaxAttestationResponseBytes = 4_194_304;
 
     private readonly HttpClient _http;
+    private readonly HttpClient _assetHttp;
     private readonly string _productVersion;
     private readonly SigstoreVerifier _sigstore;
     private readonly ILogger<UpdatePackageVerifier> _log;
@@ -32,9 +33,16 @@ internal sealed class UpdatePackageVerifier : IUpdatePackageVerifier
     internal UpdatePackageVerifier(
         HttpClient http,
         string productVersion,
-        ILogger<UpdatePackageVerifier> log)
+        ILogger<UpdatePackageVerifier> log,
+        HttpClient? assetHttp = null)
     {
         _http = http ?? throw new ArgumentNullException(nameof(http));
+        // The checksum sidecar is fetched from its published
+        // browser_download_url, which GitHub answers with a redirect to its
+        // object storage host; a caller may supply a redirect-following
+        // client for that request while keeping the pinned, non-redirecting
+        // client for the same-host GitHub REST API attestation lookup below.
+        _assetHttp = assetHttp ?? http;
         _productVersion = productVersion;
         _log = log ?? throw new ArgumentNullException(nameof(log));
         // The default constructor fetches the Sigstore public-good trust root
@@ -62,6 +70,7 @@ internal sealed class UpdatePackageVerifier : IUpdatePackageVerifier
         CancellationToken cancellationToken)
     {
         var sidecarText = await GetStringAsync(
+                _assetHttp,
                 asset.Checksum.DownloadUrl,
                 MaxChecksumSidecarBytes,
                 cancellationToken)
@@ -108,6 +117,7 @@ internal sealed class UpdatePackageVerifier : IUpdatePackageVerifier
         CancellationToken cancellationToken)
     {
         var attestationsJson = await GetStringAsync(
+                _http,
                 $"https://api.github.com/repos/{Owner}/{Repository}/attestations/sha256:{digest}",
                 MaxAttestationResponseBytes,
                 cancellationToken)
@@ -246,6 +256,7 @@ internal sealed class UpdatePackageVerifier : IUpdatePackageVerifier
     }
 
     private async Task<string> GetStringAsync(
+        HttpClient http,
         string url,
         long maxBytes,
         CancellationToken cancellationToken)
@@ -257,7 +268,7 @@ internal sealed class UpdatePackageVerifier : IUpdatePackageVerifier
             new ProductInfoHeaderValue("WindowsCompanion", _productVersion));
         request.Headers.Add("X-GitHub-Api-Version", "2026-03-10");
 
-        using var response = await _http
+        using var response = await http
             .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
             .ConfigureAwait(false);
         response.EnsureSuccessStatusCode();

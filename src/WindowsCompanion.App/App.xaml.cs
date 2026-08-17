@@ -256,5 +256,6 @@ internal enum AppShutdownReason
 {
     TrayMenu,
     RestartManager,
-    ExternalRequest
+    ExternalRequest,
+    UpdateInstall
 }

@@ -41,16 +41,35 @@ public sealed partial class AppController
         (_config ?? _settings.Load())?.Updates.Mode ?? UpdateMode.AutoInstall;
 
     /// <summary>Persists a new update-check/install preference for the current
-    /// account, if a session exists.</summary>
+    /// account, if a session exists. Switching to <see cref="UpdateMode.AutoInstall"/>
+    /// immediately evaluates the already-known update state instead of waiting
+    /// for the next periodic check; switching away from it cancels any
+    /// automatic download/verify that is still in flight (an install already
+    /// past <see cref="UpdateInstallPhase.ReadyToInstall"/> is left alone, since
+    /// nothing further happens until the user explicitly clicks install).</summary>
     public void SetUpdateMode(UpdateMode mode)
     {
         if (IsDemoMode) return;
         var config = _config ?? _settings.Load();
         if (config is null) return;
 
+        var previousMode = config.Updates.Mode;
         config.Updates.Mode = mode;
         _config ??= config;
         _settings.Save(config);
+
+        if (mode == previousMode) return;
+
+        if (mode == UpdateMode.AutoInstall)
+        {
+            EvaluateAutoDownload(_startupUpdates.State);
+        }
+        else if (previousMode == UpdateMode.AutoInstall
+            && _updateInstaller.State.Phase
+                is UpdateInstallPhase.Downloading or UpdateInstallPhase.Verifying)
+        {
+            _ = _updateInstaller.CancelAsync();
+        }
     }
 
     public UpdateCheckState UpdateState => _startupUpdates.State;
@@ -72,28 +91,46 @@ public sealed partial class AppController
 
     /// <summary>
     /// Runs the verified update that reached <see cref="UpdateInstallPhase.ReadyToInstall"/>.
-    /// The installer closes this process as part of installing, so this call may
-    /// never return normally; failures are published through
+    /// The installer closes this process as part of installing, so a successful
+    /// call may never return in practice; this normally only returns when the
+    /// silent-install handoff to the detached helper itself failed (for
+    /// example, PowerShell could not be started), which is published through
     /// <see cref="InstallStateChanged"/> instead of throwing to the caller.
+    /// Returns <c>true</c> only when the handoff succeeded, so the caller can
+    /// begin its own graceful shutdown instead of waiting indefinitely for a
+    /// helper process that was never started.
     /// </summary>
-    public async Task InstallUpdateAsync()
+    public async Task<bool> InstallUpdateAsync()
     {
         try
         {
             await _updateInstaller.InstallAsync().ConfigureAwait(false);
+            return true;
         }
         catch (Exception ex)
         {
             _loggerFactory
                 .CreateLogger<AppController>()
                 .LogWarning(ex, "The update could not be installed silently.");
+            return false;
         }
     }
 
     private void OnUpdateStateChanged(UpdateCheckState state)
     {
         UpdateStateChanged?.Invoke(state);
+        EvaluateAutoDownload(state);
+    }
 
+    /// <summary>
+    /// Starts a background download for a known available update when in
+    /// Auto-install mode and nothing is already downloading/verifying/ready for
+    /// that exact version. Shared by the update-check callback (a newly found
+    /// update) and <see cref="SetUpdateMode"/> (switching into Auto-install
+    /// while an update was already known from a prior Notify-only check).
+    /// </summary>
+    private void EvaluateAutoDownload(UpdateCheckState state)
+    {
         if (state.Status != UpdateCheckStatus.Available || state.AvailableUpdate is null) return;
         if (CurrentUpdateMode != UpdateMode.AutoInstall) return;
 

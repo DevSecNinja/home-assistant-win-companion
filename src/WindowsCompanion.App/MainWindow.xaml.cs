@@ -87,6 +87,7 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
         _controller.RouteChanged += OnRouteChanged;
         _controller.UpdateStateChanged += OnUpdateStateChanged;
         _controller.InstallStateChanged += OnInstallStateChanged;
+        UpdateBanner.Closed += (_, _) => _showingLastInstallResult = false;
         ApplyUpdateState(_controller.UpdateState);
         ShowLastInstallResultIfAny();
 

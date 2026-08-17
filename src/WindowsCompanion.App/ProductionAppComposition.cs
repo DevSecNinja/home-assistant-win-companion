@@ -34,6 +34,7 @@ internal static class ProductionAppComposition
             Network = new(new WindowsNetworkContextProvider(), true),
             LoggerFactory = new(loggerFactory, true),
             UpdateHttpClient = new(GitHubReleaseClient.CreateHttpClient(), true),
+            UpdateAssetHttpClient = new(GitHubReleaseClient.CreateAssetDownloadHttpClient(), true),
             UpdateNotificationSink = new(notifications),
             EnableStartupUpdates = true,
             WebSocketFactory = static () => new ClientWebSocketAdapter(),

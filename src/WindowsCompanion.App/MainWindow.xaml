@@ -565,7 +565,7 @@
                                 <StackPanel Spacing="3" VerticalAlignment="Center">
                                     <TextBlock Text="Update mode" FontWeight="SemiBold" />
                                     <TextBlock
-                                        Text="Controls whether new versions are downloaded and installed automatically."
+                                        Text="Controls whether new versions are downloaded automatically. Installation always requires your confirmation."
                                         TextWrapping="Wrap"
                                         Style="{StaticResource SettingsDescriptionStyle}" />
                                 </StackPanel>

@@ -108,14 +108,25 @@ public sealed class UpdateInstaller
     {
         ArgumentNullException.ThrowIfNull(update);
 
+        // An install already in progress owns the verified package and is
+        // running the silent installer; a new download must not race it by
+        // replacing _verifiedPackagePath or advancing the revision out from
+        // under it. The next automatic/periodic check will retry once the
+        // install finishes (successfully or not).
+        lock (_gate)
+        {
+            if (_state.Phase == UpdateInstallPhase.Installing) return;
+        }
+
         var asset = UpdateAssetSelector.Select(update.AvailableVersion, update.Assets, architecture);
         if (asset is null)
         {
+            var noAssetRevision = CancelActiveRunAndAdvanceRevision();
             Publish(new(
                 UpdateInstallPhase.Failed,
                 update.AvailableVersion,
                 ErrorMessage: NoAssetMessage,
-                Revision: NextRevision()));
+                Revision: noAssetRevision));
             return;
         }
 
@@ -143,7 +154,7 @@ public sealed class UpdateInstaller
                 return;
             }
 
-            var progress = new Progress<double>(fraction =>
+            var progress = new SynchronousProgress<double>(fraction =>
                 PublishIfCurrent(revision, run, new(
                     UpdateInstallPhase.Downloading,
                     update.AvailableVersion,
@@ -231,33 +242,42 @@ public sealed class UpdateInstaller
     /// </summary>
     public async Task InstallAsync(CancellationToken cancellationToken = default)
     {
-        string path;
-        UpdateInstallState current;
-        long revision;
-        lock (_gate)
-        {
-            current = _state;
-            if (current.Phase != UpdateInstallPhase.ReadyToInstall || _verifiedPackagePath is null)
-                throw new InvalidOperationException("No verified update is ready to install.");
-            path = _verifiedPackagePath;
-            revision = current.Revision;
-        }
-
-        Publish(new(UpdateInstallPhase.Installing, current.Version, 1, Revision: revision));
+        var (path, installing) = BeginInstall();
+        StateChanged?.Invoke(installing);
 
         try
         {
-            await _installer.InstallAsync(path, current.Version, cancellationToken).ConfigureAwait(false);
-            Publish(new(UpdateInstallPhase.Installed, current.Version, 1, Revision: revision));
+            await _installer.InstallAsync(path, installing.Version, cancellationToken).ConfigureAwait(false);
+            Publish(installing with { Phase = UpdateInstallPhase.Installed });
         }
         catch
         {
-            Publish(new(
-                UpdateInstallPhase.Failed,
-                current.Version,
-                ErrorMessage: InstallFailedMessage,
-                Revision: revision));
+            Publish(installing with
+            {
+                Phase = UpdateInstallPhase.Failed,
+                ErrorMessage = InstallFailedMessage
+            });
             throw;
+        }
+    }
+
+    /// <summary>
+    /// Atomically checks that a verified update is ready and transitions to
+    /// <see cref="UpdateInstallPhase.Installing"/> under the same lock as the
+    /// check, so a second concurrent <see cref="InstallAsync"/> call observes
+    /// the new phase and is rejected instead of also invoking the installer.
+    /// </summary>
+    private (string Path, UpdateInstallState Installing) BeginInstall()
+    {
+        lock (_gate)
+        {
+            var current = _state;
+            if (current.Phase != UpdateInstallPhase.ReadyToInstall || _verifiedPackagePath is null)
+                throw new InvalidOperationException("No verified update is ready to install.");
+
+            var installing = current with { Phase = UpdateInstallPhase.Installing };
+            _state = installing;
+            return (_verifiedPackagePath, installing);
         }
     }
 
@@ -272,9 +292,14 @@ public sealed class UpdateInstaller
         return Task.CompletedTask;
     }
 
-    private long NextRevision()
+    private long CancelActiveRunAndAdvanceRevision()
     {
-        lock (_gate) return ++_revision;
+        lock (_gate)
+        {
+            _active?.Cancel();
+            _active = null;
+            return ++_revision;
+        }
     }
 
     private bool PublishIfCurrent(long revision, CancellationTokenSource run, UpdateInstallState state)
@@ -311,5 +336,18 @@ public sealed class UpdateInstaller
         catch (UnauthorizedAccessException)
         {
         }
+    }
+
+    /// <summary>
+    /// Reports progress synchronously on the calling thread, instead of
+    /// <see cref="System.Progress{T}"/>'s marshaling via <c>SynchronizationContext.Post</c>.
+    /// Without this, a queued download-progress callback can execute after a
+    /// later phase (Verifying, ReadyToInstall) was already published on the
+    /// same revision, silently reverting the published state back to
+    /// Downloading.
+    /// </summary>
+    private sealed class SynchronousProgress<T>(Action<T> callback) : IProgress<T>
+    {
+        public void Report(T value) => callback(value);
     }
 }

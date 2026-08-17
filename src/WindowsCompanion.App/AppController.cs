@@ -31,6 +31,7 @@ public sealed partial class AppController : IAsyncDisposable
     private readonly HttpClient _http;
     private readonly ISecretStore _secrets;
     private readonly HttpClient _updateHttp;
+    private readonly HttpClient _updateAssetHttp;
     private readonly IUpdateNotificationSink _updateNotifications;
     private readonly bool _enableStartupUpdates;
     private readonly SessionStore _settings;
@@ -89,6 +90,7 @@ public sealed partial class AppController : IAsyncDisposable
         _lifecycleSignalSourceFactory = dependencies.LifecycleSignalSourceFactory;
         _ownedDependencies = dependencies.OwnedValues().ToArray();
         _updateHttp = dependencies.UpdateHttpClient?.Value ?? _http;
+        _updateAssetHttp = dependencies.UpdateAssetHttpClient?.Value ?? _updateHttp;
         _updateNotifications = dependencies.UpdateNotificationSink?.Value
             ?? new NoOpUpdateNotificationSink();
         _enableStartupUpdates = dependencies.EnableStartupUpdates;
@@ -105,11 +107,12 @@ public sealed partial class AppController : IAsyncDisposable
             ? UpdateArchitecture.Arm64
             : UpdateArchitecture.X64;
         _updateInstaller = new UpdateInstaller(
-            new UpdatePackageDownloader(_updateHttp),
+            new UpdatePackageDownloader(_updateAssetHttp),
             new UpdatePackageVerifier(
                 _updateHttp,
                 installedBuild.Version?.ToString() ?? "0.0.0",
-                _loggerFactory.CreateLogger<UpdatePackageVerifier>()),
+                _loggerFactory.CreateLogger<UpdatePackageVerifier>(),
+                _updateAssetHttp),
             new SilentUpdateInstaller());
         _updateInstaller.StateChanged += OnUpdateInstallStateChanged;
         _lastInstallResult = SilentUpdateInstaller.TakeLastInstallResult();

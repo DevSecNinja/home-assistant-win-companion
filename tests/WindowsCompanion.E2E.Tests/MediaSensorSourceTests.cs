@@ -113,6 +113,36 @@ public sealed class MediaSensorSourceTests
         }
     }
 
+    [Fact]
+    public async Task Enabling_a_media_sensor_publishes_the_freshly_captured_reading_immediately()
+    {
+        var preferences = new SensorPreferences();
+        var probe = new MediaProbe
+        {
+            Snapshot = new MediaSnapshot("Fresh Track", "Fresh Artist", "Fresh Player", MediaPlaybackStatus.Playing)
+        };
+        var source = new MediaSensorSource(preferences, probe.CaptureAsync, TimeSpan.FromMinutes(10));
+        var catalog = new SensorCatalog([source], preferences);
+        catalog.Start(() => { });
+
+        try
+        {
+            // A 10-minute poll interval means only an explicit refresh (via
+            // IRefreshableSensorSource) - never the timer - can be responsible
+            // for the freshly captured title showing up here.
+            var preview = await catalog.SetEnabledAndRefreshAsync(MediaSensorSource.NowPlayingId, true);
+            Assert.Equal("Fresh Track", preview);
+
+            var reading = catalog.Read(new SensorReadContext("Test"))
+                .Single(sensor => sensor.UniqueId == MediaSensorSource.NowPlayingId);
+            Assert.Equal("Fresh Track", reading.State);
+        }
+        finally
+        {
+            catalog.Stop();
+        }
+    }
+
     private sealed class ScopeRecordingProbe
     {
         private readonly List<IReadOnlySet<string>> _requests = [];

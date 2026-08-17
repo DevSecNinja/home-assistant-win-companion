@@ -26,7 +26,7 @@ namespace WindowsCompanion_App.Services;
 /// sensor alone cannot leak Now Playing metadata, matching the per-sensor
 /// isolation <see cref="SensorPreviewGate"/> guarantees elsewhere.
 /// </remarks>
-public sealed class MediaSensorSource : ISensorSource
+public sealed class MediaSensorSource : ISensorSource, IRefreshableSensorSource
 {
     public const string NowPlayingId = "media_now_playing";
     public const string PlayingId = "media_playing";
@@ -120,13 +120,24 @@ public sealed class MediaSensorSource : ISensorSource
         _onChanged = null;
     }
 
+    /// <summary>
+    /// Runs one collection now and publishes it to <see cref="_snapshot"/>, so
+    /// enabling a media sensor gets a settings-sync read of the freshly
+    /// captured value instead of racing the next scheduled poll. This never
+    /// calls <c>onChanged</c> itself (see <see cref="PollAsync"/>) because the
+    /// caller already reads the fresh value directly.
+    /// </summary>
+    public Task RefreshAsync(CancellationToken cancellationToken = default) =>
+        _loop.RunOnceAsync(cancellationToken);
+
     private async Task PollAsync(SensorPollReason reason, CancellationToken cancellationToken)
     {
         var enabled = EnabledIds();
         var current = await _capture(enabled, cancellationToken).ConfigureAwait(false);
         cancellationToken.ThrowIfCancellationRequested();
 
-        if (reason == SensorPollReason.Scheduled && _snapshot.TryUpdate(current))
+        var changed = _snapshot.TryUpdate(current);
+        if (reason == SensorPollReason.Scheduled && changed)
             _onChanged?.Invoke();
     }
 

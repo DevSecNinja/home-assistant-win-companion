@@ -59,6 +59,22 @@ public partial class App : Application
         _instanceMutex = new Mutex(initiallyOwned: false, InstanceMutexName);
 #endif
         InitializeComponent();
+        UnhandledException += OnUnhandledException;
+    }
+
+    /// <summary>
+    /// Last-resort safety net for exceptions that escape UI event handlers and
+    /// dispatcher callbacks. Without this, an uncaught exception on the UI thread
+    /// (for example from a XAML/WinRT resource load) surfaces as an unrecoverable
+    /// native crash (STATUS_STOWED_EXCEPTION via combase.dll) instead of a normal
+    /// .NET exception, and nothing gets logged before the process dies.
+    /// </summary>
+    private void OnUnhandledException(
+        object sender,
+        Microsoft.UI.Xaml.UnhandledExceptionEventArgs e)
+    {
+        _log.LogCritical(e.Exception, "Unhandled UI exception; keeping the app alive.");
+        e.Handled = true;
     }
 
     private static ILoggerFactory CreateProductionLoggerFactory() =>

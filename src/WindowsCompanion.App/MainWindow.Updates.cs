@@ -21,10 +21,7 @@ public sealed partial class MainWindow
         if (_exiting || state.Revision < _controller.UpdateState.Revision) return;
 
         var presentation = UpdateStatusPresentation.Create(state, showKnownUpdate);
-        TrayIcon.IconSource = new BitmapImage(new Uri(
-            state.AvailableUpdate is null
-                ? "ms-appx:///Assets/AppIcon.ico"
-                : "ms-appx:///Assets/UpdateIcon.ico"));
+        ApplyTrayIcon(state.AvailableUpdate is null);
         TrayUpdateItem.Text = presentation.TrayActionLabel;
         UpdateBannerTitleText.Text = presentation.BannerTitle;
         var messageChanged = !string.Equals(
@@ -109,6 +106,28 @@ public sealed partial class MainWindow
         var state = _controller.UpdateState;
         if (_updateActions.InvokeTrayAction(state))
             ApplyUpdateState(state, showKnownUpdate: true);
+    }
+
+    /// <summary>
+    /// Swaps the tray icon between the normal and "update available" glyph.
+    /// Best-effort: a bad or missing packaged resource must not crash the app,
+    /// so any failure here just leaves the previous icon in place.
+    /// </summary>
+    private void ApplyTrayIcon(bool isDefault)
+    {
+        try
+        {
+            TrayIcon.IconSource = new BitmapImage(new Uri(
+                isDefault
+                    ? "ms-appx:///Assets/AppIcon.ico"
+                    : "ms-appx:///Assets/UpdateIcon.ico"));
+        }
+        catch (Exception ex)
+        {
+            FileLoggerProvider.Write(
+                $"{DateTimeOffset.Now:yyyy-MM-dd HH:mm:ss.fff} ERR MainWindow: "
+                + $"Could not load the tray icon.{Environment.NewLine}{ex}");
+        }
     }
 
     private static void OpenReleasePage(Uri releasePage)

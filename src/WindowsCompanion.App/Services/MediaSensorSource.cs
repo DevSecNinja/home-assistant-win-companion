@@ -197,8 +197,12 @@ public sealed class MediaSensorSource : ISensorSource, IRefreshableSensorSource
             // activated one, not the one actually making sound - a paused
             // player can outrank a playing one. Prefer any session Windows
             // reports as actively playing, falling back to the current
-            // session only when nothing is playing.
-            var session = SelectPlayingSession(manager) ?? manager.GetCurrentSession();
+            // session only when nothing is playing. The selection policy
+            // itself lives in Core (MediaSessionSelector) so it is unit
+            // tested; only the WinRT enumeration and per-session status
+            // lookup live here.
+            var session = MediaSessionSelector.SelectPlaying(manager.GetSessions(), TryGetStatus)
+                ?? manager.GetCurrentSession();
             if (session is null) return MediaSnapshot.Empty;
 
             var status = TryGetStatus(session);
@@ -227,18 +231,6 @@ public sealed class MediaSensorSource : ISensorSource, IRefreshableSensorSource
         {
             return MediaSnapshot.Empty;
         }
-    }
-
-    private static GlobalSystemMediaTransportControlsSession? SelectPlayingSession(
-        GlobalSystemMediaTransportControlsSessionManager manager)
-    {
-        foreach (var candidate in manager.GetSessions())
-        {
-            if (TryGetStatus(candidate) == MediaPlaybackStatus.Playing)
-                return candidate;
-        }
-
-        return null;
     }
 
     /// <summary>

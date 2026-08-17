@@ -117,19 +117,22 @@ public sealed class MediaSensorSourceTests
     public async Task Enabling_a_media_sensor_publishes_the_freshly_captured_reading_immediately()
     {
         var preferences = new SensorPreferences();
-        var probe = new MediaProbe
-        {
-            Snapshot = new MediaSnapshot("Fresh Track", "Fresh Artist", "Fresh Player", MediaPlaybackStatus.Playing)
-        };
+        // The first capture (returned Empty) is consumed by media_playing
+        // starting the source. Only the later Now Playing refresh can produce
+        // the second, fresh snapshot - so a broken RefreshAsync leaves the
+        // reading at "nothing playing" and fails this test.
+        var probe = new SequencedMediaProbe(
+            MediaSnapshot.Empty,
+            new MediaSnapshot("Fresh Track", "Fresh Artist", "Fresh Player", MediaPlaybackStatus.Playing));
         var source = new MediaSensorSource(preferences, probe.CaptureAsync, TimeSpan.FromMinutes(10));
         var catalog = new SensorCatalog([source], preferences);
         catalog.Start(() => { });
 
         try
         {
-            // A 10-minute poll interval means only an explicit refresh (via
-            // IRefreshableSensorSource) - never the timer - can be responsible
-            // for the freshly captured title showing up here.
+            catalog.SetEnabled(MediaSensorSource.PlayingId, true);
+            await probe.WaitForCallsAsync(1);
+
             var preview = await catalog.SetEnabledAndRefreshAsync(MediaSensorSource.NowPlayingId, true);
             Assert.Equal("Fresh Track", preview);
 
@@ -140,6 +143,25 @@ public sealed class MediaSensorSourceTests
         finally
         {
             catalog.Stop();
+        }
+    }
+
+    private sealed class SequencedMediaProbe(MediaSnapshot first, MediaSnapshot afterFirst)
+    {
+        private readonly Channel<bool> _calls = Channel.CreateUnbounded<bool>();
+        private int _callCount;
+
+        public Task<MediaSnapshot> CaptureAsync(IReadOnlySet<string> requested, CancellationToken cancellationToken)
+        {
+            var call = Interlocked.Increment(ref _callCount);
+            _calls.Writer.TryWrite(true);
+            return Task.FromResult(call == 1 ? first : afterFirst);
+        }
+
+        public async Task WaitForCallsAsync(int count)
+        {
+            for (var i = 0; i < count; i++)
+                await _calls.Reader.ReadAsync().AsTask().WaitAsync(Timeout);
         }
     }
 

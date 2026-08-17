@@ -109,3 +109,64 @@ public class MediaSensorTests
         Assert.Equal(255, ((string)attributes["app_name"]).Length);
     }
 }
+
+/// <summary>
+/// <see cref="MediaSessionSelector"/> covers the multi-session regression:
+/// a "current" session that Windows reports as paused must not win over a
+/// different session that is genuinely playing.
+/// </summary>
+public class MediaSessionSelectorTests
+{
+    private readonly record struct FakeSession(string Id, MediaPlaybackStatus Status);
+
+    [Fact]
+    public void A_playing_alternate_is_preferred_over_a_paused_current_session()
+    {
+        var candidates = new[]
+        {
+            new FakeSession("current-paused", MediaPlaybackStatus.Paused),
+            new FakeSession("alternate-playing", MediaPlaybackStatus.Playing)
+        };
+
+        var selected = MediaSessionSelector.SelectPlaying(candidates, s => s.Status);
+
+        Assert.Equal("alternate-playing", selected.Id);
+    }
+
+    [Fact]
+    public void The_first_playing_candidate_wins_when_several_are_playing()
+    {
+        var candidates = new[]
+        {
+            new FakeSession("first-playing", MediaPlaybackStatus.Playing),
+            new FakeSession("second-playing", MediaPlaybackStatus.Playing)
+        };
+
+        var selected = MediaSessionSelector.SelectPlaying(candidates, s => s.Status);
+
+        Assert.Equal("first-playing", selected.Id);
+    }
+
+    [Fact]
+    public void No_playing_candidate_falls_back_to_the_default_for_the_caller_to_handle()
+    {
+        var candidates = new[]
+        {
+            new FakeSession("current-paused", MediaPlaybackStatus.Paused),
+            new FakeSession("closed", MediaPlaybackStatus.Closed)
+        };
+
+        var selected = MediaSessionSelector.SelectPlaying(candidates, s => s.Status);
+
+        Assert.Null(selected.Id);
+    }
+
+    [Fact]
+    public void An_empty_candidate_set_falls_back_to_the_default()
+    {
+        var selected = MediaSessionSelector.SelectPlaying(
+            Array.Empty<FakeSession>(), s => s.Status);
+
+        Assert.Null(selected.Id);
+    }
+}

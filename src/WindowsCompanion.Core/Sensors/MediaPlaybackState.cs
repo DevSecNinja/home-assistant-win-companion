@@ -109,3 +109,37 @@ public static class MediaPlaybackFormatter
     private static string Bound(string value) =>
         value.Length <= MaxStateLength ? value : value[..MaxStateLength];
 }
+
+/// <summary>
+/// Picks which SMTC session to read from a set of candidates, independent of
+/// the WinRT session type itself, so the policy is unit-testable in Core.
+/// </summary>
+/// <remarks>
+/// Windows' own "current" session is often just the most recently activated
+/// one, not the one actually making sound - a paused player can outrank a
+/// playing one. Preferring whichever candidate is actively <c>Playing</c>
+/// over an arbitrary "current" fallback is the fix for that: a paused
+/// Spotify session can no longer mask media genuinely playing in, say, a
+/// browser tab.
+/// </remarks>
+public static class MediaSessionSelector
+{
+    /// <summary>
+    /// Returns the first candidate reporting <see cref="MediaPlaybackStatus.Playing"/>,
+    /// or <c>default</c> when none are - the caller is expected to fall back to
+    /// its own notion of "the current session" in that case.
+    /// </summary>
+    public static T? SelectPlaying<T>(IEnumerable<T> candidates, Func<T, MediaPlaybackStatus> statusOf)
+    {
+        ArgumentNullException.ThrowIfNull(candidates);
+        ArgumentNullException.ThrowIfNull(statusOf);
+
+        foreach (var candidate in candidates)
+        {
+            if (statusOf(candidate) == MediaPlaybackStatus.Playing)
+                return candidate;
+        }
+
+        return default;
+    }
+}

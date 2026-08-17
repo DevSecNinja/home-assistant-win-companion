@@ -99,8 +99,7 @@ T005 is independently reviewable after the examples index from T003 exists.
 3. Complete T005 so future automation contributions follow a stable convention.
 4. Complete T006-T007 for discoverability and end-to-end validation.
 
-All seven tasks follow the required checklist format and include explicit file
-paths.
+All tasks follow the required checklist format and include explicit file paths.
 
 ---
 
@@ -112,3 +111,4 @@ paths.
 - [X] T010 Resolve the heartbeat by exact device name and newest sensor report in `examples/home-assistant/templates/device-connectivity/template.yaml`
 - [X] T011 Trim control-block whitespace from the rendered state in `examples/home-assistant/templates/device-connectivity/template.yaml`
 - [X] T012 Accept apostrophes in device names and document name uniqueness in `examples/home-assistant/templates/device-connectivity/`
+- [X] T013 Document the Home Assistant restart false-positive window in `examples/home-assistant/templates/device-connectivity/README.md`

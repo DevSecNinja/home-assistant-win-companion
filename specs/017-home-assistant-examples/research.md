@@ -36,6 +36,11 @@ messages from the client.
   automation, and template blueprint installation is not a fully pre-populated
   one-click helper flow.
 
+**Restart limitation**: Home Assistant can assign a fresh `last_reported` when it
+restores sensor states during startup. A PC that was already offline can
+therefore appear connected for one timeout window after Home Assistant restarts.
+The user-facing example documents and accepts this server-side limitation.
+
 ## Decision: Default to a three-minute timeout
 
 **Rationale**: Windows Companion normally synchronizes once per minute. A

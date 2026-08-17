@@ -63,6 +63,9 @@ the timeout comfortably longer than the companion's reporting interval.
   disconnected.
 - Abrupt shutdown and network loss become visible after the configured timeout.
 - A new report returns the binary sensor to connected.
+- After Home Assistant restarts, restored sensor states can receive a fresh
+  `last_reported`. An already-offline PC may therefore appear connected until the
+  timeout expires again.
 
 Templates using `now()` are evaluated once per minute. The status can therefore
 change up to one additional minute after the timeout or after reporting resumes.

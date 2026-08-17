@@ -242,9 +242,15 @@ public sealed partial class MainWindow
             row.Children.Add(text);
             row.Children.Add(toggle);
 
+            var searchText = definition.Name + "\n" + definition.Description;
+            if (definition.Privacy == SensorPrivacy.Sensitive)
+                searchText += "\nsensitive";
+            if (LifecycleSensorAdvisory.IsAdvisedSensor(definition.UniqueId))
+                searchText += "\n" + LifecycleSensorAdvisory.Badge;
+
             SensorList.Children.Add(new Border
             {
-                Tag = definition.Name,
+                Tag = searchText,
                 Background = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources[
                     "CardBackgroundFillColorDefaultBrush"],
                 BorderBrush = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources[

@@ -157,6 +157,29 @@ public sealed class HomeAssistantClient : IHomeAssistantClient
         _log.LogDebug("Sensor update accepted ({Count} sensors).", sensors.Count);
     }
 
+    public async Task UpdateLocationAsync(string webhookId, LocationUpdate location, CancellationToken ct = default)
+    {
+        object data;
+        if (location.HasFix)
+        {
+            data = new
+            {
+                gps = new[] { location.Latitude!.Value, location.Longitude!.Value },
+                gps_accuracy = location.GpsAccuracy!.Value
+            };
+        }
+        else
+        {
+            // No fix: send location_name so HA clears the GPS and shows a
+            // meaningful state instead of keeping the last stale coordinate.
+            data = new { location_name = location.LocationName ?? "not_home" };
+        }
+
+        var payload = new { type = "update_location", data };
+        await PostWebhookAsync(webhookId, payload, ct).ConfigureAwait(false);
+        _log.LogDebug("Location update sent (hasFix={HasFix}).", location.HasFix);
+    }
+
     /// <summary>
     /// Reads the per-sensor results. Parsed rather than string-matched, so it does
     /// not depend on Home Assistant's JSON spacing and cannot be fooled by a sensor

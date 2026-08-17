@@ -297,4 +297,47 @@ public class HomeAssistantClientTests
 
         Assert.Null(await CreateClient(handler).GetConfigAsync());
     }
+
+    [Fact]
+    public async Task UpdateLocationAsync_sends_gps_array_and_accuracy_when_fix_available()
+    {
+        var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("{}", Encoding.UTF8, "application/json")
+        });
+        var client = CreateClient(handler);
+
+        await client.UpdateLocationAsync("wh-1",
+            new LocationUpdate(47.398, 8.5451, 12));
+
+        var req = Assert.Single(handler.Requests);
+        Assert.Equal("https://ha.local:8123/api/webhook/wh-1", req.RequestUri!.ToString());
+
+        using var doc = JsonDocument.Parse(handler.Bodies[0]);
+        Assert.Equal("update_location", doc.RootElement.GetProperty("type").GetString());
+        var data = doc.RootElement.GetProperty("data");
+        var gps = data.GetProperty("gps");
+        Assert.Equal(47.398, gps[0].GetDouble());
+        Assert.Equal(8.5451, gps[1].GetDouble());
+        Assert.Equal(12, data.GetProperty("gps_accuracy").GetInt32());
+    }
+
+    [Fact]
+    public async Task UpdateLocationAsync_sends_location_name_when_no_fix()
+    {
+        var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("{}", Encoding.UTF8, "application/json")
+        });
+        var client = CreateClient(handler);
+
+        await client.UpdateLocationAsync("wh-1",
+            new LocationUpdate(null, null, null, "not_home"));
+
+        using var doc = JsonDocument.Parse(handler.Bodies[0]);
+        Assert.Equal("update_location", doc.RootElement.GetProperty("type").GetString());
+        var data = doc.RootElement.GetProperty("data");
+        Assert.Equal("not_home", data.GetProperty("location_name").GetString());
+        Assert.False(data.TryGetProperty("gps", out _));
+    }
 }

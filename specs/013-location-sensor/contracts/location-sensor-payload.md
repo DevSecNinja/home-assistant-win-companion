@@ -1,76 +1,64 @@
-# Contract: `location` Home Assistant Sensor Payload
+# Contract: `location` Home Assistant Device Tracker
 
-This is the only external interface this feature adds: the JSON payload sent
-to Home Assistant's `mobile_app` webhook (`register_sensor` on first
-registration, `update_sensor_states` on every sync thereafter), following the
-existing `WindowsCompanion.Core.Models.Sensor` shape used by every other
-sensor in this app.
+This feature uses the Home Assistant `mobile_app` webhook `update_location`
+command to update the built-in device tracker entity for this companion device.
+This is the same mechanism used by the iOS and Android companion apps, enabling
+zone-based states (e.g. "Home", "Work") on the map rather than raw coordinates.
 
-## Registration / update payload
+The location sensor still uses `LocationSensorSource` and `SensorCatalog` for
+lifecycle management (start/stop, privacy gating, enable/disable), but its data
+is sent via `update_location` rather than `register_sensor`/`update_sensor_states`.
+
+## Ready payload (`update_location` webhook)
 
 ```json
 {
-  "unique_id": "location",
-  "type": "sensor",
-  "name": "Location",
-  "state": "47.398000,8.545100",
-  "attributes": {
-    "latitude": 47.398000,
-    "longitude": 8.545100,
-    "gps_accuracy": 12.5
-  },
-  "icon": "mdi:crosshairs-gps"
+  "type": "update_location",
+  "data": {
+    "gps": [47.398000, 8.545100],
+    "gps_accuracy": 12
+  }
 }
 ```
 
-- `state`: `"{latitude:F6},{longitude:F6}"` (decimal degrees, WGS84, 6 decimal
-  places - roughly 0.1 m of precision, which is a formatting choice, not
-  evidence of that much real-world accuracy). Home Assistant sensor state must
-  be a string; this keeps both coordinates in one entity, matching the
-  Assumption in `spec.md` that this ships as one combined sensor rather than
-  separate latitude/longitude entities.
-- `attributes.latitude` / `attributes.longitude`: the same coordinate as
-  numeric `double` values (not packed into a string), so a Home Assistant
-  template sensor, automation trigger, or `zone` distance calculation can
-  consume them directly without parsing `state`. Present only when `state`
-  reflects a real fix.
-- `attributes.gps_accuracy`: horizontal accuracy in meters, a `double`. Present
-  only when `state` reflects a real fix.
-- No `device_class`/`unit_of_measurement`/`state_class` - a lat/long pair is
-  not a Home Assistant numeric sensor class; it is presented the same way a
-  Wi-Fi BSSID or domain name sensor is (a plain string state with supporting
-  attributes).
+- `data.gps`: `[latitude, longitude]` array of numeric doubles (WGS84).
+- `data.gps_accuracy`: horizontal accuracy in meters, integer.
 
 ## Unavailable / permission-denied payload
 
 ```json
 {
-  "unique_id": "location",
-  "type": "sensor",
-  "name": "Location",
-  "state": "Location permission required",
-  "icon": "mdi:crosshairs-question"
+  "type": "update_location",
+  "data": {
+    "location_name": "not_home"
+  }
 }
 ```
 
-- No `attributes` key when there is no fix (mirrors `Sensor.Attributes`'s
-  `JsonIgnoreCondition.WhenWritingNull`; Home Assistant simply sees no
-  attributes rather than nulled-out coordinate fields).
-- `state` text distinguishes "permission/Location Services problem, go fix it
-  in Settings" (`"Location permission required"`) from "temporarily no fix"
-  (`"Unavailable"`), per FR-005/User Story 3.
+- When no fix is available (permission denied, Location Services off, or
+  positioning timeout), the companion sends `location_name` without GPS data so
+  Home Assistant clears the stale position (FR-005). This prevents the device
+  tracker from showing an outdated coordinate indefinitely.
 
-## Disabled sensor payload
+## Sensor registration
 
-Unchanged from every other opt-in sensor: when the user disables a
-previously-enabled Location sensor, `SensorCatalog`/`SensorSyncService` send
-`"disabled": true` for `unique_id: "location"` so Home Assistant marks the
-entity unavailable, exactly as for Wi-Fi SSID/BSSID today. No feature-specific
-behavior is introduced here.
+The location sensor is **not** registered via `register_sensor` or updated via
+`update_sensor_states`. It is excluded from the normal sensor batch in
+`SensorSyncService` and sent exclusively through `update_location`.
+
+A previously registered legacy `location` sensor entity (from older versions) is
+retired on the next sync: `SensorSyncService` detects it is no longer produced by
+any source and sends `disabled: true` through `register_sensor`, marking the stale
+entity unavailable in Home Assistant.
+
+## Disabled behavior
+
+When the user disables the Location sensor toggle, `SensorCatalog` stops the
+`LocationSensorSource`. No location query occurs, no `update_location` is sent,
+and the device tracker retains whatever state Home Assistant last recorded (which
+is standard device tracker behavior for offline devices).
 
 ## Compatibility
 
-This is an additive, purely new `unique_id`. It does not change the schema,
-webhook actions, or behavior of any existing sensor, and requires no Home
-Assistant-side configuration beyond the existing `mobile_app` integration
-already required for every other sensor this companion reports.
+This is the standard `mobile_app` device tracker mechanism and requires no
+Home Assistant-side configuration beyond the existing `mobile_app` integration.

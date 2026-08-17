@@ -24,6 +24,13 @@ public interface IHomeAssistantClient
     Task UpdateSensorsAsync(string webhookId, IReadOnlyList<Sensor> sensors, CancellationToken ct = default);
 
     /// <summary>
+    /// Updates the device tracker location via the <c>update_location</c> webhook command.
+    /// This is the proper mobile_app mechanism for reporting device location on the map,
+    /// enabling zone-based state (e.g. "Home") rather than raw coordinates.
+    /// </summary>
+    Task UpdateLocationAsync(string webhookId, LocationUpdate location, CancellationToken ct = default);
+
+    /// <summary>
     /// Asks the instance behind this address to describe itself through the
     /// existing webhook (<c>get_config</c>). Returns null when the webhook is not
     /// known there, which is how a different instance is detected. Never creates

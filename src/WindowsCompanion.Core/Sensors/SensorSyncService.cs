@@ -71,9 +71,17 @@ public sealed class SensorSyncService
     private async Task SyncCoreAsync(string webhookId, SensorReadContext context, CancellationToken ct)
     {
         var readings = _catalog.Read(context);
+
+        // Location is sent via update_location (device tracker), not as a regular sensor.
+        var locationReading = readings.FirstOrDefault(s =>
+            string.Equals(s.UniqueId, LocationSensorSource.LocationId, StringComparison.Ordinal));
+        var sensorReadings = locationReading is null
+            ? readings
+            : readings.Where(s => s != locationReading).ToList();
+
         var changed = false;
 
-        foreach (var sensor in readings)
+        foreach (var sensor in sensorReadings)
         {
             if (_registered.ContainsKey(sensor.UniqueId)) continue;
 
@@ -89,7 +97,7 @@ public sealed class SensorSyncService
 
         // Anything Home Assistant knows about that we no longer produce: either the
         // user switched it off, or it was removed from the app entirely.
-        var live = readings.Select(r => r.UniqueId).ToHashSet(StringComparer.Ordinal);
+        var live = sensorReadings.Select(r => r.UniqueId).ToHashSet(StringComparer.Ordinal);
         foreach (var id in _registered.Keys.Where(id => !live.Contains(id)).ToList())
         {
             var known = _registered[id];
@@ -108,37 +116,53 @@ public sealed class SensorSyncService
 
         if (changed) _persist?.Invoke();
 
-        if (readings.Count == 0) return;
-
-        try
+        if (sensorReadings.Count > 0)
         {
-            await _client.UpdateSensorsAsync(webhookId, readings, ct).ConfigureAwait(false);
-        }
-        catch (HomeAssistantRejectedException ex)
-        {
-            // "not_registered" means Home Assistant has forgotten a sensor, usually
-            // because the entity was deleted there. Clearing local state lets the
-            // next sync re-register it; without this it would send updates for a
-            // sensor HA does not know about, forever.
-            if (ex.SensorsUnregistered)
+            try
             {
-                _log.LogWarning(ex, "Home Assistant no longer knows these sensors; re-registering.");
+                await _client.UpdateSensorsAsync(webhookId, sensorReadings, ct).ConfigureAwait(false);
+            }
+            catch (HomeAssistantRejectedException ex)
+            {
+                if (ex.SensorsUnregistered)
+                {
+                    _log.LogWarning(ex, "Home Assistant no longer knows these sensors; re-registering.");
+                    _registered.Clear();
+                    _persist?.Invoke();
+                }
+
+                throw;
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _log.LogDebug("Sensor update failed; registrations will be refreshed on the next sync "
+                              + "({ErrorType}).", ex.GetType().Name);
                 _registered.Clear();
                 _persist?.Invoke();
+                throw;
+            }
+        }
+
+        // Send location via update_location so Home Assistant updates the device
+        // tracker entity (shows zone names on the map, not raw coordinates).
+        if (locationReading is not null)
+        {
+            Models.LocationUpdate locationUpdate;
+            if (locationReading.Attributes is { } attrs
+                && attrs.TryGetValue("latitude", out var latObj) && latObj is double lat
+                && attrs.TryGetValue("longitude", out var lngObj) && lngObj is double lng
+                && attrs.TryGetValue("gps_accuracy", out var accObj) && accObj is double acc)
+            {
+                locationUpdate = new Models.LocationUpdate(lat, lng, (int)acc);
+            }
+            else
+            {
+                // No fix (permission denied or unavailable): clear GPS so HA does
+                // not keep showing the last stale position (FR-005).
+                locationUpdate = new Models.LocationUpdate(null, null, null, "not_home");
             }
 
-            // A format rejection is a bug in what we send, not stale registration:
-            // re-registering would loop forever. Surface it and leave state alone.
-            throw;
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            // A restarted HA may have forgotten our sensors; force re-registration next cycle.
-            _log.LogDebug("Sensor update failed; registrations will be refreshed on the next sync "
-                          + "({ErrorType}).", ex.GetType().Name);
-            _registered.Clear();
-            _persist?.Invoke();
-            throw;
+            await _client.UpdateLocationAsync(webhookId, locationUpdate, ct).ConfigureAwait(false);
         }
     }
 }

@@ -75,6 +75,7 @@ commands, and repository conventions.
 | --- | --- |
 | End users | [User guide](docs/user-guide.md) |
 | Installation and updates | [Installation guide](docs/installation.md) |
+| Home Assistant configuration | [Examples](examples/home-assistant/) |
 | Developers | [Developer guide](docs/development.md) |
 | Home Assistant and Windows behavior | [Protocol and platform notes](docs/protocol-notes.md) |
 | Contributors | [Contributing](CONTRIBUTING.md) |

@@ -82,7 +82,16 @@ Initial sensor instances:
   `measurement`, entity_category `diagnostic`, state = integer 0–100.
 - **battery_state**: sensor, device_class `enum`, icon `mdi:battery-charging`,
   entity_category `diagnostic`, state ∈ { `charging`, `discharging`, `full`,
-  `not_charging`, `plugged in`, `unavailable` }.
+  `not_charging`, `plugged in`, `unavailable` }. Attributes: `ac_online`
+  (bool, see `ac_power` below), `has_battery` (bool).
+- **ac_power**: binary_sensor, device_class `plug`, entity_category
+  `diagnostic`, state = true when mains-connected (`PowerState` ∈
+  `{Charging, Full, NotCharging, PluggedIn}`), false otherwise — including
+  when `PowerState` is `Unknown` (a battery-less desktop is always
+  normalized to `PluggedIn`, so `Unknown` only occurs when
+  `GetSystemPowerStatus` itself fails; that case reports "not connected"
+  rather than guessing a confirmed AC connection from an unavailable
+  reading).
 
 ### SystemStatus (from OS, transient)
 

@@ -15,7 +15,7 @@ per issue [#160](https://github.com/DevSecNinja/home-assistant-win-companion/iss
 - `media_now_playing` (`sensor`) reports the current track title as its state,
   truncated to 255 characters, with `artist`, `app_name` and
   `playback_status` as attributes. It falls back to the source app's name
-  when there is no title, and to `Nothing Playing` when there is no active
+  when there is no title, and to `Idle` when there is no active
   session or neither is available.
 - `media_playing` (`binary_sensor`) is on only while SMTC reports
   `Playing`; Paused/Stopped/Opened/Changing/Closed all report off.

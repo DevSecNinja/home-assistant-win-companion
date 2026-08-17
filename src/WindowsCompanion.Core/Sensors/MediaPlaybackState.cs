@@ -37,7 +37,7 @@ public static class MediaPlaybackFormatter
 {
     public const int MaxStateLength = 255;
 
-    public const string NothingPlaying = "Nothing Playing";
+    public const string NothingPlaying = "Idle";
 
     /// <summary>
     /// The Now Playing sensor's state: the track title, falling back to the app

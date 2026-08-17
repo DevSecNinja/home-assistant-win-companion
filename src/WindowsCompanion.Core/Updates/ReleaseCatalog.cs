@@ -7,13 +7,39 @@ public sealed record ReleaseCandidate(
     string TagName,
     bool IsDraft,
     bool IsPreRelease,
-    string PageUrl);
+    string PageUrl,
+    IReadOnlyList<ReleaseAsset> Assets)
+{
+    public ReleaseCandidate(string tagName, bool isDraft, bool isPreRelease, string pageUrl)
+        : this(tagName, isDraft, isPreRelease, pageUrl, Array.Empty<ReleaseAsset>())
+    {
+    }
+}
+
+/// <summary>
+/// A downloadable file attached to a release, such as a setup package or its
+/// checksum sidecar.
+/// </summary>
+public sealed record ReleaseAsset(
+    string Name,
+    string DownloadUrl,
+    string? DigestSha256 = null);
 
 /// <summary>A newer trusted stable release that may be presented to the user.</summary>
 public sealed record AvailableUpdate(
     SemanticVersion InstalledVersion,
     SemanticVersion AvailableVersion,
-    Uri ReleasePage);
+    Uri ReleasePage,
+    IReadOnlyList<ReleaseAsset> Assets)
+{
+    public AvailableUpdate(
+        SemanticVersion installedVersion,
+        SemanticVersion availableVersion,
+        Uri releasePage)
+        : this(installedVersion, availableVersion, releasePage, Array.Empty<ReleaseAsset>())
+    {
+    }
+}
 
 /// <summary>Parses the public GitHub releases response without making network calls.</summary>
 public static class ReleaseCatalogParser
@@ -51,8 +77,39 @@ public static class ReleaseCatalogParser
             return false;
         }
 
-        releases.Add(new ReleaseCandidate(tag!, draft, preRelease, page!));
+        releases.Add(new ReleaseCandidate(tag!, draft, preRelease, page!, ParseAssets(item)));
         return true;
+    }
+
+    private static IReadOnlyList<ReleaseAsset> ParseAssets(JsonElement item)
+    {
+        if (!item.TryGetProperty("assets", out var assets)
+            || assets.ValueKind != JsonValueKind.Array)
+        {
+            return Array.Empty<ReleaseAsset>();
+        }
+
+        var result = new List<ReleaseAsset>();
+        foreach (var asset in assets.EnumerateArray())
+        {
+            if (asset.ValueKind != JsonValueKind.Object
+                || !TryString(asset, "name", out var name)
+                || !TryString(asset, "browser_download_url", out var url))
+            {
+                continue;
+            }
+
+            string? digest = null;
+            if (TryString(asset, "digest", out var rawDigest)
+                && rawDigest!.StartsWith("sha256:", StringComparison.OrdinalIgnoreCase))
+            {
+                digest = rawDigest["sha256:".Length..];
+            }
+
+            result.Add(new ReleaseAsset(name!, url!, digest));
+        }
+
+        return result;
     }
 
     private static bool TryString(JsonElement item, string property, out string? result)
@@ -108,7 +165,7 @@ public static class UpdatePolicy
             }
 
             if (selected is null || version > selected.AvailableVersion)
-                selected = new AvailableUpdate(installed, version, page!);
+                selected = new AvailableUpdate(installed, version, page!, release.Assets);
         }
 
         return selected;

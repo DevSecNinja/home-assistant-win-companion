@@ -86,7 +86,9 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
         _controller.StateChanged += OnStateChanged;
         _controller.RouteChanged += OnRouteChanged;
         _controller.UpdateStateChanged += OnUpdateStateChanged;
+        _controller.InstallStateChanged += OnInstallStateChanged;
         ApplyUpdateState(_controller.UpdateState);
+        ShowLastInstallResultIfAny();
 
 #if DEBUG
         if (App.TestLaunchOptions is not { SuppressTrayLeftClick: true })
@@ -211,6 +213,7 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
         _controller.StateChanged -= OnStateChanged;
         _controller.RouteChanged -= OnRouteChanged;
         _controller.UpdateStateChanged -= OnUpdateStateChanged;
+        _controller.InstallStateChanged -= OnInstallStateChanged;
         _restartManagerShutdown.Dispose();
         TrayIcon.Dispose();
     }

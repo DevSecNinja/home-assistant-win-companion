@@ -23,6 +23,9 @@ public sealed class SemanticVersion : IComparable<SemanticVersion>, IEquatable<S
 
     public bool IsPreRelease => _preRelease.Length > 0;
 
+    /// <summary>A placeholder version used before any real version is known.</summary>
+    public static SemanticVersion Zero { get; } = new(0, 0, 0, Array.Empty<string>());
+
     public static bool TryParse(string? value, out SemanticVersion? version)
     {
         version = null;

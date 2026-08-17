@@ -14,6 +14,7 @@ public sealed partial class MainWindow
 {
     private bool _loadingStartupSetting;
     private bool _settingsActionBusy;
+    private bool _loadingUpdateMode;
 
     private void RefreshStartupSetting()
     {
@@ -166,7 +167,29 @@ public sealed partial class MainWindow
         SyncSensorsButton.IsEnabled = _connected;
         DisconnectButton.Content = _connected ? "Pause" : "Reconnect";
         SettingsActionInfoBar.IsOpen = false;
+        _loadingUpdateMode = true;
+        UpdateModeComboBox.SelectedIndex = _controller.CurrentUpdateMode switch
+        {
+            UpdateMode.NotifyOnly => 1,
+            UpdateMode.Disabled => 2,
+            _ => 0
+        };
+        _loadingUpdateMode = false;
         RefreshPreferencesSummary();
+    }
+
+    private void OnUpdateModeChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_loadingUpdateMode) return;
+        if (UpdateModeComboBox.SelectedIndex < 0) return;
+
+        var mode = UpdateModeComboBox.SelectedIndex switch
+        {
+            1 => UpdateMode.NotifyOnly,
+            2 => UpdateMode.Disabled,
+            _ => UpdateMode.AutoInstall
+        };
+        _controller.SetUpdateMode(mode);
     }
 
     private void RefreshPreferencesSummary()

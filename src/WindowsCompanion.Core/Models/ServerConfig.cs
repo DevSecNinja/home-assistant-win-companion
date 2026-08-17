@@ -88,6 +88,12 @@ public sealed class ServerConfig
     public Sensors.SensorPreferences Sensors { get; set; } = new();
 
     /// <summary>
+    /// How the companion checks for and installs application updates. Non-secret,
+    /// so it lives here alongside the rest of the configuration.
+    /// </summary>
+    public Updates.UpdatePreferences Updates { get; set; } = new();
+
+    /// <summary>
     /// What this installation has registered with Home Assistant, keyed by unique id.
     /// Persisted so a sensor removed in a later version can be retired rather than
     /// left behind as an entity that never updates again.

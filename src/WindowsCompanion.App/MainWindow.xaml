@@ -130,6 +130,12 @@
                                 Visibility="Collapsed"
                                 Click="OnViewRelease" />
                             <Button
+                                x:Name="InstallNowButton"
+                                Content="Install now"
+                                Style="{StaticResource AccentButtonStyle}"
+                                Visibility="Collapsed"
+                                Click="OnInstallNow" />
+                            <Button
                                 x:Name="RecheckUpdatesButton"
                                 Content="Recheck for updates"
                                 Visibility="Collapsed"
@@ -545,9 +551,34 @@
                                         Content="Install update…"
                                         Style="{StaticResource AccentButtonStyle}"
                                         HorizontalAlignment="Stretch"
-                                        Click="OnViewRelease"
+                                        Click="OnSettingsInstallUpdate"
                                         Visibility="Collapsed" />
                                 </StackPanel>
+                            </Grid>
+                        </Border>
+                        <Border Style="{StaticResource SettingsCardStyle}">
+                            <Grid Padding="16,14" ColumnSpacing="16">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="184" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Spacing="3" VerticalAlignment="Center">
+                                    <TextBlock Text="Update mode" FontWeight="SemiBold" />
+                                    <TextBlock
+                                        Text="Controls whether new versions are downloaded and installed automatically."
+                                        TextWrapping="Wrap"
+                                        Style="{StaticResource SettingsDescriptionStyle}" />
+                                </StackPanel>
+                                <ComboBox
+                                    x:Name="UpdateModeComboBox"
+                                    Grid.Column="1"
+                                    AutomationProperties.AutomationId="Settings.UpdateMode"
+                                    HorizontalAlignment="Stretch"
+                                    SelectionChanged="OnUpdateModeChanged">
+                                    <ComboBoxItem Content="Auto-install updates" Tag="AutoInstall" />
+                                    <ComboBoxItem Content="Notify only" Tag="NotifyOnly" />
+                                    <ComboBoxItem Content="Don't check for updates" Tag="Disabled" />
+                                </ComboBox>
                             </Grid>
                         </Border>
                         <Border Style="{StaticResource SettingsCardStyle}">

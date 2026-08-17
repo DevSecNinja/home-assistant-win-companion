@@ -12,15 +12,43 @@ namespace WindowsCompanion_App;
 public sealed partial class MainWindow
 {
     private readonly UpdateUiActions _updateActions;
+    private bool _settingsInstallActionIsInstall;
+
+    private void ShowLastInstallResultIfAny()
+    {
+        var result = _controller.LastInstallResult;
+        if (result is null) return;
+
+        UpdateBannerTitleText.Text = result.Success
+            ? "Update installed"
+            : "The update could not be installed";
+        UpdateBannerMessage.Text = result.Success
+            ? $"Windows Companion was updated to version {result.Version}."
+            : "The silent install failed. You can open the release page and install it manually.";
+        UpdateBanner.Severity = result.Success
+            ? InfoBarSeverity.Success
+            : InfoBarSeverity.Warning;
+        ViewReleaseButton.Visibility = result.Success ? Visibility.Collapsed : Visibility.Visible;
+        InstallNowButton.Visibility = Visibility.Collapsed;
+        RecheckUpdatesButton.Visibility = Visibility.Visible;
+        RecheckUpdatesButton.IsEnabled = true;
+        UpdateBanner.IsOpen = true;
+    }
 
     private void OnUpdateStateChanged(UpdateCheckState state) =>
         _dispatcher.TryEnqueue(() => ApplyUpdateState(state));
+
+    private void OnInstallStateChanged(UpdateInstallState state) =>
+        _dispatcher.TryEnqueue(() => ApplyUpdateState(_controller.UpdateState));
 
     private void ApplyUpdateState(UpdateCheckState state, bool showKnownUpdate = false)
     {
         if (_exiting || state.Revision < _controller.UpdateState.Revision) return;
 
-        var presentation = UpdateStatusPresentation.Create(state, showKnownUpdate);
+        var presentation = UpdateStatusPresentation.Create(
+            state,
+            showKnownUpdate,
+            _controller.InstallState);
         TrayIcon.IconSource = new BitmapImage(new Uri(
             state.AvailableUpdate is null
                 ? "ms-appx:///Assets/AppIcon.ico"
@@ -40,6 +68,10 @@ public sealed partial class MainWindow
         };
         UpdateBanner.IsOpen = presentation.IsBannerOpen;
         ViewReleaseButton.Visibility = presentation.IsReleaseActionVisible
+            && !presentation.IsInstallBannerActionVisible
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+        InstallNowButton.Visibility = presentation.IsInstallBannerActionVisible
             ? Visibility.Visible
             : Visibility.Collapsed;
         RecheckUpdatesButton.Visibility = presentation.IsRecheckVisible
@@ -63,6 +95,9 @@ public sealed partial class MainWindow
         SettingsInstallUpdateButton.Visibility = presentation.IsSettingsInstallVisible
             ? Visibility.Visible
             : Visibility.Collapsed;
+        SettingsInstallUpdateButton.Content = presentation.SettingsInstallLabel;
+        SettingsInstallUpdateButton.IsEnabled = presentation.IsSettingsInstallEnabled;
+        _settingsInstallActionIsInstall = presentation.IsSettingsInstallActionInstall;
         if (presentation.IsBannerOpen && messageChanged)
         {
             var peer = FrameworkElementAutomationPeer.FromElement(UpdateBannerMessage)
@@ -98,6 +133,19 @@ public sealed partial class MainWindow
         {
             ShowReleaseLaunchFailure();
         }
+    }
+
+    private void OnInstallNow(object sender, RoutedEventArgs e) => _ = _controller.InstallUpdateAsync();
+
+    private void OnSettingsInstallUpdate(object sender, RoutedEventArgs e)
+    {
+        if (_settingsInstallActionIsInstall)
+        {
+            _ = _controller.InstallUpdateAsync();
+            return;
+        }
+
+        OnViewRelease(sender, e);
     }
 
     private void OnRecheckUpdates(object sender, RoutedEventArgs e) =>

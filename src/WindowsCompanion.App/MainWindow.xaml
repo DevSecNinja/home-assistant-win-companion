@@ -903,6 +903,7 @@
         <Grid x:Name="SensorsPanel" Grid.Row="2" Visibility="Collapsed">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
             </Grid.RowDefinitions>
 
@@ -929,8 +930,29 @@
                 </StackPanel>
             </Grid>
 
-            <ScrollViewer Grid.Row="1" Padding="24,0,24,20">
+            <AutoSuggestBox
+                Grid.Row="1"
+                x:Name="SensorSearchBox"
+                AutomationProperties.AutomationId="Sensors.SearchBox"
+                AutomationProperties.Name="Filter sensors"
+                PlaceholderText="Filter sensors…"
+                QueryIcon="Find"
+                Margin="24,0,24,8"
+                MaxWidth="680"
+                HorizontalAlignment="Center"
+                TextChanged="OnSensorFilterChanged" />
+
+            <ScrollViewer Grid.Row="2" Padding="24,0,24,20">
                 <StackPanel MaxWidth="680" HorizontalAlignment="Center" Spacing="12">
+                    <TextBlock
+                        x:Name="SensorSearchEmpty"
+                        AutomationProperties.AutomationId="Sensors.SearchEmpty"
+                        AutomationProperties.LiveSetting="Polite"
+                        Text="No sensors match your search"
+                        Visibility="Collapsed"
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        HorizontalAlignment="Center"
+                        Margin="0,12,0,12" />
                     <StackPanel
                         x:Name="SensorList"
                         AutomationProperties.AutomationId="Sensors.List"

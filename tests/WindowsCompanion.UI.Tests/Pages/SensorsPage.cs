@@ -12,6 +12,31 @@ internal sealed class SensorsPage(Window window)
                 is { IsOffscreen: false },
             "Sensors page did not become visible.");
 
+    internal void SetFilter(string text)
+    {
+        var searchBox = AutomationWait.Element(
+            () => window.FindFirstDescendant(cf =>
+                cf.ByAutomationId("Sensors.SearchBox")),
+            "Sensors.SearchBox");
+        searchBox.AsTextBox().Text = text;
+    }
+
+    internal void ClearFilter() => SetFilter(string.Empty);
+
+    internal bool IsEmptyStateVisible()
+    {
+        var element = window.FindFirstDescendant(cf =>
+            cf.ByAutomationId("Sensors.SearchEmpty"));
+        return element is { IsOffscreen: false };
+    }
+
+    internal bool IsSensorVisible(string sensorId)
+    {
+        var element = window.FindFirstDescendant(cf =>
+            cf.ByAutomationId($"Sensors.Toggle.{sensorId}"));
+        return element is { IsOffscreen: false };
+    }
+
     internal bool IsEnabled(string sensorId)
     {
         var element = Toggle(sensorId);

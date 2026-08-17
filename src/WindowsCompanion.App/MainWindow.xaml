@@ -574,6 +574,7 @@
                                     Grid.Column="1"
                                     AutomationProperties.AutomationId="Settings.UpdateMode"
                                     HorizontalAlignment="Stretch"
+                                    VerticalAlignment="Center"
                                     SelectionChanged="OnUpdateModeChanged">
                                     <ComboBoxItem Content="Auto-install updates" Tag="AutoInstall" />
                                     <ComboBoxItem Content="Notify only" Tag="NotifyOnly" />
@@ -610,12 +611,16 @@
                                     <HyperlinkButton Content="License" NavigateUri="https://github.com/DevSecNinja/home-assistant-win-companion/blob/main/LICENSE" />
                                     <HyperlinkButton Content="SBOM" NavigateUri="https://github.com/DevSecNinja/home-assistant-win-companion/network/dependencies" />
                                 </StackPanel>
-                                <HyperlinkButton
-                                    Content="Enjoying the app? Star the repo on GitHub to show your support ⭐"
-                                    NavigateUri="https://github.com/DevSecNinja/home-assistant-win-companion"
-                                    Margin="0,4,0,0"
-                                    Padding="0"
-                                    FontSize="12" />
+                                <StackPanel Orientation="Horizontal" Margin="0,4,0,0" Spacing="4">
+                                    <TextBlock Text="Enjoying the app?" FontSize="12" VerticalAlignment="Center"
+                                        Style="{StaticResource SettingsDescriptionStyle}" />
+                                    <HyperlinkButton
+                                        Content="Star the repo on GitHub ⭐"
+                                        NavigateUri="https://github.com/DevSecNinja/home-assistant-win-companion"
+                                        Padding="0"
+                                        FontSize="12"
+                                        VerticalAlignment="Center" />
+                                </StackPanel>
                             </StackPanel>
                         </Border>
                     </StackPanel>

@@ -14,6 +14,7 @@ public class MediaSensorTests
     {
         var snapshot = MediaSnapshot.Empty;
 
+        Assert.Equal("Idle", MediaPlaybackFormatter.DescribeTitle(snapshot));
         Assert.Equal(MediaPlaybackFormatter.NothingPlaying, MediaPlaybackFormatter.DescribeTitle(snapshot));
         Assert.Null(MediaPlaybackFormatter.BuildAttributes(snapshot));
         Assert.False(MediaPlaybackFormatter.IsPlaying(snapshot));

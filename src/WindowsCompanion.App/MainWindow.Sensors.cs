@@ -36,9 +36,15 @@ public sealed partial class MainWindow
 
     private void OnCloseSensors(object sender, RoutedEventArgs e)
     {
+        SensorSearchBox.Text = string.Empty;
         _sensorPreviewCancellation.CancelAll();
         RefreshPreferencesSummary();
         ShowView(_sensorReturnView);
+    }
+
+    private void OnSensorFilterChanged(AutoSuggestBox sender, AutoSuggestBoxTextChangedEventArgs args)
+    {
+        ApplySensorFilter();
     }
 
     /// <summary>
@@ -75,6 +81,7 @@ public sealed partial class MainWindow
         }
 
         SensorList.Children.Clear();
+        SensorSearchEmpty.Visibility = Visibility.Collapsed;
         _sensorPreviewTexts.Clear();
         _sensorSettingControls.Clear();
         foreach (var definition in catalog.Definitions)
@@ -218,8 +225,15 @@ public sealed partial class MainWindow
             row.Children.Add(text);
             row.Children.Add(toggle);
 
+            var searchText = definition.Name + "\n" + definition.Description;
+            if (definition.Privacy == SensorPrivacy.Sensitive)
+                searchText += "\nsensitive";
+            if (LifecycleSensorAdvisory.IsAdvisedSensor(definition.UniqueId))
+                searchText += "\n" + LifecycleSensorAdvisory.Badge;
+
             SensorList.Children.Add(new Border
             {
+                Tag = searchText,
                 Background = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources[
                     "CardBackgroundFillColorDefaultBrush"],
                 BorderBrush = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources[
@@ -230,7 +244,29 @@ public sealed partial class MainWindow
             });
         }
 
+        ApplySensorFilter();
         return true;
+    }
+
+    private void ApplySensorFilter()
+    {
+        var filter = SensorSearchBox.Text?.Trim() ?? string.Empty;
+        var anyVisible = false;
+
+        foreach (var child in SensorList.Children)
+        {
+            if (child is Border border && border.Tag is string text)
+            {
+                var matches = filter.Length == 0
+                    || text.Contains(filter, StringComparison.OrdinalIgnoreCase);
+                border.Visibility = matches ? Visibility.Visible : Visibility.Collapsed;
+                if (matches) anyVisible = true;
+            }
+        }
+
+        SensorSearchEmpty.Visibility = anyVisible || filter.Length == 0
+            ? Visibility.Collapsed
+            : Visibility.Visible;
     }
 
     private static void AddSensorMetadataRow(

@@ -119,6 +119,18 @@ unsigned artifacts, and runs Core tests. Linting is delegated by
   `tests\WindowsCompanion.Core.Tests\Golden`. Change them only for an intentional,
   evidence-backed protocol change and update the relevant contract/spec.
 
+## Feature development workflow
+
+- New features must follow the speckit pipeline before implementation:
+  specify → clarify → plan → tasks → analyze → implement.
+- Run `speckit-analyze` after `speckit-tasks` and before implementation to catch
+  inconsistencies early.
+- Run `speckit-converge` after implementation to verify completeness.
+- Feature artifacts (spec.md, plan.md, tasks.md) live under `specs/<feature-name>/`.
+- Do not skip steps. If a feature was started without speckit, first produce the
+  missing artifacts (`speckit-specify`, then `speckit-clarify`, then `speckit-plan`,
+  then `speckit-tasks`) before running `speckit-converge` to reconcile the codebase.
+
 ## Repository workflow
 
 - Record consequential user-visible behavior and Home Assistant/Windows protocol

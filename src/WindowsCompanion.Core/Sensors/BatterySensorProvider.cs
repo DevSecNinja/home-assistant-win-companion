@@ -75,6 +75,12 @@ public static class BatterySensorProvider
     // conservation charging, or a thermal pause), which shows up as "not
     // charging" even though the machine is plugged in. Mains status is derived
     // from PowerState rather than the charging bit alone so it does not flap.
+    //
+    // !HasBattery also covers the case where GetSystemPowerStatus itself fails
+    // (HasBattery: false, PowerState: Unknown) - failing toward "AC connected"
+    // matches this provider's existing fail-safe default (BatteryPercent also
+    // falls back to 100 on the same failure), so a transient read failure does
+    // not surface as a false "unplugged" signal to automations.
     private static bool IsAcOnline(SystemStatus status) =>
         !status.HasBattery || status.PowerState is PowerState.Charging or PowerState.Full
             or PowerState.NotCharging or PowerState.PluggedIn;

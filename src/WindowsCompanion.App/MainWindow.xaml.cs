@@ -121,6 +121,7 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
         AppWindow.Closing += OnWindowClosing;
         AppWindow.Changed += OnAppWindowChanged;
         Activated += OnWindowPresentationChanged;
+        Microsoft.Win32.SystemEvents.PowerModeChanged += OnPowerModeChanged;
         Activated += OnFirstActivated;
         _restartManagerShutdown = new RestartManagerShutdownMonitor(
             _windowHandle,
@@ -227,6 +228,7 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
         _controller.InstallStateChanged -= OnInstallStateChanged;
         AppWindow.Changed -= OnAppWindowChanged;
         Activated -= OnWindowPresentationChanged;
+        Microsoft.Win32.SystemEvents.PowerModeChanged -= OnPowerModeChanged;
         _restartManagerShutdown.Dispose();
         TrayIcon.Dispose();
     }
@@ -313,6 +315,20 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
 
     private void OnWindowPresentationChanged(object sender, WindowActivatedEventArgs args) =>
         UpdateSensorPreviewRefreshState(refreshImmediately: true);
+
+    private void OnPowerModeChanged(object sender, Microsoft.Win32.PowerModeChangedEventArgs args)
+    {
+        if (_exiting) return;
+        _dispatcher.TryEnqueue(() =>
+        {
+            if (_exiting) return;
+
+            if (args.Mode == Microsoft.Win32.PowerModes.Suspend)
+                StopSensorPreviewRefresh();
+            else if (args.Mode == Microsoft.Win32.PowerModes.Resume)
+                UpdateSensorPreviewRefreshState(refreshImmediately: true);
+        });
+    }
 
     private bool IsSensorPreviewPresented() =>
         SensorPreviewPresentation.IsActive(

@@ -1,0 +1,12 @@
+<Project>
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
+  <PropertyGroup>
+    <!--
+      xUnit1051: "Calls to methods which accept CancellationToken should use
+      TestContext.Current.CancellationToken." Suppressed during the xunit v2→v3
+      migration; the fix (536 call sites) is tracked as follow-up work.
+      Remove this once all call sites pass TestContext.Current.CancellationToken.
+    -->
+    <NoWarn>$(NoWarn);xUnit1051</NoWarn>
+  </PropertyGroup>
+</Project>

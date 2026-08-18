@@ -115,7 +115,8 @@ public sealed partial class AppController : IAsyncDisposable
                 installedBuild.Version?.ToString() ?? "0.0.0",
                 _loggerFactory.CreateLogger<UpdatePackageVerifier>(),
                 _updateAssetHttp),
-            new SilentUpdateInstaller());
+            new SilentUpdateInstaller(),
+            _loggerFactory.CreateLogger<UpdateInstaller>());
         _updateInstaller.StateChanged += OnUpdateInstallStateChanged;
         _lastInstallResult = SilentUpdateInstaller.TakeLastInstallResult();
         _login = new OAuthLoginService(_http, _uriLauncher);

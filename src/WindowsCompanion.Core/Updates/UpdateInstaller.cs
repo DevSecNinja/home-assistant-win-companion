@@ -1,3 +1,5 @@
+using Microsoft.Extensions.Logging;
+
 namespace WindowsCompanion.Core.Updates;
 
 /// <summary>Supported CPU architectures for the published setup packages.</summary>
@@ -75,6 +77,7 @@ public sealed class UpdateInstaller
     private readonly IUpdatePackageDownloader _downloader;
     private readonly IUpdatePackageVerifier _verifier;
     private readonly IUpdatePackageInstaller _installer;
+    private readonly ILogger<UpdateInstaller> _log;
     private readonly object _gate = new();
     private readonly SemaphoreSlim _singleFlight = new(1, 1);
     private CancellationTokenSource? _active;
@@ -85,11 +88,13 @@ public sealed class UpdateInstaller
     public UpdateInstaller(
         IUpdatePackageDownloader downloader,
         IUpdatePackageVerifier verifier,
-        IUpdatePackageInstaller installer)
+        IUpdatePackageInstaller installer,
+        ILogger<UpdateInstaller>? logger = null)
     {
         _downloader = downloader ?? throw new ArgumentNullException(nameof(downloader));
         _verifier = verifier ?? throw new ArgumentNullException(nameof(verifier));
         _installer = installer ?? throw new ArgumentNullException(nameof(installer));
+        _log = logger ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<UpdateInstaller>.Instance;
         _state = new(UpdateInstallPhase.NotStarted, SemanticVersion.Zero);
     }
 
@@ -172,8 +177,9 @@ public sealed class UpdateInstaller
             {
                 throw;
             }
-            catch
+            catch (Exception ex)
             {
+                _log.LogWarning(ex, "Failed to download the update package.");
                 PublishIfCurrent(revision, run, new(
                     UpdateInstallPhase.Failed,
                     update.AvailableVersion,
@@ -199,8 +205,9 @@ public sealed class UpdateInstaller
             {
                 throw;
             }
-            catch
+            catch (Exception ex)
             {
+                _log.LogWarning(ex, "Failed to verify the update package.");
                 TryDelete(path);
                 PublishIfCurrent(revision, run, new(
                     UpdateInstallPhase.Failed,

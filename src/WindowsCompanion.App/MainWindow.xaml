@@ -944,7 +944,7 @@
                 QueryIcon="Find"
                 Margin="24,0,24,8"
                 MaxWidth="680"
-                HorizontalAlignment="Center"
+                HorizontalAlignment="Stretch"
                 TextChanged="OnSensorFilterChanged" />
 
             <ScrollViewer Grid.Row="2" Padding="24,0,24,20">

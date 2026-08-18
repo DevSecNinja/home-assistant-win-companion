@@ -108,7 +108,7 @@
     -->
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.3.1" />
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools.WinApp" Version="0.5.0" />
-    <PackageReference Include="Sigstore" Version="0.5.0" />
+    <PackageReference Include="Sigstore" Version="1.0.0" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\WindowsCompanion.Core\WindowsCompanion.Core.csproj" />

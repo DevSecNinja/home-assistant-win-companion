@@ -4,8 +4,6 @@
 
 **Input**: Feature specification from `specs/020-time-zone-offset/spec.md`
 
-**Note**: This template is filled in by the `/speckit-plan` command; its definition describes the execution workflow.
-
 ## Summary
 
 Add a calculation-friendly `utc_offset_seconds` attribute to the existing Time
@@ -15,12 +13,6 @@ schedule the next offset transition while the sensor is enabled. Keep
 deterministic offset and transition calculation in Core for unit testing.
 
 ## Technical Context
-
-<!--
-  ACTION REQUIRED: Replace the content in this section with the technical details
-  for the project. The structure here is presented in advisory capacity to guide
-  the iteration process.
--->
 
 **Language/Version**: C# / .NET 10
 
@@ -64,22 +56,20 @@ and introduce no constitution violation.
 ### Documentation (this feature)
 
 ```text
-specs/[###-feature]/
-├── plan.md              # This file (/speckit-plan command output)
-├── research.md          # Phase 0 output (/speckit-plan command)
-├── data-model.md        # Phase 1 output (/speckit-plan command)
-├── quickstart.md        # Phase 1 output (/speckit-plan command)
-├── contracts/           # Phase 1 output (/speckit-plan command)
-└── tasks.md             # Phase 2 output (/speckit-tasks command - NOT created by /speckit-plan)
+specs/019-time-zone-offset/
+├── checklists/
+│   └── requirements.md
+├── contracts/
+│   └── time-zone-sensor.md
+├── data-model.md
+├── plan.md
+├── quickstart.md
+├── research.md
+├── spec.md
+└── tasks.md
 ```
 
 ### Source Code (repository root)
-<!--
-  ACTION REQUIRED: Replace the placeholder tree below with the concrete layout
-  for this feature. Delete unused options and expand the chosen structure with
-  real paths (e.g., apps/admin, packages/something). The delivered plan must
-  not include Option labels.
--->
 
 ```text
 src/
@@ -98,5 +88,3 @@ tests/
 **Structure Decision**: Extend the existing Core locale/time-zone formatter with
 the deterministic calculation and keep Windows state access in the existing App
 sensor source. Add focused tests to the established hardware sensor test class.
-
-| [e.g., Repository pattern] | [specific problem] | [why direct DB access insufficient] |

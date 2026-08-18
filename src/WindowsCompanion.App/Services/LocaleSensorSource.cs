@@ -33,6 +33,7 @@ public sealed class LocaleSensorSource : ISensorSource
 
     private readonly ChangeGate<(string Locale, string TimeZone, int? UtcOffsetSeconds)> _state =
         new((LocaleFormatter.Unknown, LocaleFormatter.Unknown, null));
+    private readonly object _lifecycleGate = new();
 
     private Action? _onChanged;
     private CancellationTokenSource? _transitionCancellation;
@@ -104,25 +105,40 @@ public sealed class LocaleSensorSource : ISensorSource
 
     public void Start(Action onChanged)
     {
-        _onChanged = onChanged;
-        if (_observing) return;
+        CancellationTokenSource? previous;
+        CancellationTokenSource? current;
+        lock (_lifecycleGate)
+        {
+            _onChanged = onChanged;
+            if (_observing) return;
 
-        _state.Seed(Query());
-        SystemEvents.UserPreferenceChanged += OnUserPreferenceChanged;
-        SystemEvents.TimeChanged += OnTimeChanged;
-        _observing = true;
-        RestartOffsetTransitionMonitor();
+            _state.Seed(Query());
+            SystemEvents.UserPreferenceChanged += OnUserPreferenceChanged;
+            SystemEvents.TimeChanged += OnTimeChanged;
+            _observing = true;
+            (previous, current) = ReplaceOffsetTransitionMonitorLocked();
+        }
+
+        ActivateOffsetTransitionMonitor(previous, current);
     }
 
     public void Stop()
     {
-        if (!_observing) return;
+        CancellationTokenSource? cancellation;
+        lock (_lifecycleGate)
+        {
+            if (!_observing) return;
 
-        _observing = false;
-        SystemEvents.UserPreferenceChanged -= OnUserPreferenceChanged;
-        SystemEvents.TimeChanged -= OnTimeChanged;
-        CancelOffsetTransitionMonitor();
-        _onChanged = null;
+            _observing = false;
+            SystemEvents.UserPreferenceChanged -= OnUserPreferenceChanged;
+            SystemEvents.TimeChanged -= OnTimeChanged;
+            cancellation = _transitionCancellation;
+            _transitionCancellation = null;
+            _monitorOffsetChanges = false;
+            _onChanged = null;
+        }
+
+        CancelAndDispose(cancellation);
     }
 
     private void OnUserPreferenceChanged(object sender, UserPreferenceChangedEventArgs e)
@@ -145,40 +161,63 @@ public sealed class LocaleSensorSource : ISensorSource
 
     private void Publish()
     {
-        if (!_observing) return;
-        if (_state.TryUpdate(Query())) _onChanged?.Invoke();
+        var current = Query();
+        lock (_lifecycleGate)
+        {
+            if (!_observing) return;
+            if (_state.TryUpdate(current)) _onChanged?.Invoke();
+        }
     }
 
     private void SetOffsetMonitoringEnabled(bool enabled)
     {
-        if (_monitorOffsetChanges == enabled) return;
-
-        _monitorOffsetChanges = enabled;
-        if (!_observing) return;
-
-        if (enabled)
+        CancellationTokenSource? previous;
+        CancellationTokenSource? current;
+        lock (_lifecycleGate)
         {
-            RestartOffsetTransitionMonitor();
+            if (_monitorOffsetChanges == enabled) return;
+
+            _monitorOffsetChanges = enabled;
+            (previous, current) = ReplaceOffsetTransitionMonitorLocked();
         }
-        else
-        {
-            CancelOffsetTransitionMonitor();
-        }
+
+        ActivateOffsetTransitionMonitor(previous, current);
     }
 
     private void RestartOffsetTransitionMonitor()
     {
-        CancelOffsetTransitionMonitor();
-        if (!_observing || !_monitorOffsetChanges) return;
+        CancellationTokenSource? previous;
+        CancellationTokenSource? current;
+        lock (_lifecycleGate)
+        {
+            (previous, current) = ReplaceOffsetTransitionMonitorLocked();
+        }
 
-        var cancellation = new CancellationTokenSource();
-        _transitionCancellation = cancellation;
-        _ = MonitorOffsetTransitionsAsync(cancellation.Token);
+        ActivateOffsetTransitionMonitor(previous, current);
     }
 
-    private void CancelOffsetTransitionMonitor()
+    private (CancellationTokenSource? Previous, CancellationTokenSource? Current)
+        ReplaceOffsetTransitionMonitorLocked()
     {
-        var cancellation = Interlocked.Exchange(ref _transitionCancellation, null);
+        var previous = _transitionCancellation;
+        var current = _observing && _monitorOffsetChanges
+            ? new CancellationTokenSource()
+            : null;
+        _transitionCancellation = current;
+        return (previous, current);
+    }
+
+    private void ActivateOffsetTransitionMonitor(
+        CancellationTokenSource? previous,
+        CancellationTokenSource? current)
+    {
+        CancelAndDispose(previous);
+        if (current is not null)
+            _ = MonitorOffsetTransitionsAsync(current.Token);
+    }
+
+    private static void CancelAndDispose(CancellationTokenSource? cancellation)
+    {
         cancellation?.Cancel();
         cancellation?.Dispose();
     }

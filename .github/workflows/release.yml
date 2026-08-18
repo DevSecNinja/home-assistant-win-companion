@@ -124,7 +124,7 @@ jobs:
           format: spdx-json
           output-file: artifacts/release/WindowsCompanion-${{ steps.version.outputs.version }}-win-x64.spdx.json
           # renovate: datasource=github-releases depName=anchore/syft
-          syft-version: v1.50.0
+          syft-version: v1.51.0
           upload-artifact: false
           upload-release-assets: false
       - name: Generate ARM64 SPDX SBOM
@@ -137,7 +137,7 @@ jobs:
           format: spdx-json
           output-file: artifacts/release/WindowsCompanion-${{ steps.version.outputs.version }}-win-arm64.spdx.json
           # renovate: datasource=github-releases depName=anchore/syft
-          syft-version: v1.50.0
+          syft-version: v1.51.0
           upload-artifact: false
           upload-release-assets: false
       - name: Generate SBOM checksums

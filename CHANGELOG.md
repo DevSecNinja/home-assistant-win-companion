@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.9.0](https://github.com/DevSecNinja/home-assistant-win-companion/compare/v0.8.0...v0.9.0) (2026-08-18)
+
+
+### Features
+
+* **sensors:** add UTC offset to time zone sensor ([#197](https://github.com/DevSecNinja/home-assistant-win-companion/issues/197)) ([c786459](https://github.com/DevSecNinja/home-assistant-win-companion/commit/c78645938eb335a30b413b00957b99eb4f294ff3))
+* **sensors:** add WireGuard status sensor ([#196](https://github.com/DevSecNinja/home-assistant-win-companion/issues/196)) ([8ec277e](https://github.com/DevSecNinja/home-assistant-win-companion/commit/8ec277e5054d2d5f9ec5e09fb95703529089de70))
+* **ui:** add search bar to sensors overview ([#177](https://github.com/DevSecNinja/home-assistant-win-companion/issues/177)) ([9b57129](https://github.com/DevSecNinja/home-assistant-win-companion/commit/9b571296d31b995f46351c3735bf2afa62a09b19))
+* **ui:** display HA Core and OS version in connection status card ([#194](https://github.com/DevSecNinja/home-assistant-win-companion/issues/194)) ([d7fa2be](https://github.com/DevSecNinja/home-assistant-win-companion/commit/d7fa2beb83c619eb6ce41b497ee6567418470484))
+* **ui:** polish home screen URL display, add about section, and align media idle state ([#175](https://github.com/DevSecNinja/home-assistant-win-companion/issues/175)) ([3fbe101](https://github.com/DevSecNinja/home-assistant-win-companion/commit/3fbe101c7eaa035954606cd87f6782784708f10c))
+* **ui:** refresh sensor previews automatically ([#198](https://github.com/DevSecNinja/home-assistant-win-companion/issues/198)) ([a5e50f7](https://github.com/DevSecNinja/home-assistant-win-companion/commit/a5e50f7ca5c1feffe00d6bb2016d7cfc48b946e3))
+
 ## [0.8.0](https://github.com/DevSecNinja/home-assistant-win-companion/compare/v0.7.0...v0.8.0) (2026-08-17)
 
 

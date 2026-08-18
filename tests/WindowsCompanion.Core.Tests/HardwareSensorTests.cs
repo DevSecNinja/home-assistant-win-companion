@@ -279,6 +279,75 @@ public class HardwareSensorTests
         Assert.Equal(LocaleFormatter.Unknown, LocaleFormatter.DescribeTimeZone(null, null));
     }
 
+    [Theory]
+    [InlineData(0)]
+    [InlineData(7_200)]
+    [InlineData(-19_800)]
+    [InlineData(20_700)]
+    public void Time_zone_offset_is_reported_as_signed_seconds(int expectedSeconds)
+    {
+        var zone = TimeZoneInfo.CreateCustomTimeZone(
+            $"UTC{expectedSeconds:+#;-#;0}",
+            TimeSpan.FromSeconds(expectedSeconds),
+            "Test zone",
+            "Test zone");
+
+        Assert.Equal(
+            expectedSeconds,
+            LocaleFormatter.UtcOffsetSeconds(zone, DateTimeOffset.UnixEpoch));
+    }
+
+    [Fact]
+    public void Time_zone_offset_attribute_uses_an_explicit_unit()
+    {
+        var attributes = LocaleFormatter.BuildTimeZoneAttributes(7_200);
+
+        Assert.Equal(7_200, attributes["utc_offset_seconds"]);
+        Assert.Single(attributes);
+    }
+
+    [Fact]
+    public void Time_zone_offset_rejects_a_missing_zone()
+    {
+        Assert.Throws<ArgumentNullException>(
+            () => LocaleFormatter.UtcOffsetSeconds(null!, DateTimeOffset.UnixEpoch));
+    }
+
+    [Fact]
+    public void Time_zone_offset_applies_daylight_saving_for_the_requested_instant()
+    {
+        var daylightStart = TimeZoneInfo.TransitionTime.CreateFloatingDateRule(
+            new DateTime(1, 1, 1, 2, 0, 0),
+            3,
+            2,
+            DayOfWeek.Sunday);
+        var daylightEnd = TimeZoneInfo.TransitionTime.CreateFloatingDateRule(
+            new DateTime(1, 1, 1, 2, 0, 0),
+            11,
+            1,
+            DayOfWeek.Sunday);
+        var rule = TimeZoneInfo.AdjustmentRule.CreateAdjustmentRule(
+            new DateTime(2026, 1, 1),
+            new DateTime(2026, 12, 31),
+            TimeSpan.FromHours(1),
+            daylightStart,
+            daylightEnd);
+        var zone = TimeZoneInfo.CreateCustomTimeZone(
+            "Test daylight zone",
+            TimeSpan.FromHours(1),
+            "Test daylight zone",
+            "Test standard time",
+            "Test daylight time",
+            [rule]);
+
+        Assert.Equal(
+            3_600,
+            LocaleFormatter.UtcOffsetSeconds(zone, new DateTimeOffset(2026, 1, 15, 12, 0, 0, TimeSpan.Zero)));
+        Assert.Equal(
+            7_200,
+            LocaleFormatter.UtcOffsetSeconds(zone, new DateTimeOffset(2026, 7, 15, 12, 0, 0, TimeSpan.Zero)));
+    }
+
     [Fact]
     public void Dark_mode_follows_the_app_theme_preference()
     {

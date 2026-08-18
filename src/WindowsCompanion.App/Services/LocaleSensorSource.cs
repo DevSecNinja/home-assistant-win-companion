@@ -27,8 +27,8 @@ public sealed class LocaleSensorSource : ISensorSource
 
     private const string InternationalKey = @"Control Panel\International";
 
-    private readonly ChangeGate<(string Locale, string TimeZone)> _state =
-        new((LocaleFormatter.Unknown, LocaleFormatter.Unknown));
+    private readonly ChangeGate<(string Locale, string TimeZone, int? UtcOffsetSeconds)> _state =
+        new((LocaleFormatter.Unknown, LocaleFormatter.Unknown, null));
 
     private Action? _onChanged;
     private bool _observing;
@@ -86,7 +86,8 @@ public sealed class LocaleSensorSource : ISensorSource
                 Name = "Time Zone",
                 State = current.TimeZone,
                 EntityCategory = "diagnostic",
-                Icon = "mdi:map-clock"
+                Icon = "mdi:map-clock",
+                Attributes = BuildTimeZoneAttributes(current.UtcOffsetSeconds)
             });
         }
 
@@ -134,7 +135,24 @@ public sealed class LocaleSensorSource : ISensorSource
         if (_state.TryUpdate(Query())) _onChanged?.Invoke();
     }
 
-    private static (string Locale, string TimeZone) Query() => (DescribeLocale(), DescribeTimeZone());
+    private static (string Locale, string TimeZone, int? UtcOffsetSeconds) Query()
+    {
+        var locale = DescribeLocale();
+        try
+        {
+            var local = TimeZoneInfo.Local;
+            var now = DateTimeOffset.Now;
+            return (locale, DescribeTimeZone(local), LocaleFormatter.UtcOffsetSeconds(local, now));
+        }
+        catch (TimeZoneNotFoundException)
+        {
+            return (locale, LocaleFormatter.Unknown, null);
+        }
+        catch (InvalidTimeZoneException)
+        {
+            return (locale, LocaleFormatter.Unknown, null);
+        }
+    }
 
     /// <summary>
     /// Prefers the live user setting from the registry, because .NET caches the
@@ -149,27 +167,15 @@ public sealed class LocaleSensorSource : ISensorSource
             : LocaleFormatter.Describe(CultureInfo.CurrentCulture.Name);
     }
 
-    private static string DescribeTimeZone()
+    private static string DescribeTimeZone(TimeZoneInfo local)
     {
-        try
-        {
-            var local = TimeZoneInfo.Local;
-            var iana = local.HasIanaId
-                ? local.Id
-                : TimeZoneInfo.TryConvertWindowsIdToIanaId(local.Id, out var converted)
-                    ? converted
-                    : null;
+        var iana = local.HasIanaId
+            ? local.Id
+            : TimeZoneInfo.TryConvertWindowsIdToIanaId(local.Id, out var converted)
+                ? converted
+                : null;
 
-            return LocaleFormatter.DescribeTimeZone(iana, local.Id);
-        }
-        catch (TimeZoneNotFoundException)
-        {
-            return LocaleFormatter.Unknown;
-        }
-        catch (InvalidTimeZoneException)
-        {
-            return LocaleFormatter.Unknown;
-        }
+        return LocaleFormatter.DescribeTimeZone(iana, local.Id);
     }
 
     private static IDictionary<string, object> BuildLocaleAttributes()
@@ -190,6 +196,11 @@ public sealed class LocaleSensorSource : ISensorSource
 
         return attributes;
     }
+
+    private static IDictionary<string, object>? BuildTimeZoneAttributes(int? utcOffsetSeconds) =>
+        utcOffsetSeconds is { } offset
+            ? LocaleFormatter.BuildTimeZoneAttributes(offset)
+            : null;
 
     private static string? ReadInternational(string name)
     {

@@ -51,6 +51,24 @@ public static class LocaleFormatter
         return Unknown;
     }
 
+    /// <summary>
+    /// Returns the signed local-minus-UTC offset for <paramref name="instant"/>,
+    /// including any daylight-saving adjustment active at that time.
+    /// </summary>
+    public static int UtcOffsetSeconds(TimeZoneInfo timeZone, DateTimeOffset instant)
+    {
+        ArgumentNullException.ThrowIfNull(timeZone);
+
+        var offset = timeZone.GetUtcOffset(instant);
+        return checked((int)(offset.Ticks / TimeSpan.TicksPerSecond));
+    }
+
+    public static IDictionary<string, object> BuildTimeZoneAttributes(int utcOffsetSeconds) =>
+        new Dictionary<string, object>(StringComparer.Ordinal)
+        {
+            ["utc_offset_seconds"] = utcOffsetSeconds
+        };
+
     private static string Shorten(string value) =>
         value.Length <= 255 ? value : value[..255];
 }

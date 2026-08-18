@@ -1,0 +1,101 @@
+# Implementation Plan: Time Zone Offset Attribute
+
+**Branch**: `devsecninja-add-timezone-offset` | **Date**: 2026-08-18 | **Spec**: [spec.md](spec.md)
+
+**Input**: Feature specification from `specs/020-time-zone-offset/spec.md`
+
+**Note**: This template is filled in by the `/speckit-plan` command; its definition describes the execution workflow.
+
+## Summary
+
+Add a calculation-friendly `utc_offset_seconds` attribute to the existing Time
+Zone sensor without changing its state or identity. Capture the current offset
+alongside the locale and time-zone name, include it in change detection, and
+keep deterministic offset calculation in Core for unit testing.
+
+## Technical Context
+
+<!--
+  ACTION REQUIRED: Replace the content in this section with the technical details
+  for the project. The structure here is presented in advisory capacity to guide
+  the iteration process.
+-->
+
+**Language/Version**: C# / .NET 10
+
+**Primary Dependencies**: .NET BCL `TimeZoneInfo`; existing WinUI 3 application services
+
+**Storage**: N/A; the attribute is calculated for each sensor reading
+
+**Testing**: xUnit in `WindowsCompanion.Core.Tests`
+
+**Target Platform**: Windows 10 build 19041+ and Windows 11
+
+**Project Type**: Windows desktop companion application with a platform-independent Core library
+
+**Performance Goals**: Constant-time calculation during existing event-driven sensor reads; no polling
+
+**Constraints**: Preserve the `time_zone` entity state and identity; use the offset at the reading instant; transmit a JSON integer
+
+**Scale/Scope**: One new attribute on one existing diagnostic sensor
+
+## Constitution Check
+
+*GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
+
+- **Native Windows Experience**: PASS. The existing native sensor source remains
+  event driven and gains no web UI or cross-platform abstraction.
+- **Security and Privacy**: PASS. A UTC offset is benign and no secrets, network
+  access, or logging are introduced.
+- **Evidence-Driven Development**: PASS. The behavior and payload contract are
+  recorded under `specs/020-time-zone-offset/`.
+- **Testable, Layered Architecture**: PASS. Deterministic offset calculation is
+  placed in Core and covered with unit tests; the App service only reads Windows
+  state and maps it to a sensor.
+- **Resilience and Observability**: PASS. Existing exception boundaries and
+  change-driven synchronization remain intact.
+
+Post-design re-check: PASS. The data model and contract preserve these boundaries
+and introduce no constitution violation.
+
+## Project Structure
+
+### Documentation (this feature)
+
+```text
+specs/[###-feature]/
+├── plan.md              # This file (/speckit-plan command output)
+├── research.md          # Phase 0 output (/speckit-plan command)
+├── data-model.md        # Phase 1 output (/speckit-plan command)
+├── quickstart.md        # Phase 1 output (/speckit-plan command)
+├── contracts/           # Phase 1 output (/speckit-plan command)
+└── tasks.md             # Phase 2 output (/speckit-tasks command - NOT created by /speckit-plan)
+```
+
+### Source Code (repository root)
+<!--
+  ACTION REQUIRED: Replace the placeholder tree below with the concrete layout
+  for this feature. Delete unused options and expand the chosen structure with
+  real paths (e.g., apps/admin, packages/something). The delivered plan must
+  not include Option labels.
+-->
+
+```text
+src/
+├── WindowsCompanion.Core/
+│   └── Sensors/
+│       └── LocaleFormatter.cs
+└── WindowsCompanion.App/
+    └── Services/
+        └── LocaleSensorSource.cs
+
+tests/
+└── WindowsCompanion.Core.Tests/
+    └── HardwareSensorTests.cs
+```
+
+**Structure Decision**: Extend the existing Core locale/time-zone formatter with
+the deterministic calculation and keep Windows state access in the existing App
+sensor source. Add focused tests to the established hardware sensor test class.
+
+| [e.g., Repository pattern] | [specific problem] | [why direct DB access insufficient] |

@@ -143,6 +143,7 @@ internal sealed class UpdatePackageVerifier : IUpdatePackageVerifier
             }
             catch (Exception ex) when (ex is JsonException or FormatException)
             {
+                failureReasons.Add($"Bundle deserialization failed: {ex.Message}");
                 continue;
             }
 
@@ -178,7 +179,7 @@ internal sealed class UpdatePackageVerifier : IUpdatePackageVerifier
             collected);
 
         throw new UpdatePackageVerificationException(
-            $"No GitHub build-provenance attestation for {asset.Package.Name} could be verified against this repository's release workflow.");
+            $"No GitHub build-provenance attestation for {asset.Package.Name} could be verified against this repository's release workflow. Reasons: {collected}");
     }
 
     /// <summary>

@@ -67,6 +67,9 @@ public class SensorSyncServiceTests
 
         public Task<HaConfigInfo?> GetConfigAsync(CancellationToken ct = default)
             => Task.FromResult<HaConfigInfo?>(null);
+
+        public Task<string?> GetOsVersionAsync(CancellationToken ct = default)
+            => Task.FromResult<string?>(null);
     }
 
     private static SensorCatalog BatteryCatalog(SensorPreferences? prefs = null) =>

@@ -88,6 +88,8 @@ public sealed partial class AppController
     {
         _catalog?.Stop();
         _catalog = null;
+        _instanceVersion = null;
+        _instanceOsVersion = null;
 
         if (_connection is not null)
         {
@@ -301,19 +303,38 @@ public sealed partial class AppController
     private async Task LearnInstanceIdentityAsync(
         HomeAssistantClient client, ServerConfig config, CancellationToken ct)
     {
-        if (!string.IsNullOrEmpty(config.InstanceDeviceId) || string.IsNullOrEmpty(config.WebhookId))
+        if (string.IsNullOrEmpty(config.WebhookId))
             return;
 
         try
         {
             var info = await client.GetInstanceInfoAsync(config.WebhookId, ct).ConfigureAwait(false);
-            if (info?.DeviceId is null) return;
-            config.InstanceDeviceId = info.DeviceId;
-            _settings.Save(config);
+            if (info?.DeviceId is not null)
+            {
+                _instanceVersion = info.Version;
+
+                if (string.IsNullOrEmpty(config.InstanceDeviceId))
+                {
+                    config.InstanceDeviceId = info.DeviceId;
+                    _settings.Save(config);
+                }
+            }
         }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
         catch
         {
             // Identity is a nicety at startup; the validation flow re-reads it.
+        }
+
+        // OS version requires the Supervisor API (only HA OS installs).
+        try
+        {
+            _instanceOsVersion = await client.GetOsVersionAsync(ct).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+        catch
+        {
+            // Non-fatal: not all installs have a Supervisor.
         }
     }
 

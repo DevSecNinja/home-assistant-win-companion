@@ -62,6 +62,8 @@ public sealed partial class AppController : IAsyncDisposable
     private SensorCatalog? _catalog;
     private DemoSession? _demo;
     private RouteSupervisor? _supervisor;
+    private string? _instanceVersion;
+    private string? _instanceOsVersion;
     private CancellationTokenSource? _networkSettle;
     private NetworkContext? _lastNetwork;
     private int _disposeStarted;
@@ -147,6 +149,23 @@ public sealed partial class AppController : IAsyncDisposable
         RouteStatus.SingleUrl => "Single URL",
         _ => "Offline"
     };
+
+    /// <summary>
+    /// HA version string for the settings card, e.g. "HA 2025.1.0" or
+    /// "HA 2025.1.0 · OS 14.2". Null when disconnected or version unknown.
+    /// </summary>
+    public string? VersionSummary
+    {
+        get
+        {
+            if (State != ConnectionState.Connected) return null;
+            var version = _supervisor?.ActiveInstanceVersion ?? _instanceVersion;
+            if (string.IsNullOrEmpty(version)) return null;
+            return string.IsNullOrEmpty(_instanceOsVersion)
+                ? $"HA {version}"
+                : $"HA {version} · OS {_instanceOsVersion}";
+        }
+    }
 
     /// <summary>The local network snapshot, for the trusted-network settings UI.</summary>
     public NetworkContext CurrentNetwork => _network.GetCurrent();

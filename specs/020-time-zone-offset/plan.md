@@ -56,7 +56,7 @@ and introduce no constitution violation.
 ### Documentation (this feature)
 
 ```text
-specs/019-time-zone-offset/
+specs/020-time-zone-offset/
 ├── checklists/
 │   └── requirements.md
 ├── contracts/

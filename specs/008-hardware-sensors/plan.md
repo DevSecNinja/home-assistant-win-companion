@@ -29,4 +29,3 @@ App sensor sources.
 - `src/WindowsCompanion.App/Services/PendingRebootSensorSource.cs`
 - `tests/WindowsCompanion.Core.Tests/HardwareSensorTests.cs`
 - `tests/WindowsCompanion.Core.Tests/PendingRebootTests.cs`
-- `tests/WindowsCompanion.Core.Tests/PendingRebootSensorSourceTests.cs`

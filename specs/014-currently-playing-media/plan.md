@@ -10,7 +10,7 @@
 
 Add `media_now_playing` and `media_playing` sensors backed by Windows SMTC. Keep
 playback-state classification, session preference logic, and attribute formatting
-in Core. Keep the WinRT session-manager subscription and AUMID resolution in the
+in Core. Keep the WinRT session-manager access and AUMID resolution in the
 App sensor source. Poll on a 2-second cadence with change-driven push.
 
 ## Files
@@ -18,4 +18,3 @@ App sensor source. Poll on a 2-second cadence with change-driven push.
 - `src/WindowsCompanion.Core/Sensors/MediaPlaybackState.cs`
 - `src/WindowsCompanion.App/Services/MediaSensorSource.cs`
 - `tests/WindowsCompanion.Core.Tests/MediaSensorTests.cs`
-- `tests/WindowsCompanion.Core.Tests/MediaSensorSourceTests.cs`

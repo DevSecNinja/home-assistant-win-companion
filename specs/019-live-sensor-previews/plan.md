@@ -2,7 +2,7 @@
 
 **Branch**: `devsecninja-live-sensor-previews` | **Date**: 2026-08-18 | **Spec**: [spec.md](spec.md)
 
-**Input**: Feature specification from `specs/018-live-sensor-previews/spec.md`
+**Input**: Feature specification from `specs/019-live-sensor-previews/spec.md`
 
 ## Summary
 
@@ -44,7 +44,7 @@ Refresh the existing sensor preview text in place every two seconds while the Se
 ### Documentation (this feature)
 
 ```text
-specs/018-live-sensor-previews/
+specs/019-live-sensor-previews/
 ├── plan.md
 ├── research.md
 ├── data-model.md

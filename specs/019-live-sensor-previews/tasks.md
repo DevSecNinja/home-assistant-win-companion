@@ -33,9 +33,9 @@
 
 ## Phase 5: Polish & Cross-Cutting Concerns
 
-- [X] T012 Run targeted App and UI sensor tests using specs/018-live-sensor-previews/quickstart.md
+- [X] T012 Run targeted App and UI sensor tests using specs/019-live-sensor-previews/quickstart.md
 - [X] T013 Build the supported x64 application target using scripts/run.ps1 -NoLaunch
-- [X] T014 Update specs/018-live-sensor-previews/spec.md with any implementation evidence or corrected lifecycle behavior
+- [X] T014 Update specs/019-live-sensor-previews/spec.md with any implementation evidence or corrected lifecycle behavior
 
 ## Dependencies
 

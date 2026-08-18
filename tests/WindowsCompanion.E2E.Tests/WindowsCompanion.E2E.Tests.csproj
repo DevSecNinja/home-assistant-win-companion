@@ -2,6 +2,7 @@
   <PropertyGroup>
     <TargetFramework>net10.0-windows10.0.26100.0</TargetFramework>
     <OutputType>Exe</OutputType>
+    <SelfContained>true</SelfContained>
     <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
@@ -20,8 +21,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\WindowsCompanion.App\WindowsCompanion.App.csproj"
-      ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\..\src\WindowsCompanion.App\WindowsCompanion.App.csproj" />
     <ProjectReference Include="..\..\src\WindowsCompanion.Core\WindowsCompanion.Core.csproj" />
     <ProjectReference Include="..\WindowsCompanion.Testing\WindowsCompanion.Testing.csproj" />
   </ItemGroup>

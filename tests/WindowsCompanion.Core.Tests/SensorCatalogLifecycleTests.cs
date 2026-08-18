@@ -125,6 +125,26 @@ public class SensorCatalogLifecycleTests
     }
 
     [Fact]
+    public void Live_preview_reads_only_enabled_cached_values()
+    {
+        var preferences = new SensorPreferences();
+        var failing = new ThrowingPreviewSource();
+        var healthy = new CountingSource();
+        var catalog = new SensorCatalog([failing, healthy], preferences);
+
+        Assert.Empty(catalog.PreviewEnabled());
+        Assert.Equal(0, healthy.ReadCount);
+
+        catalog.SetEnabled(ThrowingPreviewSource.Id, true);
+        catalog.SetEnabled(CountingSource.PrimaryId, true);
+        var preview = catalog.PreviewEnabled();
+
+        Assert.False(preview.ContainsKey(ThrowingPreviewSource.Id));
+        Assert.Equal("Primary", preview[CountingSource.PrimaryId]);
+        Assert.Equal(1, healthy.ReadCount);
+    }
+
+    [Fact]
     public async Task Enabling_a_sensitive_sensor_immediately_previews_a_fresh_value()
     {
         var preferences = new SensorPreferences();

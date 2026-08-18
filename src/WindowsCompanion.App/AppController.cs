@@ -183,6 +183,16 @@ public sealed partial class AppController : IAsyncDisposable
               ?? Task.FromResult<IReadOnlyDictionary<string, string>>(
                   new Dictionary<string, string>(StringComparer.Ordinal));
 
+    /// <summary>Reads cached enabled previews without bypassing source-owned collection cadence.</summary>
+    public Task<IReadOnlyDictionary<string, string>> PreviewEnabledSensorsAsync(
+        CancellationToken cancellationToken = default) =>
+        _demo is not null
+            ? _demo.PreviewAsync(cancellationToken)
+            : Task.FromResult(
+                _catalog?.PreviewEnabled()
+                ?? (IReadOnlyDictionary<string, string>)new Dictionary<string, string>(
+                    StringComparer.Ordinal));
+
     /// <summary>When sensor states were last pushed to Home Assistant successfully.</summary>
     public DateTimeOffset? LastSyncedAt => _connection?.LastSyncedAt;
 

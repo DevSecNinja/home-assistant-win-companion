@@ -20,6 +20,7 @@ internal static class ProductionSensorComposition
         new BatterySensorSource(status),
         new ActiveSensorSource(config.Sensors),
         new NetworkSensorSource(config.Sensors),
+        new WireGuardSensorSource(),
         new WifiSensorSource(config.Sensors),
         new SystemSensorSource(),
         new DomainSensorSource(config.Sensors),

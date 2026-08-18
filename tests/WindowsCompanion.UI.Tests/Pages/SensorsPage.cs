@@ -43,6 +43,13 @@ internal sealed class SensorsPage(Window window)
         return element.AsToggleButton().IsToggled == true;
     }
 
+    internal string Preview(string sensorId) =>
+        AutomationWait.Element(
+                () => window.FindFirstDescendant(cf =>
+                    cf.ByAutomationId($"Sensors.Preview.{sensorId}")),
+                $"Sensors.Preview.{sensorId}")
+            .Name;
+
     internal void SetEnabled(string sensorId, bool enabled)
     {
         var toggle = Toggle(sensorId).AsToggleButton();

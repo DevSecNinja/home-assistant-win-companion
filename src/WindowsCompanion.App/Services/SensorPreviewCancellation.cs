@@ -1,5 +1,15 @@
 namespace WindowsCompanion_App.Services;
 
+internal static class SensorPreviewPresentation
+{
+    public static bool IsActive(
+        bool sensorsSelected,
+        bool windowVisible,
+        bool minimized,
+        bool exiting) =>
+        sensorsSelected && windowVisible && !minimized && !exiting;
+}
+
 internal sealed class SensorPreviewCancellation
 {
     private readonly object _gate = new();
@@ -19,6 +29,17 @@ internal sealed class SensorPreviewCancellation
 
         previous?.Cancel();
         return next;
+    }
+
+    public CancellationTokenSource? TryBeginList()
+    {
+        lock (_gate)
+        {
+            if (_listPreview is not null) return null;
+
+            _listPreview = new CancellationTokenSource();
+            return _listPreview;
+        }
     }
 
     public void EndList(CancellationTokenSource completed)
@@ -54,6 +75,17 @@ internal sealed class SensorPreviewCancellation
                 _rowPreviews.Remove(uniqueId);
             }
         }
+    }
+
+    public void CancelList()
+    {
+        CancellationTokenSource? listPreview;
+        lock (_gate)
+        {
+            listPreview = _listPreview;
+        }
+
+        listPreview?.Cancel();
     }
 
     public void CancelAll()

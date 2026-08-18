@@ -185,7 +185,10 @@ internal static class TestAppComposition
 
     private sealed class FixedSystemStatusProvider : ISystemStatusProvider
     {
-        public SystemStatus GetStatus() => new(true, 87, PowerState.Discharging);
+        private int _readCount = 86;
+
+        public SystemStatus GetStatus() =>
+            new(true, 80 + Interlocked.Increment(ref _readCount) % 20, PowerState.Discharging);
     }
 
     private sealed class NoOpWinGetUpdateProvider : IWinGetUpdateProvider

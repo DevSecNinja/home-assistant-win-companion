@@ -1,0 +1,26 @@
+# Replace the device name below with this PC's exact Home Assistant device name.
+# Increase offline_after_seconds if your companion reports less frequently.
+template:
+  - binary_sensor:
+      - name: "Windows PC connectivity"
+        unique_id: windows_pc_connectivity
+        device_class: connectivity
+        state: >-
+          {%- set companion_device -%}
+            Replace with your device name
+          {%- endset -%}
+          {%- set offline_after_seconds = 180 -%}
+          {%- set heartbeat = namespace(last_reported=none) -%}
+          {%- set companion_device_id = device_id(companion_device) -%}
+          {%- if companion_device_id is not none -%}
+            {%- for entity in expand(device_entities(companion_device_id))
+                if entity.entity_id.startswith('sensor.') -%}
+              {%- if heartbeat.last_reported is none
+                  or entity.last_reported > heartbeat.last_reported -%}
+                {%- set heartbeat.last_reported = entity.last_reported -%}
+              {%- endif -%}
+            {%- endfor -%}
+          {%- endif -%}
+          {{- heartbeat.last_reported is not none
+              and (now() - heartbeat.last_reported).total_seconds()
+                  < offline_after_seconds -}}

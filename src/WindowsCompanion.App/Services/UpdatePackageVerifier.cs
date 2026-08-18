@@ -132,6 +132,7 @@ internal sealed class UpdatePackageVerifier : IUpdatePackageVerifier
         }
 
         var policies = CreatePolicies(asset);
+        var failureReasons = new List<string>();
 
         foreach (var bundleJson in bundles)
         {
@@ -161,12 +162,20 @@ internal sealed class UpdatePackageVerifier : IUpdatePackageVerifier
                     return;
                 }
 
-                _log.LogWarning(
+                var reason = result?.FailureReason ?? "unknown";
+                failureReasons.Add(reason);
+                _log.LogDebug(
                     "An attestation for {Package} did not match the expected GitHub Actions build identity: {Reason}",
                     asset.Package.Name,
-                    result?.FailureReason);
+                    reason);
             }
         }
+
+        var collected = string.Join("; ", failureReasons);
+        _log.LogWarning(
+            "All attestation candidates for {Package} failed verification: {Reasons}",
+            asset.Package.Name,
+            collected);
 
         throw new UpdatePackageVerificationException(
             $"No GitHub build-provenance attestation for {asset.Package.Name} could be verified against this repository's release workflow.");

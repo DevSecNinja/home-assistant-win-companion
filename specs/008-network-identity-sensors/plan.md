@@ -67,12 +67,14 @@ specs/008-network-identity-sensors/
 
 ```text
 src/WindowsCompanion.Core/Sensors/
-├── AdapterSnapshot.cs           (adapter model, IPv6 classification, MAC format)
-├── RouteProbe.cs                (UDP-connect route resolution)
-└── NetworkChangeCoalescer.cs    (dedup burst events)
+├── NetworkAdapterSnapshot.cs    (adapter model, IPv6 classification)
+├── NetworkAdapterSelector.cs    (adapter selection, MAC formatting)
+├── NetworkRouteProbe.cs         (UDP-connect route resolution)
+├── NetworkIdentityMonitor.cs    (change coalescing, lifecycle)
+└── Ipv6AddressClassifier.cs     (IPv6 address filtering and preference)
 
 src/WindowsCompanion.App/Services/
-└── NetworkIdentitySensorSource.cs  (OS adapter enumeration, event hookup)
+└── NetworkSensorSource.cs       (OS adapter enumeration, event hookup)
 ```
 
 ### Integration Points
@@ -83,8 +85,9 @@ src/WindowsCompanion.App/Services/
 - `SensorPreviewGate` withholds previews until enabled
 
 **Structure Decision**: Core owns testable decisions (IPv6 classification, MAC
-format, route probe, coalescing); App owns OS adapter enumeration and event
-hookup. Preserve the existing two-project layering.
+format, route probe, coalescing) in `NetworkAdapterSelector`, `NetworkRouteProbe`,
+`NetworkIdentityMonitor`; App owns OS adapter enumeration via
+`NetworkSensorSource`. Preserve the existing two-project layering.
 
 ## Complexity Tracking
 

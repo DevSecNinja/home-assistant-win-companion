@@ -4,8 +4,8 @@
 
 ## Phase 1: Core utilities
 
-- [x] T001 [US1] Add permanent physical MAC lookup via IP Helper P/Invoke in `src/WindowsCompanion.App/Services/NetworkIdentitySensorSource.cs`
-- [x] T002 [US1] Add MAC formatting utility in `src/WindowsCompanion.Core/Sensors/MacFormatter.cs`
+- [x] T001 [US1] Add permanent physical MAC lookup via IP Helper P/Invoke in `src/WindowsCompanion.App/Services/WindowsNetworkInterfaceIdentity.cs`
+- [x] T002 [US1] Add MAC formatting utility in `src/WindowsCompanion.Core/Sensors/NetworkAdapterSelector.cs`
 
 ## Phase 2: User Story 1 - LAN/WLAN MAC addresses
 
@@ -24,19 +24,20 @@ randomization, and adapters that are up are preferred over merely present ones.
 
 ## Phase 4: User Story 3 - Wi-Fi security and randomized MAC
 
-**Independent Test**: Verify security type mapping from native WLAN profile XML and
-randomized MAC detection.
+**Independent Test**: Verify security type mapping from WLAN connection attributes
+and randomized MAC detection from profile XML.
 
-- [x] T007 [US3] Parse connected WLAN profile XML for security type and randomized MAC state
-- [x] T008 [US3] Add `connectivity_wifi_security` and `connectivity_wifi_random_mac` definitions
-- [x] T009 [US3] Add Core unit tests for security mapping in `tests/WindowsCompanion.Core.Tests/`
+- [x] T007 [US3] Read Wi-Fi security from WLAN connection attributes in `src/WindowsCompanion.App/Services/WifiSensorSource.cs`
+- [x] T008 [US3] Parse profile XML for randomized MAC state in `src/WindowsCompanion.App/Services/WifiSensorSource.cs`
+- [x] T009 [US3] Add `connectivity_wifi_security` and `connectivity_wifi_random_mac` definitions
+- [x] T010 [US3] Add Core unit tests for security classification in `tests/WindowsCompanion.Core.Tests/`
 
 ## Phase 5: Validation
 
-- [x] T010 Validate independent capture-scope gating and privacy model
+- [x] T011 Validate independent capture-scope gating and privacy model
 
 ## Dependencies
 
 - T001 and T002 are required before T003–T004.
-- T005–T006 and T007–T009 can run in parallel after Phase 1.
-- T010 follows all phases.
+- T005–T006 and T007–T010 can run in parallel after Phase 1.
+- T011 follows all phases.

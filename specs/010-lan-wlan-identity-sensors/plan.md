@@ -7,11 +7,13 @@
 
 ## Summary
 
-Extend the network identity sensor source with six opt-in sensors:
+Extend the network identity sensors with six opt-in sensors:
 `lan_mac_address`, `wlan_mac_address`, `gateway_address`, `dns_servers`,
 `connectivity_wifi_security`, and `connectivity_wifi_random_mac`. Uses Windows IP
 Helper for permanent MAC addresses, the existing adapter snapshot for gateway/DNS,
-and native WLAN profile XML for security type and randomized MAC detection.
+and native WLAN connection attributes for security type plus profile XML for
+randomized MAC detection. Four sensors are handled by `NetworkSensorSource` and
+two Wi-Fi sensors by `WifiSensorSource`.
 
 ## Technical Context
 
@@ -67,22 +69,26 @@ specs/010-lan-wlan-identity-sensors/
 
 ```text
 src/WindowsCompanion.Core/Sensors/
-├── MacFormatter.cs              (shared MAC format utility)
-└── WifiSecurityMapper.cs        (DOT11_AUTH_ALGORITHM → display string)
+├── NetworkAdapterSelector.cs    (MAC formatting via MacAddressFormatter)
+├── NetworkIdentity.cs           (permanent MAC, gateway, DNS state)
+└── WifiConnectionInfo.cs        (Wi-Fi security classification, randomized MAC)
 
 src/WindowsCompanion.App/Services/
-├── NetworkIdentitySensorSource.cs  (extended with new definitions)
-└── WlanProfileReader.cs         (profile XML parsing for security/random MAC)
+├── NetworkSensorSource.cs       (LAN/WLAN MAC, gateway, DNS definitions)
+├── WifiSensorSource.cs          (Wi-Fi security/random MAC, profile XML parsing)
+└── WindowsNetworkInterfaceIdentity.cs  (IP Helper P/Invoke for permanent MAC)
 ```
 
 ### Integration Points
 
-- Extends the existing `NetworkIdentitySensorSource`
+- Four sensors extend existing `NetworkSensorSource`
+- Two Wi-Fi sensors handled by `WifiSensorSource` with its own `NetworkChange` subscriptions
 - Reuses adapter snapshot and change-driven lifecycle
 - Independent capture-scope per sensor, matching existing privacy model
 
-**Structure Decision**: Extend existing `NetworkIdentitySensorSource` rather than
-adding a new source. Core utilities for formatting; App for OS access.
+**Structure Decision**: Four sensors extend `NetworkSensorSource`; two Wi-Fi
+sensors use `WifiSensorSource` with its own lifecycle. Core owns formatting
+(`NetworkAdapterSelector`, `WifiConnectionInfo`); App owns OS access.
 
 ## Complexity Tracking
 

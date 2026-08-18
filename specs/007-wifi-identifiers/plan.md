@@ -60,21 +60,22 @@ specs/007-wifi-identifiers/
 ### Source Code
 
 ```text
+src/WindowsCompanion.Core/Sensors/
+└── WifiConnectionInfo.cs        (state formatting, permission/unavailable mapping)
+
 src/WindowsCompanion.App/Services/
 └── WifiSensorSource.cs          (WLAN P/Invoke, event subscription)
-
-src/WindowsCompanion.Core/Sensors/
-└── (no Core logic needed — raw string values)
 ```
 
 ### Integration Points
 
 - `AppController` registers the source
 - `SensorCatalog` manages start/stop lifecycle
-- Location Settings direct action added to sensor definitions
+- Location Settings action routed through `AppController.OpenLocationSettings()`
 
-**Structure Decision**: Single source in App; no Core logic needed for raw
-string values. Preserve the existing two-project layering.
+**Structure Decision**: Core owns state formatting and permission mapping
+(`WifiConnectionInfo`); App owns WLAN P/Invoke and event lifecycle. Preserve the
+existing two-project layering.
 
 ## Complexity Tracking
 

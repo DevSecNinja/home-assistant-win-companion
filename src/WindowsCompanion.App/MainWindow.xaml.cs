@@ -27,6 +27,7 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
     private readonly AppController _controller;
     private readonly DispatcherQueue _dispatcher;
     private readonly DispatcherQueueTimer _statusTimer;
+    private readonly DispatcherQueueTimer _sensorPreviewTimer;
     private readonly IStartupRegistration _startup;
     private readonly RestartManagerShutdownMonitor _restartManagerShutdown;
     private readonly MainWindowActivation _windowActivation;
@@ -34,6 +35,7 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
     private readonly bool _startHidden;
     private bool _exiting;
     private bool _connected;
+    private View _currentView;
 
     public ICommand TrayOpenHomeAssistantCommand { get; }
     public ICommand TrayUpdateCommand { get; }
@@ -111,7 +113,14 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
         _statusTimer.Interval = TimeSpan.FromSeconds(5);
         _statusTimer.Tick += (_, _) => RefreshBattery();
 
+        _sensorPreviewTimer = _dispatcher.CreateTimer();
+        _sensorPreviewTimer.Interval = TimeSpan.FromSeconds(2);
+        _sensorPreviewTimer.IsRepeating = true;
+        _sensorPreviewTimer.Tick += OnSensorPreviewTimerTick;
+
         AppWindow.Closing += OnWindowClosing;
+        AppWindow.Changed += OnAppWindowChanged;
+        Activated += OnWindowPresentationChanged;
         Activated += OnFirstActivated;
         _restartManagerShutdown = new RestartManagerShutdownMonitor(
             _windowHandle,
@@ -209,12 +218,15 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
         if (_exiting) return;
 
         _exiting = true;
+        StopSensorPreviewRefresh();
         AppWindow.Hide();
         _statusTimer.Stop();
         _controller.StateChanged -= OnStateChanged;
         _controller.RouteChanged -= OnRouteChanged;
         _controller.UpdateStateChanged -= OnUpdateStateChanged;
         _controller.InstallStateChanged -= OnInstallStateChanged;
+        AppWindow.Changed -= OnAppWindowChanged;
+        Activated -= OnWindowPresentationChanged;
         _restartManagerShutdown.Dispose();
         TrayIcon.Dispose();
     }
@@ -230,6 +242,7 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
     {
         if (_exiting) return;
         args.Cancel = true;
+        StopSensorPreviewRefresh();
         AppWindow.Hide();
     }
 
@@ -271,6 +284,7 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
 
     private void ShowView(View view)
     {
+        _currentView = view;
         ConnectPanel.Visibility = view == View.Connect ? Visibility.Visible : Visibility.Collapsed;
         StatusPanel.Visibility = view == View.Status ? Visibility.Visible : Visibility.Collapsed;
         PreferencesPanel.Visibility = view == View.Preferences ? Visibility.Visible : Visibility.Collapsed;
@@ -285,6 +299,49 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
             ConnectError.Visibility = Visibility.Collapsed;
             _statusTimer.Stop();
         }
+
+        UpdateSensorPreviewRefreshState(refreshImmediately: false);
+    }
+
+    private void OnAppWindowChanged(
+        Microsoft.UI.Windowing.AppWindow sender,
+        Microsoft.UI.Windowing.AppWindowChangedEventArgs args)
+    {
+        if (args.DidVisibilityChange || args.DidPresenterChange)
+            UpdateSensorPreviewRefreshState(refreshImmediately: true);
+    }
+
+    private void OnWindowPresentationChanged(object sender, WindowActivatedEventArgs args) =>
+        UpdateSensorPreviewRefreshState(refreshImmediately: true);
+
+    private bool IsSensorPreviewPresented() =>
+        SensorPreviewPresentation.IsActive(
+            _currentView == View.Sensors,
+            AppWindow.IsVisible,
+            AppWindow.Presenter is Microsoft.UI.Windowing.OverlappedPresenter
+            {
+                State: Microsoft.UI.Windowing.OverlappedPresenterState.Minimized
+            },
+            _exiting);
+
+    private void UpdateSensorPreviewRefreshState(bool refreshImmediately)
+    {
+        if (!IsSensorPreviewPresented())
+        {
+            StopSensorPreviewRefresh();
+            return;
+        }
+
+        var wasRunning = _sensorPreviewTimer.IsRunning;
+        if (!wasRunning) _sensorPreviewTimer.Start();
+        if (refreshImmediately && !wasRunning)
+            _ = RefreshSensorPreviewsAsync();
+    }
+
+    private void StopSensorPreviewRefresh()
+    {
+        _sensorPreviewTimer.Stop();
+        _sensorPreviewCancellation.CancelList();
     }
 
     private static void PrepareDialog(ContentDialog dialog)

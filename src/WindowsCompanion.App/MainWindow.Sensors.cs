@@ -37,9 +37,63 @@ public sealed partial class MainWindow
     private void OnCloseSensors(object sender, RoutedEventArgs e)
     {
         SensorSearchBox.Text = string.Empty;
-        _sensorPreviewCancellation.CancelAll();
         RefreshPreferencesSummary();
         ShowView(_sensorReturnView);
+    }
+
+    private async void OnSensorPreviewTimerTick(
+        Microsoft.UI.Dispatching.DispatcherQueueTimer sender,
+        object args) =>
+        await RefreshSensorPreviewsAsync();
+
+    private async Task RefreshSensorPreviewsAsync()
+    {
+        if (!IsSensorPreviewPresented()
+            || _sensorSettingControls.Any(control => !control.IsEnabled))
+        {
+            return;
+        }
+
+        var catalog = _controller.Catalog;
+        if (catalog is null) return;
+
+        using var previewCancellation = _sensorPreviewCancellation.TryBeginList();
+        if (previewCancellation is null) return;
+
+        try
+        {
+            var previews = await _controller.PreviewSensorsAsync(previewCancellation.Token);
+            if (previewCancellation.IsCancellationRequested
+                || !IsSensorPreviewPresented()
+                || !ReferenceEquals(catalog, _controller.Catalog))
+            {
+                return;
+            }
+
+            foreach (var (uniqueId, value) in previews)
+            {
+                if (_sensorPreviewTexts.TryGetValue(uniqueId, out var previewText))
+                {
+                    previewText.Text = value;
+                    previewText.Foreground =
+                        (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources[
+                            "TextFillColorSecondaryBrush"];
+                }
+            }
+        }
+        catch (OperationCanceledException) when (previewCancellation.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            FileLoggerProvider.Write(
+                $"{DateTimeOffset.Now:yyyy-MM-dd HH:mm:ss.fff} WRN MainWindow: "
+                + $"Could not refresh sensor previews.{Environment.NewLine}{ex}");
+        }
+        finally
+        {
+            _sensorPreviewCancellation.EndList(previewCancellation);
+        }
     }
 
     private void OnSensorFilterChanged(AutoSuggestBox sender, AutoSuggestBoxTextChangedEventArgs args)
@@ -206,6 +260,9 @@ public sealed partial class MainWindow
                 FontSize = 12,
                 Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"]
             };
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetAutomationId(
+                previewText,
+                $"Sensors.Preview.{definition.UniqueId}");
             AddSensorMetadataRow(metadata, metadataRow, "Current value", previewText);
             text.Children.Add(metadata);
             _sensorPreviewTexts[definition.UniqueId] = previewText;
@@ -405,6 +462,7 @@ public sealed partial class MainWindow
 
         var wasEnabled = catalog.IsEnabled(uniqueId);
         toggle.IsEnabled = false;
+        _sensorPreviewCancellation.CancelList();
         using var previewCancellation = _sensorPreviewCancellation.BeginRow(uniqueId);
         Exception? refreshFailure = null;
         string? refreshedPreview = null;

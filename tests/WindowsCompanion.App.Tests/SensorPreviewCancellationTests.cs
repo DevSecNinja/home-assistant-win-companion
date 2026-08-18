@@ -4,6 +4,28 @@ namespace WindowsCompanion.App.Tests;
 
 public sealed class SensorPreviewCancellationTests
 {
+    [Theory]
+    [InlineData(true, true, false, false, true)]
+    [InlineData(false, true, false, false, false)]
+    [InlineData(true, false, false, false, false)]
+    [InlineData(true, true, true, false, false)]
+    [InlineData(true, true, false, true, false)]
+    public void Presentation_requires_visible_active_sensors_view(
+        bool sensorsSelected,
+        bool windowVisible,
+        bool minimized,
+        bool exiting,
+        bool expected)
+    {
+        Assert.Equal(
+            expected,
+            SensorPreviewPresentation.IsActive(
+                sensorsSelected,
+                windowVisible,
+                minimized,
+                exiting));
+    }
+
     [Fact]
     public void Beginning_list_preview_cancels_previous_preview()
     {
@@ -27,6 +49,45 @@ public sealed class SensorPreviewCancellationTests
 
         Assert.True(second.IsCancellationRequested);
         Assert.False(third.IsCancellationRequested);
+    }
+
+    [Fact]
+    public void Try_begin_list_does_not_overlap_current_preview()
+    {
+        var previews = new SensorPreviewCancellation();
+        using var first = previews.TryBeginList();
+
+        var overlapping = previews.TryBeginList();
+
+        Assert.NotNull(first);
+        Assert.Null(overlapping);
+    }
+
+    [Fact]
+    public void Ending_list_allows_next_non_overlapping_preview()
+    {
+        var previews = new SensorPreviewCancellation();
+        using var first = previews.TryBeginList();
+        Assert.NotNull(first);
+        previews.EndList(first);
+
+        using var second = previews.TryBeginList();
+
+        Assert.NotNull(second);
+        Assert.False(second.IsCancellationRequested);
+    }
+
+    [Fact]
+    public void Cancel_list_stops_only_list_preview()
+    {
+        var previews = new SensorPreviewCancellation();
+        using var list = previews.BeginList();
+        using var row = previews.BeginRow("battery");
+
+        previews.CancelList();
+
+        Assert.True(list.IsCancellationRequested);
+        Assert.False(row.IsCancellationRequested);
     }
 
     [Fact]

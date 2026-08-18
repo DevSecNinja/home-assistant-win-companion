@@ -37,7 +37,31 @@ no additional polling; push only on change
 enumerates another's value; no hardware address logged; permanent MAC reported
 regardless of per-network randomization
 
+**Scale/Scope**: Six new sensors extending an existing source
+
+## Constitution Check
+
+*GATE: Passed (retroactive evaluation of shipped implementation).*
+
+- **Native Windows Experience First**: PASS — uses native IP Helper and WLAN APIs.
+- **Security & Privacy**: PASS — all sensors default off, labelled sensitive;
+  independent capture-scope; no addresses logged.
+- **Evidence-Driven Development**: PASS — shipped and verified.
+- **Testable, Layered Architecture**: PASS — MAC formatting and security mapping
+  in Core with tests; P/Invoke and profile parsing in App.
+- **Resilience & Observability**: PASS — missing adapters/profiles produce safe
+  `Not Connected`/`Unavailable` states.
+
 ## Project Structure
+
+### Documentation (this feature)
+
+```text
+specs/010-lan-wlan-identity-sensors/
+├── spec.md
+├── plan.md
+└── tasks.md
+```
 
 ### Source Code
 
@@ -56,6 +80,9 @@ src/WindowsCompanion.App/Services/
 - Extends the existing `NetworkIdentitySensorSource`
 - Reuses adapter snapshot and change-driven lifecycle
 - Independent capture-scope per sensor, matching existing privacy model
+
+**Structure Decision**: Extend existing `NetworkIdentitySensorSource` rather than
+adding a new source. Core utilities for formatting; App for OS access.
 
 ## Complexity Tracking
 

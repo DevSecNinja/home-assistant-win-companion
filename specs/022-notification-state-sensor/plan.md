@@ -33,7 +33,30 @@ only on state change.
 **Constraints**: Does not cover Focus / Do Not Disturb (no supported API); enum
 values validated with `Enum.IsDefined`; failure returns Unknown
 
+**Scale/Scope**: One new sensor in one Windows source
+
+## Constitution Check
+
+*GATE: Passed (retroactive evaluation of shipped implementation).*
+
+- **Native Windows Experience First**: PASS — uses native shell32 P/Invoke.
+- **Security & Privacy**: PASS — no sensitive data; diagnostic entity.
+- **Evidence-Driven Development**: PASS — shipped and verified; Focus/DnD
+  limitation documented.
+- **Testable, Layered Architecture**: PASS — state formatting and suppression
+  evaluation in Core with tests; P/Invoke in App.
+- **Resilience & Observability**: PASS — undefined enum returns Unknown.
+
 ## Project Structure
+
+### Documentation (this feature)
+
+```text
+specs/022-notification-state-sensor/
+├── spec.md
+├── plan.md
+└── tasks.md
+```
 
 ### Source Code
 
@@ -50,6 +73,9 @@ src/WindowsCompanion.App/Services/
 - `AppController` registers the source
 - `SensorCatalog` manages start/stop lifecycle
 - Diagnostic entity category
+
+**Structure Decision**: Core owns enum, formatter, and suppression logic (testable);
+App owns P/Invoke and timer lifecycle. Preserve the two-project layering.
 
 ## Complexity Tracking
 

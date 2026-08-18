@@ -36,7 +36,31 @@ state change; no registry access while disabled
 **Constraints**: No app names exposed; registry errors skipped per entry;
 `SensorPollLoop` ensures single-flight; testable via injected delegate
 
+**Scale/Scope**: Two new sensors in one Windows source
+
+## Constitution Check
+
+*GATE: Passed (retroactive evaluation of shipped implementation).*
+
+- **Native Windows Experience First**: PASS — reads native Windows registry.
+- **Security & Privacy**: PASS — both sensors default off, labelled sensitive;
+  no app names or PIDs exposed.
+- **Evidence-Driven Development**: PASS — shipped and verified.
+- **Testable, Layered Architecture**: PASS — `CapabilityActivity.IsActive` in
+  Core with tests; injectable delegate for testable source.
+- **Resilience & Observability**: PASS — registry errors skipped per entry;
+  sensor remains available.
+
 ## Project Structure
+
+### Documentation (this feature)
+
+```text
+specs/023-capability-usage-sensor/
+├── spec.md
+├── plan.md
+└── tasks.md
+```
 
 ### Source Code
 
@@ -53,6 +77,10 @@ src/WindowsCompanion.App/Services/
 - `AppController` registers the source
 - `SensorCatalog` manages start/stop lifecycle
 - Uses `SensorPollLoop` and `ChangeGate<T>` from the sensor infrastructure
+
+**Structure Decision**: Core owns `CapabilityActivity.IsActive` (testable);
+App owns registry traversal with injectable delegate for testing. Preserve the
+two-project layering.
 
 ## Complexity Tracking
 

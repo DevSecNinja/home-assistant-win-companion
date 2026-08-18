@@ -33,7 +33,29 @@ actual value change
 **Constraints**: Requires Windows Location permission; no fallback to
 `Wlan*` without permission; disabled means zero OS interaction
 
+**Scale/Scope**: Two new sensors in one Windows source
+
+## Constitution Check
+
+*GATE: Passed (retroactive evaluation of shipped implementation).*
+
+- **Native Windows Experience First**: PASS — uses native WLAN API directly.
+- **Security & Privacy**: PASS — both sensors default off, labelled
+  location-revealing; no values logged.
+- **Evidence-Driven Development**: PASS — shipped and verified.
+- **Testable, Layered Architecture**: PASS — raw string values need no Core logic.
+- **Resilience & Observability**: PASS — permission-denied produces safe state.
+
 ## Project Structure
+
+### Documentation (this feature)
+
+```text
+specs/007-wifi-identifiers/
+├── spec.md
+├── plan.md
+└── tasks.md
+```
 
 ### Source Code
 
@@ -50,6 +72,9 @@ src/WindowsCompanion.Core/Sensors/
 - `AppController` registers the source
 - `SensorCatalog` manages start/stop lifecycle
 - Location Settings direct action added to sensor definitions
+
+**Structure Decision**: Single source in App; no Core logic needed for raw
+string values. Preserve the existing two-project layering.
 
 ## Complexity Tracking
 

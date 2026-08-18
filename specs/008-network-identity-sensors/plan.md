@@ -37,7 +37,31 @@ push only when reported values change
 physical adapters over VPN/tunnel; IPv6 excludes link-local, loopback, multicast,
 6to4/Teredo, temporary (RFC 4941 preferred only as fallback)
 
+**Scale/Scope**: Two new sensors plus shared adapter snapshot refactoring
+
+## Constitution Check
+
+*GATE: Passed (retroactive evaluation of shipped implementation).*
+
+- **Native Windows Experience First**: PASS — uses .NET socket and network APIs.
+- **Security & Privacy**: PASS — sensors default off, labelled sensitive; no
+  addresses logged; previews withheld until enabled.
+- **Evidence-Driven Development**: PASS — shipped and verified.
+- **Testable, Layered Architecture**: PASS — IPv6 classification, MAC formatting,
+  route selection, and coalescing live in Core with unit tests.
+- **Resilience & Observability**: PASS — missing adapters produce `Not Connected`;
+  handles released on cancel.
+
 ## Project Structure
+
+### Documentation (this feature)
+
+```text
+specs/008-network-identity-sensors/
+├── spec.md
+├── plan.md
+└── tasks.md
+```
 
 ### Source Code
 
@@ -57,6 +81,10 @@ src/WindowsCompanion.App/Services/
 - `SensorCatalog` manages start/stop lifecycle
 - Existing connection type/IPv4 sensors refactored to share the snapshot
 - `SensorPreviewGate` withholds previews until enabled
+
+**Structure Decision**: Core owns testable decisions (IPv6 classification, MAC
+format, route probe, coalescing); App owns OS adapter enumeration and event
+hookup. Preserve the existing two-project layering.
 
 ## Complexity Tracking
 

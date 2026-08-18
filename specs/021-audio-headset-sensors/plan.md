@@ -35,7 +35,30 @@ enumeration while disabled
 **Constraints**: No third-party audio SDK; COM failures produce safe empty
 readings; device names never logged
 
+**Scale/Scope**: Two new sensors in one Windows source
+
+## Constitution Check
+
+*GATE: Passed (retroactive evaluation of shipped implementation).*
+
+- **Native Windows Experience First**: PASS — uses WinRT device enumeration.
+- **Security & Privacy**: PASS — both sensors default off, labelled sensitive;
+  device names not logged.
+- **Evidence-Driven Development**: PASS — shipped and verified.
+- **Testable, Layered Architecture**: PASS — keyword classification in Core with
+  tests; WinRT enumeration in App.
+- **Resilience & Observability**: PASS — COM exceptions produce safe empty readings.
+
 ## Project Structure
+
+### Documentation (this feature)
+
+```text
+specs/021-audio-headset-sensors/
+├── spec.md
+├── plan.md
+└── tasks.md
+```
 
 ### Source Code
 
@@ -52,6 +75,9 @@ src/WindowsCompanion.App/Services/
 - `AppController` registers the source
 - `SensorCatalog` manages start/stop lifecycle
 - Supports async preview for device enumeration
+
+**Structure Decision**: Core owns HeadsetClassifier (testable keyword matching);
+App owns WinRT device access and poll loop. Preserve the two-project layering.
 
 ## Complexity Tracking
 

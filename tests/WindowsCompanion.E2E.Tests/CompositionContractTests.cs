@@ -18,6 +18,23 @@ namespace WindowsCompanion.E2E.Tests;
 public sealed class CompositionContractTests
 {
     [Fact]
+    public void Production_composition_includes_one_opt_in_wireguard_source()
+    {
+        var sources = ProductionSensorComposition.CreateSources(
+            new ServerConfig(),
+            new LifecycleCoordinator(new MemoryLifecycleJournal()),
+            new NoOpLifecycleSignals(),
+            new FixedSystemStatus(),
+            new NoOpWinGetProvider(),
+            new NoOpLocationProvider());
+        var source = Assert.Single(sources.OfType<WireGuardSensorSource>());
+        var definition = Assert.Single(source.Definitions);
+
+        Assert.Equal(WireGuardSensorSource.StatusId, definition.UniqueId);
+        Assert.False(definition.EnabledByDefault);
+    }
+
+    [Fact]
     public void Production_composition_keeps_platform_defaults()
     {
         var dependencies = AppControllerDependencies.CreateProduction();

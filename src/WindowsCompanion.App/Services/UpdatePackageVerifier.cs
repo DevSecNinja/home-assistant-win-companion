@@ -161,7 +161,7 @@ internal sealed class UpdatePackageVerifier : IUpdatePackageVerifier
                     return;
                 }
 
-                _log.LogDebug(
+                _log.LogWarning(
                     "An attestation for {Package} did not match the expected GitHub Actions build identity: {Reason}",
                     asset.Package.Name,
                     result?.FailureReason);

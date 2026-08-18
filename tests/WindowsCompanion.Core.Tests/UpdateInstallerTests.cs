@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using WindowsCompanion.Core.Updates;
 
 namespace WindowsCompanion.Core.Tests;
@@ -61,11 +62,13 @@ public class UpdateInstallerTests
     private static UpdateInstaller Installer(
         IUpdatePackageDownloader? downloader = null,
         IUpdatePackageVerifier? verifier = null,
-        IUpdatePackageInstaller? installer = null) => new(
+        IUpdatePackageInstaller? installer = null,
+        ILogger<UpdateInstaller>? logger = null) => new(
         downloader ?? new ScriptedDownloader(
             (_, _, _) => Task.FromResult("C:\\fake\\package.zip")),
         verifier ?? new ScriptedVerifier((_, _) => Task.CompletedTask),
-        installer ?? new ScriptedInstaller((_, _) => Task.CompletedTask));
+        installer ?? new ScriptedInstaller((_, _) => Task.CompletedTask),
+        logger);
 
     [Fact]
     public async Task Successful_download_and_verification_reaches_ready_to_install()
@@ -199,10 +202,58 @@ public class UpdateInstallerTests
         await install;
     }
 
+    [Fact]
+    public async Task Download_failure_logs_a_warning_with_the_exception()
+    {
+        var logger = new RecordingLogger();
+        var ex = new HttpRequestException("connection reset");
+        var installer = Installer(
+            downloader: new ScriptedDownloader((_, _, _) => throw ex),
+            logger: logger);
+
+        await installer.DownloadAsync(Update("1.4.0"), UpdateArchitecture.X64);
+
+        Assert.Single(logger.Entries, e =>
+            e.Level == LogLevel.Warning && ReferenceEquals(e.Exception, ex));
+    }
+
+    [Fact]
+    public async Task Verification_failure_logs_a_warning_with_the_exception()
+    {
+        var logger = new RecordingLogger();
+        var ex = new UpdatePackageVerificationException("checksum mismatch");
+        var installer = Installer(
+            verifier: new ScriptedVerifier((_, _) => throw ex),
+            logger: logger);
+
+        await installer.DownloadAsync(Update("1.4.0"), UpdateArchitecture.X64);
+
+        Assert.Single(logger.Entries, e =>
+            e.Level == LogLevel.Warning && ReferenceEquals(e.Exception, ex));
+    }
+
     private static async Task<string> BlockUntilGateAsync(
         TaskCompletionSource gate, CancellationToken ct)
     {
         await gate.Task.WaitAsync(ct);
         return "C:\\fake\\first.zip";
+    }
+
+    private sealed record LogEntry(LogLevel Level, string Message, Exception? Exception);
+
+    private sealed class RecordingLogger : ILogger<UpdateInstaller>
+    {
+        public List<LogEntry> Entries { get; } = [];
+
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter) =>
+            Entries.Add(new LogEntry(logLevel, formatter(state, exception), exception));
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
     }
 }

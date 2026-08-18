@@ -17,20 +17,27 @@ namespace WindowsCompanion_App.Services;
 /// PC actually needs. The display language and region are attributes, so no
 /// second entity is needed to answer the other questions.
 ///
-/// Both values are read live from documented user settings; a locale or
-/// time-zone change raises a system event, so there is no polling.
+/// Both values are read live from documented user settings. System events cover
+/// setting changes, while a one-shot schedule covers automatic UTC-offset
+/// transitions without polling.
 /// </remarks>
 public sealed class LocaleSensorSource : ISensorSource
 {
+    private static readonly TimeSpan MaxTransitionDelay = TimeSpan.FromDays(30);
+    private static readonly TimeSpan TransitionWakeTolerance = TimeSpan.FromSeconds(1);
+
     public const string LocaleId = "locale";
     public const string TimeZoneId = "time_zone";
 
     private const string InternationalKey = @"Control Panel\International";
 
-    private readonly ChangeGate<(string Locale, string TimeZone)> _state =
-        new((LocaleFormatter.Unknown, LocaleFormatter.Unknown));
+    private readonly ChangeGate<(string Locale, string TimeZone, int? UtcOffsetSeconds)> _state =
+        new((LocaleFormatter.Unknown, LocaleFormatter.Unknown, null));
+    private readonly object _lifecycleGate = new();
 
     private Action? _onChanged;
+    private CancellationTokenSource? _transitionCancellation;
+    private bool _monitorOffsetChanges;
     private bool _observing;
 
     public IReadOnlyList<SensorDefinition> Definitions { get; } =
@@ -49,13 +56,15 @@ public sealed class LocaleSensorSource : ISensorSource
             "The time zone this PC is set to, preferring the IANA name Home Assistant uses.",
             SensorPrivacy.Benign,
             EnabledByDefault: true,
-            ResourceUsage: "Low. Shares the regional-settings check above and does not use the "
-                           + "internet.",
+            ResourceUsage: "Low. Schedules one wake-up for the next UTC-offset transition, "
+                           + "listens for settings changes, and does not use the internet.",
             AutomationIdea: "When the time zone changes away from home, enable travel mode.")
     ];
 
     public IReadOnlyList<Sensor> Read(IReadOnlySet<string> enabled, SensorReadContext context)
     {
+        if (!string.Equals(context.Reason, "Preview", StringComparison.Ordinal))
+            SetOffsetMonitoringEnabled(enabled.Contains(TimeZoneId));
         if (!enabled.Contains(LocaleId) && !enabled.Contains(TimeZoneId)) return [];
 
         var current = Query();
@@ -86,7 +95,8 @@ public sealed class LocaleSensorSource : ISensorSource
                 Name = "Time Zone",
                 State = current.TimeZone,
                 EntityCategory = "diagnostic",
-                Icon = "mdi:map-clock"
+                Icon = "mdi:map-clock",
+                Attributes = BuildTimeZoneAttributes(current.UtcOffsetSeconds)
             });
         }
 
@@ -95,22 +105,37 @@ public sealed class LocaleSensorSource : ISensorSource
 
     public void Start(Action onChanged)
     {
-        _onChanged = onChanged;
-        if (_observing) return;
+        CancellationTokenSource? current;
+        CancellationToken? currentToken;
+        lock (_lifecycleGate)
+        {
+            _onChanged = onChanged;
+            if (_observing) return;
 
-        _state.Seed(Query());
-        SystemEvents.UserPreferenceChanged += OnUserPreferenceChanged;
-        SystemEvents.TimeChanged += OnTimeChanged;
-        _observing = true;
+            _state.Seed(Query());
+            SystemEvents.UserPreferenceChanged += OnUserPreferenceChanged;
+            SystemEvents.TimeChanged += OnTimeChanged;
+            _observing = true;
+            (current, currentToken) = ReplaceOffsetTransitionMonitorLocked();
+        }
+
+        ActivateOffsetTransitionMonitor(current, currentToken);
     }
 
     public void Stop()
     {
-        if (!_observing) return;
+        lock (_lifecycleGate)
+        {
+            if (!_observing) return;
 
-        SystemEvents.UserPreferenceChanged -= OnUserPreferenceChanged;
-        SystemEvents.TimeChanged -= OnTimeChanged;
-        _observing = false;
+            _observing = false;
+            SystemEvents.UserPreferenceChanged -= OnUserPreferenceChanged;
+            SystemEvents.TimeChanged -= OnTimeChanged;
+            _transitionCancellation?.Cancel();
+            _transitionCancellation = null;
+            _monitorOffsetChanges = false;
+            _onChanged = null;
+        }
     }
 
     private void OnUserPreferenceChanged(object sender, UserPreferenceChangedEventArgs e)
@@ -121,20 +146,145 @@ public sealed class LocaleSensorSource : ISensorSource
         // is invisible until that cache is dropped.
         CultureInfo.CurrentCulture.ClearCachedData();
         Publish();
+        RestartOffsetTransitionMonitor();
     }
 
     private void OnTimeChanged(object? sender, EventArgs e)
     {
         TimeZoneInfo.ClearCachedData();
         Publish();
+        RestartOffsetTransitionMonitor();
     }
 
     private void Publish()
     {
-        if (_state.TryUpdate(Query())) _onChanged?.Invoke();
+        var current = Query();
+        lock (_lifecycleGate)
+        {
+            if (!_observing) return;
+            if (_state.TryUpdate(current)) _onChanged?.Invoke();
+        }
     }
 
-    private static (string Locale, string TimeZone) Query() => (DescribeLocale(), DescribeTimeZone());
+    private void SetOffsetMonitoringEnabled(bool enabled)
+    {
+        CancellationTokenSource? current;
+        CancellationToken? currentToken;
+        lock (_lifecycleGate)
+        {
+            if (_monitorOffsetChanges == enabled) return;
+
+            _monitorOffsetChanges = enabled;
+            (current, currentToken) = ReplaceOffsetTransitionMonitorLocked();
+        }
+
+        ActivateOffsetTransitionMonitor(current, currentToken);
+    }
+
+    private void RestartOffsetTransitionMonitor()
+    {
+        CancellationTokenSource? current;
+        CancellationToken? currentToken;
+        lock (_lifecycleGate)
+        {
+            (current, currentToken) = ReplaceOffsetTransitionMonitorLocked();
+        }
+
+        ActivateOffsetTransitionMonitor(current, currentToken);
+    }
+
+    private (CancellationTokenSource? Current, CancellationToken? CurrentToken)
+        ReplaceOffsetTransitionMonitorLocked()
+    {
+        _transitionCancellation?.Cancel();
+        var current = _observing && _monitorOffsetChanges
+            ? new CancellationTokenSource()
+            : null;
+        _transitionCancellation = current;
+        return (current, current?.Token);
+    }
+
+    private void ActivateOffsetTransitionMonitor(
+        CancellationTokenSource? current,
+        CancellationToken? currentToken)
+    {
+        if (current is not null && currentToken is { } token)
+            _ = MonitorOffsetTransitionsAsync(current, token);
+    }
+
+    private async Task MonitorOffsetTransitionsAsync(
+        CancellationTokenSource cancellation,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                var nextChange = LocaleFormatter.NextUtcOffsetChange(
+                    TimeZoneInfo.Local,
+                    DateTimeOffset.UtcNow);
+                if (nextChange is null) return;
+
+                await DelayUntilAsync(
+                    nextChange.Value + TransitionWakeTolerance,
+                    cancellationToken).ConfigureAwait(false);
+                cancellationToken.ThrowIfCancellationRequested();
+                Publish();
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+        }
+        catch (TimeZoneNotFoundException)
+        {
+        }
+        catch (InvalidTimeZoneException)
+        {
+        }
+        finally
+        {
+            lock (_lifecycleGate)
+            {
+                if (ReferenceEquals(_transitionCancellation, cancellation))
+                    _transitionCancellation = null;
+                cancellation.Dispose();
+            }
+        }
+    }
+
+    private static async Task DelayUntilAsync(
+        DateTimeOffset target,
+        CancellationToken cancellationToken)
+    {
+        while (true)
+        {
+            var remaining = target - DateTimeOffset.UtcNow;
+            if (remaining <= TimeSpan.Zero) return;
+
+            await Task.Delay(
+                remaining < MaxTransitionDelay ? remaining : MaxTransitionDelay,
+                cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    private static (string Locale, string TimeZone, int? UtcOffsetSeconds) Query()
+    {
+        var locale = DescribeLocale();
+        try
+        {
+            var local = TimeZoneInfo.Local;
+            var now = DateTimeOffset.Now;
+            return (locale, DescribeTimeZone(local), LocaleFormatter.UtcOffsetSeconds(local, now));
+        }
+        catch (TimeZoneNotFoundException)
+        {
+            return (locale, LocaleFormatter.Unknown, null);
+        }
+        catch (InvalidTimeZoneException)
+        {
+            return (locale, LocaleFormatter.Unknown, null);
+        }
+    }
 
     /// <summary>
     /// Prefers the live user setting from the registry, because .NET caches the
@@ -149,27 +299,15 @@ public sealed class LocaleSensorSource : ISensorSource
             : LocaleFormatter.Describe(CultureInfo.CurrentCulture.Name);
     }
 
-    private static string DescribeTimeZone()
+    private static string DescribeTimeZone(TimeZoneInfo local)
     {
-        try
-        {
-            var local = TimeZoneInfo.Local;
-            var iana = local.HasIanaId
-                ? local.Id
-                : TimeZoneInfo.TryConvertWindowsIdToIanaId(local.Id, out var converted)
-                    ? converted
-                    : null;
+        var iana = local.HasIanaId
+            ? local.Id
+            : TimeZoneInfo.TryConvertWindowsIdToIanaId(local.Id, out var converted)
+                ? converted
+                : null;
 
-            return LocaleFormatter.DescribeTimeZone(iana, local.Id);
-        }
-        catch (TimeZoneNotFoundException)
-        {
-            return LocaleFormatter.Unknown;
-        }
-        catch (InvalidTimeZoneException)
-        {
-            return LocaleFormatter.Unknown;
-        }
+        return LocaleFormatter.DescribeTimeZone(iana, local.Id);
     }
 
     private static IDictionary<string, object> BuildLocaleAttributes()
@@ -190,6 +328,11 @@ public sealed class LocaleSensorSource : ISensorSource
 
         return attributes;
     }
+
+    private static IDictionary<string, object>? BuildTimeZoneAttributes(int? utcOffsetSeconds) =>
+        utcOffsetSeconds is { } offset
+            ? LocaleFormatter.BuildTimeZoneAttributes(offset)
+            : null;
 
     private static string? ReadInternational(string name)
     {

@@ -8,6 +8,30 @@ namespace WindowsCompanion.UI.Tests;
 public sealed class SensorUiTests
 {
     [UiFact]
+    public Task Sensor_preview_refreshes_while_page_remains_open() =>
+        UiScenarioFixture.RunAsync(
+            "ui-sensor-preview-refresh",
+            "refresh sensor preview automatically",
+            async fixture =>
+            {
+                new ConnectPage(fixture.Window).EnterUrl(fixture.Scenario.BaseUrl!.AbsoluteUri);
+                var status = new StatusPage(fixture.Window);
+                status.WaitForConnection("Connected");
+                status.OpenSensors();
+
+                var sensors = new SensorsPage(fixture.Window);
+                sensors.WaitUntilVisible();
+                var initial = sensors.Preview("battery_level");
+
+                await Task.Run(() => AutomationWait.Until(
+                    () => !string.Equals(
+                        sensors.Preview("battery_level"),
+                        initial,
+                        StringComparison.Ordinal),
+                    "Battery preview did not refresh while the Sensors page remained open."));
+            });
+
+    [UiFact]
     public Task Sensor_toggle_and_update_now_reach_home_assistant() =>
         UiScenarioFixture.RunAsync(
             "ui-sensors",

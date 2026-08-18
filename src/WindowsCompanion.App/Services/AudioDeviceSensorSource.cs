@@ -6,7 +6,7 @@ using Windows.Media.Devices;
 
 namespace WindowsCompanion_App.Services;
 
-public sealed class AudioDeviceSensorSource : ISensorSource
+public sealed class AudioDeviceSensorSource : ISensorSource, ICachedSensorSource
 {
     public const string AudioOutputId = "audio_output";
     public const string HeadsetConnectedId = "headset_connected";
@@ -51,6 +51,9 @@ public sealed class AudioDeviceSensorSource : ISensorSource
         lock (_gate) snapshot = _snapshot;
         return Build(snapshot, enabled);
     }
+
+    public IReadOnlyList<Sensor> ReadCached(IReadOnlySet<string> enabled) =>
+        Read(enabled, new SensorReadContext("Cached"));
 
     public async ValueTask<IReadOnlyList<Sensor>> PreviewAsync(
         IReadOnlySet<string> requested,

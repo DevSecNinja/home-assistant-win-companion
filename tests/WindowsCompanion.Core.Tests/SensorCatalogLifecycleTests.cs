@@ -125,6 +125,29 @@ public class SensorCatalogLifecycleTests
     }
 
     [Fact]
+    public void Live_preview_reads_only_enabled_cached_values()
+    {
+        var preferences = new SensorPreferences();
+        var failing = new ThrowingPreviewSource();
+        var healthy = new CountingSource();
+        var collecting = new UncachedCountingSource();
+        var catalog = new SensorCatalog([failing, healthy, collecting], preferences);
+
+        Assert.Empty(catalog.PreviewEnabled());
+        Assert.Equal(0, healthy.ReadCount);
+
+        catalog.SetEnabled(ThrowingPreviewSource.Id, true);
+        catalog.SetEnabled(CountingSource.PrimaryId, true);
+        catalog.SetEnabled(UncachedCountingSource.Id, true);
+        var preview = catalog.PreviewEnabled();
+
+        Assert.False(preview.ContainsKey(ThrowingPreviewSource.Id));
+        Assert.Equal("Primary", preview[CountingSource.PrimaryId]);
+        Assert.Equal(1, healthy.ReadCount);
+        Assert.Equal(0, collecting.ReadCount);
+    }
+
+    [Fact]
     public async Task Enabling_a_sensitive_sensor_immediately_previews_a_fresh_value()
     {
         var preferences = new SensorPreferences();
@@ -298,7 +321,7 @@ public class SensorCatalogLifecycleTests
         }
     }
 
-    private sealed class CountingSource : ISensorSource
+    private sealed class CountingSource : ISensorSource, ICachedSensorSource
     {
         public const string PrimaryId = "counting_primary";
         public const string SecondaryId = "counting_secondary";
@@ -333,6 +356,9 @@ public class SensorCatalogLifecycleTests
                 .ToList();
         }
 
+        public IReadOnlyList<Sensor> ReadCached(IReadOnlySet<string> enabled) =>
+            Read(enabled, new SensorReadContext("Cached"));
+
         public void Start(Action onChanged)
         {
             StartCount++;
@@ -350,7 +376,7 @@ public class SensorCatalogLifecycleTests
         public void SignalChange() => _onChanged?.Invoke();
     }
 
-    private sealed class ThrowingPreviewSource : ISensorSource
+    private sealed class ThrowingPreviewSource : ISensorSource, ICachedSensorSource
     {
         public const string Id = "throwing_preview";
 
@@ -360,6 +386,9 @@ public class SensorCatalogLifecycleTests
         public IReadOnlyList<Sensor> Read(IReadOnlySet<string> enabled, SensorReadContext context) =>
             throw new InvalidOperationException("Preview must not break the settings UI.");
 
+        public IReadOnlyList<Sensor> ReadCached(IReadOnlySet<string> enabled) =>
+            throw new InvalidOperationException("Cached preview must not break the settings UI.");
+
         public void Start(Action onChanged)
         {
         }
@@ -367,6 +396,26 @@ public class SensorCatalogLifecycleTests
         public void Stop()
         {
         }
+    }
+
+    private sealed class UncachedCountingSource : ISensorSource
+    {
+        public const string Id = "uncached_counting";
+
+        public int ReadCount { get; private set; }
+
+        public IReadOnlyList<SensorDefinition> Definitions { get; } =
+            [new(Id, "Uncached", "Test sensor.", SensorPrivacy.Benign, false)];
+
+        public IReadOnlyList<Sensor> Read(IReadOnlySet<string> enabled, SensorReadContext context)
+        {
+            ReadCount++;
+            return [new Sensor { UniqueId = Id, State = "Collected" }];
+        }
+
+        public void Start(Action onChanged) { }
+
+        public void Stop() { }
     }
 
     private sealed class GatedSensitiveSource : ISensorSource

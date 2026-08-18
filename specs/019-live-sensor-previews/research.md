@@ -15,7 +15,7 @@
 - **Rationale**: The page should stop causing work when another view is selected, the window is hidden to tray, or its presenter is minimized. Window presentation changes are the authoritative native lifecycle signal.
 - **Alternatives considered**: Run continuously once the page is first opened; gate only on XAML visibility.
 
-## Decision: Reuse catalog preview privacy and error behavior
+## Decision: Use cached enabled readings for periodic updates
 
-- **Rationale**: `SensorCatalog.PreviewAsync` already prevents reads of disabled sensitive sensors, serializes preview calls, and isolates individual source failures.
-- **Alternatives considered**: Read individual sources from the UI or duplicate privacy checks in the page.
+- **Rationale**: The initial full preview remains privacy-gated, while periodic updates invoke only an explicit non-collecting cached-snapshot contract on enabled sources. Sources whose ordinary read performs collection are excluded, and demo mode returns no periodic updates because its sources are deliberately not started.
+- **Alternatives considered**: Re-run every source's active preview operation, assume the general read contract is cached, read individual sources from the UI, or duplicate privacy checks in the page.

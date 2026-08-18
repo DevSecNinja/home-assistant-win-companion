@@ -16,7 +16,7 @@ namespace WindowsCompanion_App.Services;
 /// rather than on every sync, and the published snapshot only changes (and
 /// pushes) when the pending-reboot state actually flips.
 /// </remarks>
-public sealed class PendingRebootSensorSource : ISensorSource, IRefreshableSensorSource
+public sealed class PendingRebootSensorSource : ISensorSource, IRefreshableSensorSource, ICachedSensorSource
 {
     public const string PendingRebootId = "pending_reboot";
 
@@ -61,6 +61,9 @@ public sealed class PendingRebootSensorSource : ISensorSource, IRefreshableSenso
     ];
 
     public IReadOnlyList<Sensor> Read(IReadOnlySet<string> enabled, SensorReadContext context) =>
+        Build(_state.Current, enabled);
+
+    public IReadOnlyList<Sensor> ReadCached(IReadOnlySet<string> enabled) =>
         Build(_state.Current, enabled);
 
     public async ValueTask<IReadOnlyList<Sensor>> PreviewAsync(

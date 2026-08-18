@@ -6,7 +6,7 @@
 
 ## Summary
 
-Refresh the existing sensor preview text in place every two seconds while the Sensors view is visible and the app window is neither hidden nor minimized. Reuse the catalog's privacy-gated preview operation and the existing preview cancellation coordinator. Keep each refresh single-flight, cancel it when presentation stops, and never rebuild the sensor controls during periodic updates.
+Refresh preview text from explicitly opted-in, non-collecting cached snapshots every two seconds while the Sensors view is visible and the app window is neither hidden nor minimized. Keep each refresh single-flight, cancel it when presentation stops, preserve every source's collection cadence, disable periodic collection in demo mode, and never rebuild the sensor controls during periodic updates.
 
 ## Technical Context
 

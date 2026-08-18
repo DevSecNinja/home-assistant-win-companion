@@ -40,3 +40,12 @@ public interface ISensorSource
     /// <summary>Releases any OS hooks. Called when the last sensor is disabled.</summary>
     void Stop();
 }
+
+/// <summary>
+/// Opt-in contract for sources that can render an existing snapshot without
+/// querying the operating system or starting new collection.
+/// </summary>
+public interface ICachedSensorSource
+{
+    IReadOnlyList<Sensor> ReadCached(IReadOnlySet<string> enabled);
+}

@@ -49,7 +49,11 @@ internal static class TestAppComposition
             LoggerFactory = new(loggerFactory, ownsLoggerFactory),
             WebSocketFactory = static () => new ClientWebSocketAdapter(),
             SensorSourceFactory = (config, _, _) =>
-                [new BatterySensorSource(status), new LocationSensorSource(location, config.Sensors)],
+                [
+                    new BatterySensorSource(status),
+                    new LocationSensorSource(location, config.Sensors),
+                    new TestLivePreviewSensorSource()
+                ],
             LifecycleJournalFactory = () => new FileLifecycleJournal(
                 Path.Combine(options.SettingsDirectory, "lifecycle.json")),
             LifecycleSignalSourceFactory = static () => new NoOpLifecycleSignalSource()
@@ -189,6 +193,42 @@ internal static class TestAppComposition
 
         public SystemStatus GetStatus() =>
             new(true, 80 + Interlocked.Increment(ref _readCount) % 20, PowerState.Discharging);
+    }
+
+    private sealed class TestLivePreviewSensorSource : ISensorSource, ICachedSensorSource
+    {
+        public const string Id = "test_live_preview";
+
+        private Timer? _timer;
+        private int _value;
+
+        public IReadOnlyList<SensorDefinition> Definitions { get; } =
+            [new(Id, "Test Live Preview", "Changing UI-test value.", SensorPrivacy.Benign, true)];
+
+        public IReadOnlyList<Sensor> Read(IReadOnlySet<string> enabled, SensorReadContext context) =>
+            Build(enabled);
+
+        public IReadOnlyList<Sensor> ReadCached(IReadOnlySet<string> enabled) => Build(enabled);
+
+        public void Start(Action onChanged)
+        {
+            _timer ??= new Timer(
+                _ => Interlocked.Increment(ref _value),
+                null,
+                TimeSpan.FromMilliseconds(250),
+                TimeSpan.FromMilliseconds(250));
+        }
+
+        public void Stop()
+        {
+            _timer?.Dispose();
+            _timer = null;
+        }
+
+        private IReadOnlyList<Sensor> Build(IReadOnlySet<string> enabled) =>
+            enabled.Contains(Id)
+                ? [new Sensor { UniqueId = Id, Name = "Test Live Preview", State = _value }]
+                : [];
     }
 
     private sealed class NoOpWinGetUpdateProvider : IWinGetUpdateProvider

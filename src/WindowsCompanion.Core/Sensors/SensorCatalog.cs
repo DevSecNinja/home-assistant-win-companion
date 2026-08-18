@@ -211,6 +211,42 @@ public sealed class SensorCatalog
     }
 
     /// <summary>
+    /// Describes cached readings for enabled sensors without triggering source collection.
+    /// Intended for live UI updates while source-owned hooks and poll loops keep snapshots current.
+    /// </summary>
+    public IReadOnlyDictionary<string, string> PreviewEnabled()
+    {
+        var enabled = EnabledIds;
+        var values = new Dictionary<string, string>(StringComparer.Ordinal);
+
+        foreach (var source in _sources)
+        {
+            if (source is not ICachedSensorSource cached) continue;
+
+            var requested = source.Definitions
+                .Where(definition => enabled.Contains(definition.UniqueId))
+                .Select(definition => definition.UniqueId)
+                .ToHashSet(StringComparer.Ordinal);
+            if (requested.Count == 0) continue;
+
+            IReadOnlyList<Sensor> readings;
+            try
+            {
+                readings = cached.ReadCached(requested);
+            }
+            catch (Exception)
+            {
+                continue; // One cached preview must not break the settings UI.
+            }
+
+            foreach (var reading in readings)
+                values[reading.UniqueId] = Describe(reading.State);
+        }
+
+        return values;
+    }
+
+    /// <summary>
     /// Reads every sensor the user is allowed to see, so the UI can show exactly
     /// what a sensor would report before they switch it on. Purely local: nothing
     /// produced here is transmitted.

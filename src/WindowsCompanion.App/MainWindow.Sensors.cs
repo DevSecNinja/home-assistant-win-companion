@@ -67,7 +67,7 @@ public sealed partial class MainWindow
 
         try
         {
-            var previews = await _controller.PreviewSensorsAsync(previewCancellation.Token);
+            var previews = await _controller.PreviewEnabledSensorsAsync(previewCancellation.Token);
             if (previewCancellation.IsCancellationRequested
                 || !IsSensorPreviewPresented()
                 || !ReferenceEquals(catalog, _controller.Catalog))

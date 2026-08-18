@@ -18,6 +18,7 @@ public sealed partial class MainWindow
         new(StringComparer.Ordinal);
     private readonly List<Control> _sensorSettingControls = [];
     private bool _loadingSensorSettings;
+    private bool _sensorPreviewRefreshPending;
     private View _sensorReturnView = View.Status;
 
     private async void OnShowSensors(object sender, RoutedEventArgs e)
@@ -46,7 +47,7 @@ public sealed partial class MainWindow
         object args) =>
         await RefreshSensorPreviewsAsync();
 
-    private async Task RefreshSensorPreviewsAsync()
+    private async Task RefreshSensorPreviewsAsync(bool retryWhenBusy = false)
     {
         if (!IsSensorPreviewPresented()
             || _sensorSettingControls.Any(control => !control.IsEnabled))
@@ -58,7 +59,11 @@ public sealed partial class MainWindow
         if (catalog is null) return;
 
         using var previewCancellation = _sensorPreviewCancellation.TryBeginList();
-        if (previewCancellation is null) return;
+        if (previewCancellation is null)
+        {
+            if (retryWhenBusy) _sensorPreviewRefreshPending = true;
+            return;
+        }
 
         try
         {
@@ -93,6 +98,11 @@ public sealed partial class MainWindow
         finally
         {
             _sensorPreviewCancellation.EndList(previewCancellation);
+            if (_sensorPreviewRefreshPending && IsSensorPreviewPresented())
+            {
+                _sensorPreviewRefreshPending = false;
+                _ = RefreshSensorPreviewsAsync(retryWhenBusy: true);
+            }
         }
     }
 

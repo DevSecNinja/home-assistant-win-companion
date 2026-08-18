@@ -91,6 +91,20 @@ public sealed class SensorPreviewCancellationTests
     }
 
     [Fact]
+    public void Cancel_list_keeps_owner_until_canceled_preview_ends()
+    {
+        var previews = new SensorPreviewCancellation();
+        using var list = previews.BeginList();
+
+        previews.CancelList();
+
+        Assert.Null(previews.TryBeginList());
+        previews.EndList(list);
+        using var next = previews.TryBeginList();
+        Assert.NotNull(next);
+    }
+
+    [Fact]
     public void Beginning_row_preview_only_cancels_same_sensor()
     {
         var previews = new SensorPreviewCancellation();

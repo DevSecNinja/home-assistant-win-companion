@@ -335,12 +335,13 @@ public sealed partial class MainWindow : Window, IMainWindowActivationTarget
         var wasRunning = _sensorPreviewTimer.IsRunning;
         if (!wasRunning) _sensorPreviewTimer.Start();
         if (refreshImmediately && !wasRunning)
-            _ = RefreshSensorPreviewsAsync();
+            _ = RefreshSensorPreviewsAsync(retryWhenBusy: true);
     }
 
     private void StopSensorPreviewRefresh()
     {
         _sensorPreviewTimer.Stop();
+        _sensorPreviewRefreshPending = false;
         _sensorPreviewCancellation.CancelList();
     }
 

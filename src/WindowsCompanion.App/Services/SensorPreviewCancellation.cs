@@ -83,7 +83,6 @@ internal sealed class SensorPreviewCancellation
         lock (_gate)
         {
             listPreview = _listPreview;
-            _listPreview = null;
         }
 
         listPreview?.Cancel();

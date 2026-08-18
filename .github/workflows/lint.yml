@@ -16,7 +16,7 @@ concurrency:
 jobs:
   lint:
     # renovate: datasource=github-tags depName=DevSecNinja/.github
-    uses: DevSecNinja/.github/.github/workflows/lint.yml@783a7a3a03ae71efcdf5b13eaea80efe26dfa641 # v2.2.0
+    uses: DevSecNinja/.github/.github/workflows/lint.yml@0d0f448de257f354c89dc3a128871235d6ba8c11 # v2.5.0
     permissions:
       contents: read
       security-events: write

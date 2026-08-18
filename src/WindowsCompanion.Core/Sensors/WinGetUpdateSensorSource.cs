@@ -3,7 +3,7 @@ using WindowsCompanion.Core.Models;
 
 namespace WindowsCompanion.Core.Sensors;
 
-public sealed class WinGetUpdateSensorSource : ISensorSource, IRefreshableSensorSource
+public sealed class WinGetUpdateSensorSource : ISensorSource, IRefreshableSensorSource, ICachedSensorSource
 {
     public const string WinGetUpdatesId = "winget_updates";
 
@@ -69,6 +69,9 @@ public sealed class WinGetUpdateSensorSource : ISensorSource, IRefreshableSensor
             }
         ];
     }
+
+    public IReadOnlyList<Sensor> ReadCached(IReadOnlySet<string> enabled) =>
+        Read(enabled, new SensorReadContext("Cached"));
 
     public ValueTask<IReadOnlyList<Sensor>> PreviewAsync(
         IReadOnlySet<string> requested,

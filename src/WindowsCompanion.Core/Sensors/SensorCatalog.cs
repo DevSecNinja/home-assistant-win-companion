@@ -221,6 +221,8 @@ public sealed class SensorCatalog
 
         foreach (var source in _sources)
         {
+            if (source is not ICachedSensorSource cached) continue;
+
             var requested = source.Definitions
                 .Where(definition => enabled.Contains(definition.UniqueId))
                 .Select(definition => definition.UniqueId)
@@ -230,7 +232,7 @@ public sealed class SensorCatalog
             IReadOnlyList<Sensor> readings;
             try
             {
-                readings = source.Read(requested, new SensorReadContext("LivePreview"));
+                readings = cached.ReadCached(requested);
             }
             catch (Exception)
             {

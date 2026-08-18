@@ -26,7 +26,7 @@ namespace WindowsCompanion_App.Services;
 /// sensor alone cannot leak Now Playing metadata, matching the per-sensor
 /// isolation <see cref="SensorPreviewGate"/> guarantees elsewhere.
 /// </remarks>
-public sealed class MediaSensorSource : ISensorSource, IRefreshableSensorSource
+public sealed class MediaSensorSource : ISensorSource, IRefreshableSensorSource, ICachedSensorSource
 {
     public const string NowPlayingId = "media_now_playing";
     public const string PlayingId = "media_playing";
@@ -77,6 +77,9 @@ public sealed class MediaSensorSource : ISensorSource, IRefreshableSensorSource
 
     public IReadOnlyList<Sensor> Read(
         IReadOnlySet<string> enabled, SensorReadContext context) =>
+        Build(_snapshot.Current, enabled);
+
+    public IReadOnlyList<Sensor> ReadCached(IReadOnlySet<string> enabled) =>
         Build(_snapshot.Current, enabled);
 
     public async ValueTask<IReadOnlyList<Sensor>> PreviewAsync(

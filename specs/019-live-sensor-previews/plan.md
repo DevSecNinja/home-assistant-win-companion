@@ -6,7 +6,7 @@
 
 ## Summary
 
-Refresh enabled sensor preview text from source-owned cached snapshots every two seconds while the Sensors view is visible and the app window is neither hidden nor minimized. Keep each refresh single-flight, cancel it when presentation stops, preserve each source's collection cadence, and never rebuild the sensor controls during periodic updates.
+Refresh preview text from explicitly opted-in, non-collecting cached snapshots every two seconds while the Sensors view is visible and the app window is neither hidden nor minimized. Keep each refresh single-flight, cancel it when presentation stops, preserve every source's collection cadence, disable periodic collection in demo mode, and never rebuild the sensor controls during periodic updates.
 
 ## Technical Context
 

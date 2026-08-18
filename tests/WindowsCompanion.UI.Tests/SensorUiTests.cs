@@ -21,11 +21,11 @@ public sealed class SensorUiTests
 
                 var sensors = new SensorsPage(fixture.Window);
                 sensors.WaitUntilVisible();
-                var initial = sensors.Preview("battery_level");
+                var initial = sensors.Preview("test_live_preview");
 
                 await Task.Run(() => AutomationWait.Until(
                     () => !string.Equals(
-                        sensors.Preview("battery_level"),
+                        sensors.Preview("test_live_preview"),
                         initial,
                         StringComparison.Ordinal),
                     "Battery preview did not refresh while the Sensors page remained open."));

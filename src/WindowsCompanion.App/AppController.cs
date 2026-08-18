@@ -187,7 +187,8 @@ public sealed partial class AppController : IAsyncDisposable
     public Task<IReadOnlyDictionary<string, string>> PreviewEnabledSensorsAsync(
         CancellationToken cancellationToken = default) =>
         _demo is not null
-            ? _demo.PreviewAsync(cancellationToken)
+            ? Task.FromResult<IReadOnlyDictionary<string, string>>(
+                new Dictionary<string, string>(StringComparer.Ordinal))
             : Task.FromResult(
                 _catalog?.PreviewEnabled()
                 ?? (IReadOnlyDictionary<string, string>)new Dictionary<string, string>(

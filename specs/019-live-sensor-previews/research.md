@@ -17,5 +17,5 @@
 
 ## Decision: Use cached enabled readings for periodic updates
 
-- **Rationale**: The initial full preview remains privacy-gated, while periodic updates read only enabled sensors from source-owned snapshots. This preserves expensive source polling cadences and avoids probing disabled benign sources every two seconds.
-- **Alternatives considered**: Re-run every source's active preview operation, read individual sources from the UI, or duplicate privacy checks in the page.
+- **Rationale**: The initial full preview remains privacy-gated, while periodic updates invoke only an explicit non-collecting cached-snapshot contract on enabled sources. Sources whose ordinary read performs collection are excluded, and demo mode returns no periodic updates because its sources are deliberately not started.
+- **Alternatives considered**: Re-run every source's active preview operation, assume the general read contract is cached, read individual sources from the UI, or duplicate privacy checks in the page.

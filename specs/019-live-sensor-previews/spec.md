@@ -83,7 +83,7 @@ As a user, I want preview refresh activity to stop when I leave the Sensors page
 ## Assumptions
 
 - A refresh interval of approximately 2 seconds is frequent enough for live feedback while avoiding needlessly aggressive work.
-- Automatic refresh reads cached values for enabled sensors only; disabled benign previews remain at their initial value until enabled, and Home Assistant transmission frequency is unchanged.
+- Automatic refresh reads values only from enabled sources that explicitly expose a non-collecting cached snapshot. Other previews remain at their initial value, demo-mode previews remain static, and Home Assistant transmission frequency is unchanged.
 - Existing sensor enablement, privacy, unavailable-state, and error-display behavior remains authoritative.
 - Sensors that legitimately need longer than the target interval may show their latest completed value rather than overlapping reads.
 

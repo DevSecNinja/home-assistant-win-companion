@@ -19,7 +19,7 @@ namespace WindowsCompanion_App.Services;
 /// worth a Home Assistant recorder row. All three sensors share the single
 /// reading, so enabling all of them costs one query.
 /// </remarks>
-public sealed class DiskUsageSensorSource : ISensorSource, IRefreshableSensorSource
+public sealed class DiskUsageSensorSource : ISensorSource, IRefreshableSensorSource, ICachedSensorSource
 {
     public const string FreeSpaceId = "disk_free_space";
     public const string UsedSpaceId = "disk_used_space";
@@ -74,6 +74,9 @@ public sealed class DiskUsageSensorSource : ISensorSource, IRefreshableSensorSou
     ];
 
     public IReadOnlyList<Sensor> Read(IReadOnlySet<string> enabled, SensorReadContext context) =>
+        Build(_usage.Current, enabled);
+
+    public IReadOnlyList<Sensor> ReadCached(IReadOnlySet<string> enabled) =>
         Build(_usage.Current, enabled);
 
     public async ValueTask<IReadOnlyList<Sensor>> PreviewAsync(

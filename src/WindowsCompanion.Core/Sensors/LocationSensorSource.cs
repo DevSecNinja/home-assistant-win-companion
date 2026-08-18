@@ -4,7 +4,7 @@ using WindowsCompanion.Core.Models;
 
 namespace WindowsCompanion.Core.Sensors;
 
-public sealed class LocationSensorSource : ISensorSource, IRefreshableSensorSource
+public sealed class LocationSensorSource : ISensorSource, IRefreshableSensorSource, ICachedSensorSource
 {
     public const string LocationId = "location";
 
@@ -59,6 +59,9 @@ public sealed class LocationSensorSource : ISensorSource, IRefreshableSensorSour
 
         return [BuildSensor(CurrentResult())];
     }
+
+    public IReadOnlyList<Sensor> ReadCached(IReadOnlySet<string> enabled) =>
+        enabled.Contains(LocationId) ? [BuildSensor(CurrentResult())] : [];
 
     public ValueTask<IReadOnlyList<Sensor>> PreviewAsync(
         IReadOnlySet<string> requested,

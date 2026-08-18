@@ -105,7 +105,7 @@ public sealed class LocaleSensorSource : ISensorSource
 
     public void Start(Action onChanged)
     {
-        CancellationTokenSource? previous;
+        CancellationTokenSource? current;
         CancellationToken? currentToken;
         lock (_lifecycleGate)
         {
@@ -116,15 +116,14 @@ public sealed class LocaleSensorSource : ISensorSource
             SystemEvents.UserPreferenceChanged += OnUserPreferenceChanged;
             SystemEvents.TimeChanged += OnTimeChanged;
             _observing = true;
-            (previous, currentToken) = ReplaceOffsetTransitionMonitorLocked();
+            (current, currentToken) = ReplaceOffsetTransitionMonitorLocked();
         }
 
-        ActivateOffsetTransitionMonitor(previous, currentToken);
+        ActivateOffsetTransitionMonitor(current, currentToken);
     }
 
     public void Stop()
     {
-        CancellationTokenSource? cancellation;
         lock (_lifecycleGate)
         {
             if (!_observing) return;
@@ -132,13 +131,11 @@ public sealed class LocaleSensorSource : ISensorSource
             _observing = false;
             SystemEvents.UserPreferenceChanged -= OnUserPreferenceChanged;
             SystemEvents.TimeChanged -= OnTimeChanged;
-            cancellation = _transitionCancellation;
+            _transitionCancellation?.Cancel();
             _transitionCancellation = null;
             _monitorOffsetChanges = false;
             _onChanged = null;
         }
-
-        CancelAndDispose(cancellation);
     }
 
     private void OnUserPreferenceChanged(object sender, UserPreferenceChangedEventArgs e)
@@ -171,58 +168,53 @@ public sealed class LocaleSensorSource : ISensorSource
 
     private void SetOffsetMonitoringEnabled(bool enabled)
     {
-        CancellationTokenSource? previous;
+        CancellationTokenSource? current;
         CancellationToken? currentToken;
         lock (_lifecycleGate)
         {
             if (_monitorOffsetChanges == enabled) return;
 
             _monitorOffsetChanges = enabled;
-            (previous, currentToken) = ReplaceOffsetTransitionMonitorLocked();
+            (current, currentToken) = ReplaceOffsetTransitionMonitorLocked();
         }
 
-        ActivateOffsetTransitionMonitor(previous, currentToken);
+        ActivateOffsetTransitionMonitor(current, currentToken);
     }
 
     private void RestartOffsetTransitionMonitor()
     {
-        CancellationTokenSource? previous;
+        CancellationTokenSource? current;
         CancellationToken? currentToken;
         lock (_lifecycleGate)
         {
-            (previous, currentToken) = ReplaceOffsetTransitionMonitorLocked();
+            (current, currentToken) = ReplaceOffsetTransitionMonitorLocked();
         }
 
-        ActivateOffsetTransitionMonitor(previous, currentToken);
+        ActivateOffsetTransitionMonitor(current, currentToken);
     }
 
-    private (CancellationTokenSource? Previous, CancellationToken? CurrentToken)
+    private (CancellationTokenSource? Current, CancellationToken? CurrentToken)
         ReplaceOffsetTransitionMonitorLocked()
     {
-        var previous = _transitionCancellation;
+        _transitionCancellation?.Cancel();
         var current = _observing && _monitorOffsetChanges
             ? new CancellationTokenSource()
             : null;
         _transitionCancellation = current;
-        return (previous, current?.Token);
+        return (current, current?.Token);
     }
 
     private void ActivateOffsetTransitionMonitor(
-        CancellationTokenSource? previous,
+        CancellationTokenSource? current,
         CancellationToken? currentToken)
     {
-        CancelAndDispose(previous);
-        if (currentToken is { } token)
-            _ = MonitorOffsetTransitionsAsync(token);
+        if (current is not null && currentToken is { } token)
+            _ = MonitorOffsetTransitionsAsync(current, token);
     }
 
-    private static void CancelAndDispose(CancellationTokenSource? cancellation)
-    {
-        cancellation?.Cancel();
-        cancellation?.Dispose();
-    }
-
-    private async Task MonitorOffsetTransitionsAsync(CancellationToken cancellationToken)
+    private async Task MonitorOffsetTransitionsAsync(
+        CancellationTokenSource cancellation,
+        CancellationToken cancellationToken)
     {
         try
         {
@@ -248,6 +240,15 @@ public sealed class LocaleSensorSource : ISensorSource
         }
         catch (InvalidTimeZoneException)
         {
+        }
+        finally
+        {
+            lock (_lifecycleGate)
+            {
+                if (ReferenceEquals(_transitionCancellation, cancellation))
+                    _transitionCancellation = null;
+                cancellation.Dispose();
+            }
         }
     }
 

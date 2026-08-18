@@ -45,7 +45,7 @@ jobs:
           # Upstream release tags use underscores, so this pin stores 7_0_2 and
           # the step derives the tag and the dotted asset name from it.
           # renovate: datasource=github-releases depName=jrsoftware/issrc
-          inno_version: "7_0_2"
+          inno_version: "7_1_0"
           inno_signer: Pyrsys B.V.
         run: |
           $version = $env:inno_version -replace '_', '.'

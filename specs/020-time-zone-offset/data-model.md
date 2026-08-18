@@ -28,5 +28,7 @@ UTC offset.
 3. Seed or compare the complete locale/time-zone/offset state in the existing
    change gate.
 4. Include `utc_offset_seconds` whenever the Time Zone sensor is read.
-5. Request an immediate sensor sync when the offset changes, even if the zone name
-   does not.
+5. While the Time Zone sensor is enabled, schedule the next offset transition and
+   cancel that schedule when the sensor source stops or the sensor is disabled.
+6. At the transition, request an immediate sensor sync when the offset changes,
+   even if the zone name does not.

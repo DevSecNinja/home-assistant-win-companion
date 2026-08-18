@@ -14,6 +14,9 @@ namespace WindowsCompanion.Core.Sensors;
 /// </remarks>
 public static class LocaleFormatter
 {
+    private static readonly TimeSpan OffsetChangeSearchHorizon = TimeSpan.FromDays(370);
+    private static readonly TimeSpan OffsetChangeSearchStep = TimeSpan.FromHours(1);
+
     public const string Unknown = "Unknown";
 
     /// <summary>Longest real BCP 47 tag is far below this; a guard, not a policy.</summary>
@@ -63,11 +66,64 @@ public static class LocaleFormatter
         return checked((int)(offset.Ticks / TimeSpan.TicksPerSecond));
     }
 
+    /// <summary>
+    /// Finds the first instant in the next year when the zone's UTC offset changes.
+    /// </summary>
+    public static DateTimeOffset? NextUtcOffsetChange(TimeZoneInfo timeZone, DateTimeOffset after)
+    {
+        ArgumentNullException.ThrowIfNull(timeZone);
+
+        var lower = after.ToUniversalTime();
+        var end = lower.Add(OffsetChangeSearchHorizon);
+        var currentOffset = timeZone.GetUtcOffset(lower);
+
+        while (lower < end)
+        {
+            var upper = lower + OffsetChangeSearchStep;
+            if (upper > end) upper = end;
+
+            if (timeZone.GetUtcOffset(upper) != currentOffset)
+            {
+                return FindOffsetChange(timeZone, currentOffset, lower, upper);
+            }
+
+            lower = upper;
+        }
+
+        return null;
+    }
+
     public static IDictionary<string, object> BuildTimeZoneAttributes(int utcOffsetSeconds) =>
         new Dictionary<string, object>(StringComparer.Ordinal)
         {
             ["utc_offset_seconds"] = utcOffsetSeconds
         };
+
+    private static DateTimeOffset FindOffsetChange(
+        TimeZoneInfo timeZone,
+        TimeSpan currentOffset,
+        DateTimeOffset lower,
+        DateTimeOffset upper)
+    {
+        var lowerTicks = lower.UtcDateTime.Ticks;
+        var upperTicks = upper.UtcDateTime.Ticks;
+
+        while (upperTicks - lowerTicks > 1)
+        {
+            var middleTicks = lowerTicks + ((upperTicks - lowerTicks) / 2);
+            var middle = new DateTimeOffset(middleTicks, TimeSpan.Zero);
+            if (timeZone.GetUtcOffset(middle) == currentOffset)
+            {
+                lowerTicks = middleTicks;
+            }
+            else
+            {
+                upperTicks = middleTicks;
+            }
+        }
+
+        return new DateTimeOffset(upperTicks, TimeSpan.Zero);
+    }
 
     private static string Shorten(string value) =>
         value.Length <= 255 ? value : value[..255];

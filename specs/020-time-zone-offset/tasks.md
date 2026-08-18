@@ -60,7 +60,7 @@ change as meaningful.
 
 ### Implementation for User Story 2
 
-- [x] T006 [US2] Include the offset in locale source snapshot and change-gate state in `src/WindowsCompanion.App/Services/LocaleSensorSource.cs`
+- [x] T006 [US2] Include the offset in locale source snapshot and change-gate state, and schedule the next offset transition while enabled in `src/WindowsCompanion.App/Services/LocaleSensorSource.cs`
 
 **Checkpoint**: An offset-only seasonal change can request an immediate sensor
 sync while the IANA state remains unchanged.

@@ -20,6 +20,8 @@ Expected outcomes:
 - Positive and negative zones produce correctly signed seconds.
 - A fractional-hour zone is not rounded.
 - A daylight-saving zone produces the offset active at each supplied instant.
+- The next daylight-saving start and end transitions are found exactly, while a
+  fixed-offset zone schedules no transition.
 
 ## Source validation
 

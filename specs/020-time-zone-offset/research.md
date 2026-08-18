@@ -24,13 +24,17 @@
 
 ## Change detection
 
-- **Decision**: Include the offset in the locale source's captured state.
+- **Decision**: Include the offset in the locale source's captured state and
+  schedule a cancellable wake-up for the next offset transition while the Time
+  Zone sensor is enabled.
 - **Rationale**: The time-zone name can remain unchanged when daylight-saving
-  changes its current offset. Including the offset lets the existing event-driven
-  change gate request synchronization without adding polling.
-- **Alternatives considered**: Calculating only when `Read` is called would return
-  the correct value eventually but could leave Home Assistant stale after an
-  offset-only transition.
+  changes its current offset. Windows setting events do not guarantee delivery at
+  an automatic daylight-saving boundary, so the scheduled wake-up feeds the
+  existing change gate without periodic polling.
+- **Alternatives considered**: Relying on system events or calculating only when
+  `Read` is called would return the correct value eventually but could leave Home
+  Assistant stale until the next periodic full sync. Frequent polling would wake
+  the app unnecessarily.
 
 ## Test boundary
 

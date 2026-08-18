@@ -316,6 +316,50 @@ public class HardwareSensorTests
     [Fact]
     public void Time_zone_offset_applies_daylight_saving_for_the_requested_instant()
     {
+        var zone = CreateTestDaylightZone();
+
+        Assert.Equal(
+            3_600,
+            LocaleFormatter.UtcOffsetSeconds(zone, new DateTimeOffset(2026, 1, 15, 12, 0, 0, TimeSpan.Zero)));
+        Assert.Equal(
+            7_200,
+            LocaleFormatter.UtcOffsetSeconds(zone, new DateTimeOffset(2026, 7, 15, 12, 0, 0, TimeSpan.Zero)));
+    }
+
+    [Fact]
+    public void Next_time_zone_offset_change_finds_each_daylight_saving_transition()
+    {
+        var zone = CreateTestDaylightZone();
+
+        Assert.Equal(
+            new DateTimeOffset(2026, 3, 8, 1, 0, 0, TimeSpan.Zero),
+            LocaleFormatter.NextUtcOffsetChange(
+                zone,
+                new DateTimeOffset(2026, 1, 15, 12, 0, 0, TimeSpan.Zero)));
+        Assert.Equal(
+            new DateTimeOffset(2026, 11, 1, 0, 0, 0, TimeSpan.Zero),
+            LocaleFormatter.NextUtcOffsetChange(
+                zone,
+                new DateTimeOffset(2026, 7, 15, 12, 0, 0, TimeSpan.Zero)));
+    }
+
+    [Fact]
+    public void Fixed_time_zone_has_no_upcoming_offset_change()
+    {
+        var zone = TimeZoneInfo.CreateCustomTimeZone(
+            "Fixed test zone",
+            TimeSpan.FromHours(5.75),
+            "Fixed test zone",
+            "Fixed test zone");
+
+        Assert.Null(
+            LocaleFormatter.NextUtcOffsetChange(
+                zone,
+                new DateTimeOffset(2026, 1, 15, 12, 0, 0, TimeSpan.Zero)));
+    }
+
+    private static TimeZoneInfo CreateTestDaylightZone()
+    {
         var daylightStart = TimeZoneInfo.TransitionTime.CreateFloatingDateRule(
             new DateTime(1, 1, 1, 2, 0, 0),
             3,
@@ -340,12 +384,7 @@ public class HardwareSensorTests
             "Test daylight time",
             [rule]);
 
-        Assert.Equal(
-            3_600,
-            LocaleFormatter.UtcOffsetSeconds(zone, new DateTimeOffset(2026, 1, 15, 12, 0, 0, TimeSpan.Zero)));
-        Assert.Equal(
-            7_200,
-            LocaleFormatter.UtcOffsetSeconds(zone, new DateTimeOffset(2026, 7, 15, 12, 0, 0, TimeSpan.Zero)));
+        return zone;
     }
 
     [Fact]

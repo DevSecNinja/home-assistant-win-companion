@@ -11,7 +11,8 @@
 Add a calculation-friendly `utc_offset_seconds` attribute to the existing Time
 Zone sensor without changing its state or identity. Capture the current offset
 alongside the locale and time-zone name, include it in change detection, and
-keep deterministic offset calculation in Core for unit testing.
+schedule the next offset transition while the sensor is enabled. Keep
+deterministic offset and transition calculation in Core for unit testing.
 
 ## Technical Context
 
@@ -33,7 +34,7 @@ keep deterministic offset calculation in Core for unit testing.
 
 **Project Type**: Windows desktop companion application with a platform-independent Core library
 
-**Performance Goals**: Constant-time calculation during existing event-driven sensor reads; no polling
+**Performance Goals**: Constant-time offset calculation during sensor reads and one scheduled wake-up per offset transition; no periodic polling
 
 **Constraints**: Preserve the `time_zone` entity state and identity; use the offset at the reading instant; transmit a JSON integer
 

@@ -20,7 +20,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\WindowsCompanion.App\WindowsCompanion.App.csproj" />
+    <ProjectReference Include="..\..\src\WindowsCompanion.App\WindowsCompanion.App.csproj"
+      ReferenceOutputAssembly="false" />
     <ProjectReference Include="..\..\src\WindowsCompanion.Core\WindowsCompanion.Core.csproj" />
     <ProjectReference Include="..\WindowsCompanion.Testing\WindowsCompanion.Testing.csproj" />
   </ItemGroup>

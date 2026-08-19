@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.10.0](https://github.com/DevSecNinja/home-assistant-win-companion/compare/v0.9.0...v0.10.0) (2026-08-19)
+
+
+### Features
+
+* **deps:** migrate from xunit v2 to xunit.v3 ([#203](https://github.com/DevSecNinja/home-assistant-win-companion/issues/203)) ([6d59db1](https://github.com/DevSecNinja/home-assistant-win-companion/commit/6d59db1eac1a4571f31e63ed141b70ae3024c33d))
+
+
+### Bug Fixes
+
+* improve update verification logging and sensor filter width ([#202](https://github.com/DevSecNinja/home-assistant-win-companion/issues/202)) ([87c3107](https://github.com/DevSecNinja/home-assistant-win-companion/commit/87c310706435a8010869c6555902b5bd106cf216))
+* **ui:** preserve sensor source polling cadence ([#221](https://github.com/DevSecNinja/home-assistant-win-companion/issues/221)) ([bd5c93f](https://github.com/DevSecNinja/home-assistant-win-companion/commit/bd5c93f075c44815871d29569e665893cf0ce161))
+
 ## [0.9.0](https://github.com/DevSecNinja/home-assistant-win-companion/compare/v0.8.0...v0.9.0) (2026-08-18)
 
 

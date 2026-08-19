@@ -340,6 +340,7 @@ public class ConnectionManagerTests
             await attempts.ReachedAsync(attempt + 1);
         }
 
+        await clock.NextDelayAsync(IsReconnectDelay);
         Assert.Equal(21, attempts.Count);
         Assert.Equal(1, unhealthy);
         Assert.Equal(2, logger.Count(LogLevel.Warning));

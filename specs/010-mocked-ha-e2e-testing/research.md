@@ -74,7 +74,7 @@ controller, session, registration, connection, and sensor logic.
 
 ## Decision 4: Native UI automation
 
-**Decision**: Use FlaUI 5 UIA3 from a `net10.0-windows` xUnit project. Add stable
+**Decision**: Use FlaUI UIA3 from a `net10.0-windows` xUnit project. Add stable
 `AutomationProperties.AutomationId` values to tested controls and page objects
 that locate elements only by those identifiers and control types.
 

@@ -21,7 +21,7 @@ model, poll-driven sensor source) lives in `WindowsCompanion.Core` behind an
 
 **Language/Version**: C# 13 / .NET 10
 
-**Primary Dependencies**: Windows App SDK (WinUI 3) 2.3.1; `Windows.Devices.Geolocation` (Windows Runtime, via the Windows SDK projection already used for `Windows.Devices.Enumeration`/`Windows.Media.Devices` in `AudioDeviceSensorSource`)
+**Primary Dependencies**: Windows App SDK (WinUI 3); `Windows.Devices.Geolocation` (Windows Runtime, via the Windows SDK projection already used for `Windows.Devices.Enumeration`/`Windows.Media.Devices` in `AudioDeviceSensorSource`)
 
 **Storage**: N/A - no new persisted state; reuses existing `SensorPreferences`/`RegisteredSensors` enable/disable and registration bookkeeping
 

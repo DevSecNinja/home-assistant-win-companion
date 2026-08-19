@@ -12,14 +12,19 @@ Register-TestSuite -Name 'core' -Default -Run {
     }
 
     $coverageArguments = @(
-        '--collect'
-        'XPlat Code Coverage'
         '--results-directory'
         $coverageDirectory
     )
-    if ($Filter) { $coverageArguments += @('--filter', $Filter) }
+    $coverageTestArguments = @(
+        '--coverage'
+        '--coverage-output-format'
+        'cobertura'
+        '--coverage-output'
+        'coverage.cobertura.xml'
+    )
+    if ($Filter) { $coverageTestArguments += @('--filter-query', $Filter) }
 
-    & $dotnet test $project --nologo @coverageArguments
+    & $dotnet test --project $project @coverageArguments -- @coverageTestArguments
     if ($LASTEXITCODE -ne 0) { throw 'Core tests failed.' }
 
     $report = Get-ChildItem $coverageDirectory -Recurse -Filter 'coverage.cobertura.xml' |

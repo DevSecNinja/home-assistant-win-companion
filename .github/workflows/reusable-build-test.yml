@@ -77,26 +77,24 @@ jobs:
       - name: Run core tests
         id: tests
         run: >-
-          dotnet test tests\WindowsCompanion.Core.Tests\WindowsCompanion.Core.Tests.csproj -c Release --no-restore --logger "trx;LogFileName=test-results.trx"
-          --results-directory TestResults --nologo
+          dotnet test --project tests\WindowsCompanion.Core.Tests\WindowsCompanion.Core.Tests.csproj -c Release --no-restore
+          --results-directory TestResults -- --report-trx --report-trx-filename test-results.trx
       - name: Run end-to-end tests
         id: e2e-tests
         run: >-
-          dotnet test tests\WindowsCompanion.E2E.Tests\WindowsCompanion.E2E.Tests.csproj -c Release
+          dotnet test --project tests\WindowsCompanion.E2E.Tests\WindowsCompanion.E2E.Tests.csproj -c Release
           -p:Platform=x64 -p:PublishReadyToRun=false -r win-x64 --no-restore
-          --filter "Category!=Repeatability"
-          --blame-hang --blame-hang-timeout 2m --blame-hang-dump-type none
-          --logger "console;verbosity=detailed"
-          --logger "trx;LogFileName=e2e-test-results.trx"
-          --results-directory TestResults --nologo
+          --output Detailed --results-directory TestResults --
+          --filter-query "/[Category!=Repeatability]"
+          --hangdump --hangdump-timeout 2m --hangdump-type None
+          --report-trx --report-trx-filename e2e-test-results.trx
       - name: Run Debug launch-profile safety tests
         run: >-
-          dotnet test tests\WindowsCompanion.E2E.Tests\WindowsCompanion.E2E.Tests.csproj -c Debug
+          dotnet test --project tests\WindowsCompanion.E2E.Tests\WindowsCompanion.E2E.Tests.csproj -c Debug
           -p:Platform=x64 -r win-x64 --no-restore
-          --filter "FullyQualifiedName~TestAppLaunchOptionsTests"
-          --logger "console;verbosity=detailed"
-          --logger "trx;LogFileName=launch-profile-test-results.trx"
-          --results-directory TestResults --nologo
+          --output Detailed --results-directory TestResults --
+          --filter-query "/*/*/TestAppLaunchOptionsTests/*"
+          --report-trx --report-trx-filename launch-profile-test-results.trx
       - name: Compile UI tests
         run: >-
           dotnet build tests\WindowsCompanion.UI.Tests\WindowsCompanion.UI.Tests.csproj -c Debug
@@ -120,8 +118,8 @@ jobs:
       - name: Run App-boundary tests
         id: app-tests
         run: >-
-          dotnet test tests\WindowsCompanion.App.Tests\WindowsCompanion.App.Tests.csproj -c Release --no-restore --logger "trx;LogFileName=app-test-results.trx"
-          --results-directory TestResults --nologo
+          dotnet test --project tests\WindowsCompanion.App.Tests\WindowsCompanion.App.Tests.csproj -c Release --no-restore
+          --results-directory TestResults -- --report-trx --report-trx-filename app-test-results.trx
       - name: Publish test summary
         if: ${{ always() }}
         shell: pwsh

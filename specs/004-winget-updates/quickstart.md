@@ -4,7 +4,7 @@
 
 ```powershell
 .\scripts\run.ps1
-dotnet test tests\WindowsCompanion.Core.Tests\WindowsCompanion.Core.Tests.csproj
+dotnet test --project tests\WindowsCompanion.Core.Tests\WindowsCompanion.Core.Tests.csproj
 ```
 
 ## First enablement

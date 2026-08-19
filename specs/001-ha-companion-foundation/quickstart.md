@@ -61,7 +61,7 @@
 ## Run tests
 
 ```powershell
-dotnet test tests/WindowsCompanion.Core.Tests/WindowsCompanion.Core.Tests.csproj
+dotnet test --project tests\WindowsCompanion.Core.Tests\WindowsCompanion.Core.Tests.csproj
 ```
 
 ## Pause or remove the connection

@@ -24,7 +24,7 @@ Single existing solution: `src/WindowsCompanion.Core/`, `src/WindowsCompanion.Ap
 
 **Purpose**: No new project/toolchain setup is needed - this feature adds files to the existing `WindowsCompanion.Core` and `WindowsCompanion.App` projects and the existing `WindowsCompanion.Core.Tests` test project. This phase only confirms the workspace builds cleanly before changes begin.
 
-- [X] T001 Confirm a clean baseline build: run `dotnet build src\WindowsCompanion.App\WindowsCompanion.App.csproj -c Release -p:Platform=x64 -r win-x64 --nologo` and `dotnet test tests\WindowsCompanion.Core.Tests\WindowsCompanion.Core.Tests.csproj -c Release` before any edits, so any later failure is attributable to this feature
+- [X] T001 Confirm a clean baseline build: run `dotnet build src\WindowsCompanion.App\WindowsCompanion.App.csproj -c Release -p:Platform=x64 -r win-x64 --nologo` and `dotnet test --project tests\WindowsCompanion.Core.Tests\WindowsCompanion.Core.Tests.csproj -c Release` before any edits, so any later failure is attributable to this feature
 
 ---
 
@@ -112,8 +112,8 @@ Single existing solution: `src/WindowsCompanion.Core/`, `src/WindowsCompanion.Ap
 
 **Purpose**: Final repo-wide validation once all user stories are complete.
 
-- [X] T023 [P] Run `dotnet test tests\WindowsCompanion.Core.Tests\WindowsCompanion.Core.Tests.csproj -c Release --filter "FullyQualifiedName~LocationSensorSourceTests"` and confirm every new test passes
-- [X] T024 Run the full `dotnet test tests\WindowsCompanion.Core.Tests\WindowsCompanion.Core.Tests.csproj -c Release` suite to confirm no regressions
+- [X] T023 [P] Run `dotnet test --project tests\WindowsCompanion.Core.Tests\WindowsCompanion.Core.Tests.csproj -c Release -- --filter-query "/*/*/LocationSensorSourceTests/*"` and confirm every new test passes
+- [X] T024 Run the full `dotnet test --project tests\WindowsCompanion.Core.Tests\WindowsCompanion.Core.Tests.csproj -c Release` suite to confirm no regressions
 - [X] T025 [P] Run `dotnet build src\WindowsCompanion.App\WindowsCompanion.App.csproj -c Release -p:Platform=x64 -r win-x64 --nologo` and the ARM64 equivalent to confirm both platforms still build
 - [X] T026 Execute the manual validation steps in `specs/013-location-sensor/quickstart.md` (steps 1-7) on a Windows machine and record any deviations back into `spec.md`/`research.md` per the constitution's evidence-driven-development principle
 

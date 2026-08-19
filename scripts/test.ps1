@@ -68,27 +68,32 @@ function Invoke-TestProject {
 
         [string]$Configuration,
 
-        [string[]]$AdditionalArguments = @()
+        [string[]]$AdditionalArguments = @(),
+
+        [string[]]$TestArguments = @()
     )
 
+    $testOutput = if ($Verbosity -eq 'detailed') { 'Detailed' } else { 'Normal' }
     $arguments = @(
         'test'
+        '--project'
         $Project
-        '--nologo'
-        '--logger'
-        "console;verbosity=$Verbosity"
+        '-v'
+        $Verbosity
+        '--output'
+        $testOutput
     )
     if ($Configuration) { $arguments += @('-c', $Configuration) }
-    if ($Filter) { $arguments += @('--filter', $Filter) }
     if ($ResultsDirectory) {
         $arguments += @(
             '--results-directory'
             $ResultsDirectory
-            '--logger'
-            "trx;LogFileName=$Name.trx"
         )
+        $TestArguments += @('--report-trx', '--report-trx-filename', "$Name.trx")
     }
     $arguments += $AdditionalArguments
+    if ($Filter) { $TestArguments += @('--filter-query', $Filter) }
+    if ($TestArguments) { $arguments += @('--') + $TestArguments }
 
     & $dotnet @arguments
     if ($LASTEXITCODE -ne 0) { throw "$Name tests failed." }
@@ -129,6 +134,9 @@ foreach ($suiteFile in $suiteFiles) {
 
 $requestedSuites = if ($Suite) {
     @($Suite)
+}
+elseif ($Filter -and ($EndToEnd -or $Ui)) {
+    @()
 }
 else {
     @($testSuites.Values | Where-Object Default | ForEach-Object Name)

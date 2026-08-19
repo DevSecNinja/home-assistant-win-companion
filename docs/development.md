@@ -71,8 +71,8 @@ filters, diagnostics, and runner constraints.
 Run a focused xUnit class or test with:
 
 ```powershell
-dotnet test tests\WindowsCompanion.Core.Tests\WindowsCompanion.Core.Tests.csproj `
-  -c Release --filter "FullyQualifiedName~RouteValidatorTests"
+dotnet test --project tests\WindowsCompanion.Core.Tests\WindowsCompanion.Core.Tests.csproj `
+  -c Release -- --filter-query "/*/*/RouteValidatorTests/*"
 ```
 
 ## Architecture

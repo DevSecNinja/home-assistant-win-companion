@@ -27,7 +27,7 @@ jobs:
     steps:
       - name: Harden runner
         # renovate: datasource=github-tags depName=DevSecNinja/.github
-        uses: DevSecNinja/.github/actions/harden-runner@7d7ddabef968d8505aceb8a1f8965afd872f0a0c # v2.4.0
+        uses: DevSecNinja/.github/actions/harden-runner@0d0f448de257f354c89dc3a128871235d6ba8c11 # v2.5.0
       - name: Checkout tag
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -45,7 +45,7 @@ jobs:
           # Upstream release tags use underscores, so this pin stores 7_0_2 and
           # the step derives the tag and the dotted asset name from it.
           # renovate: datasource=github-releases depName=jrsoftware/issrc
-          inno_version: "7_0_2"
+          inno_version: "7_1_0"
           inno_signer: Pyrsys B.V.
         run: |
           $version = $env:inno_version -replace '_', '.'
@@ -124,7 +124,7 @@ jobs:
           format: spdx-json
           output-file: artifacts/release/WindowsCompanion-${{ steps.version.outputs.version }}-win-x64.spdx.json
           # renovate: datasource=github-releases depName=anchore/syft
-          syft-version: v1.50.0
+          syft-version: v1.51.0
           upload-artifact: false
           upload-release-assets: false
       - name: Generate ARM64 SPDX SBOM
@@ -137,7 +137,7 @@ jobs:
           format: spdx-json
           output-file: artifacts/release/WindowsCompanion-${{ steps.version.outputs.version }}-win-arm64.spdx.json
           # renovate: datasource=github-releases depName=anchore/syft
-          syft-version: v1.50.0
+          syft-version: v1.51.0
           upload-artifact: false
           upload-release-assets: false
       - name: Generate SBOM checksums
@@ -179,7 +179,7 @@ jobs:
     steps:
       - name: Harden runner
         # renovate: datasource=github-tags depName=DevSecNinja/.github
-        uses: DevSecNinja/.github/actions/harden-runner@7d7ddabef968d8505aceb8a1f8965afd872f0a0c # v2.4.0
+        uses: DevSecNinja/.github/actions/harden-runner@0d0f448de257f354c89dc3a128871235d6ba8c11 # v2.5.0
       - name: Checkout tag
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

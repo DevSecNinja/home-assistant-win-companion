@@ -159,7 +159,7 @@ public sealed class ConnectionManager : IAsyncDisposable
         {
             try
             {
-                SetState(attempt == 0 ? ConnectionState.Connecting : ConnectionState.Reconnecting);
+                if (attempt > 0) SetState(ConnectionState.Reconnecting);
                 Interlocked.Exchange(ref _authenticatedAtTimestamp, long.MinValue);
                 await _ws.RunAsync(ct).ConfigureAwait(false);
                 ResetReconnectAfterStableConnection(ref attempt);

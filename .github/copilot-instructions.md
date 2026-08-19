@@ -35,8 +35,8 @@ Coverage applies to `WindowsCompanion.Core`; the gates are 85% line and 70% bran
 Run a class or single xUnit test with:
 
 ```powershell
-dotnet test tests\WindowsCompanion.Core.Tests\WindowsCompanion.Core.Tests.csproj -c Release --filter "FullyQualifiedName~RouteValidatorTests"
-dotnet test tests\WindowsCompanion.Core.Tests\WindowsCompanion.Core.Tests.csproj -c Release --filter "FullyQualifiedName~RouteValidatorTests.One_url_is_the_default_configuration"
+dotnet test --project tests\WindowsCompanion.Core.Tests\WindowsCompanion.Core.Tests.csproj -c Release -- --filter-query "/*/*/RouteValidatorTests/*"
+dotnet test --project tests\WindowsCompanion.Core.Tests\WindowsCompanion.Core.Tests.csproj -c Release -- --filter-query "/*/*/RouteValidatorTests/One_url_is_the_default_configuration"
 ```
 
 CI is defined in `.github/workflows/ci.yml` and builds x64 and ARM64, uploads

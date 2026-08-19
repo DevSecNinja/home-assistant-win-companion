@@ -12,7 +12,7 @@ Refresh preview text from explicitly opted-in, non-collecting cached snapshots e
 
 **Language/Version**: C# / .NET 10
 
-**Primary Dependencies**: Windows App SDK 2.3, WinUI 3
+**Primary Dependencies**: Windows App SDK, WinUI 3
 
 **Storage**: N/A; previews are transient
 

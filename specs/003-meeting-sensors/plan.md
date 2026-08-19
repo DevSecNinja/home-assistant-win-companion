@@ -17,7 +17,7 @@ poller exists only while one of its sensors is enabled.
 
 **Language/Version**: C# 13 / .NET 9
 
-**Primary Dependencies**: Windows App SDK 2.3.1; Windows shell APIs; Windows registry;
+**Primary Dependencies**: Windows App SDK; Windows shell APIs; Windows registry;
 `Windows.Devices.Enumeration` and `Windows.Media.Devices`; .NET BCL timers
 
 **Storage**: Existing `SensorPreferences` in

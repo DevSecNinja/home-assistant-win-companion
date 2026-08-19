@@ -52,7 +52,7 @@ extension of this flow and is covered by
 - Single-clicking or double-clicking the tray icon and the tray's show command
   share one dispatcher-owned activation path. It idempotently handles hidden,
   minimized, and already-visible windows, and explicitly foregrounds the native
-  window after showing or restoring it. H.NotifyIcon.WinUI 2.4.1 is wired through
+  window after showing or restoring it. H.NotifyIcon.WinUI is wired through
   `LeftClickCommand`, `DoubleClickCommand`, and command-bound flyout items, not
   ignored XAML click handlers.
 - The badge remains while the newer release is known, including after a failed

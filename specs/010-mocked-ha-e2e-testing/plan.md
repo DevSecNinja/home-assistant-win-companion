@@ -21,7 +21,7 @@ explicitly interactive self-hosted Windows runner for trusted changes.
 
 **Primary Dependencies**: ASP.NET Core shared framework for the loopback test
 server; xUnit and Microsoft.NET.Test.Sdk matching the existing test stack; FlaUI
-Core/UIA3 for native UI automation; existing Windows App SDK 2.3 application
+Core/UIA3 for native UI automation; existing Windows App SDK application
 dependencies
 
 **Storage**: Scenario-scoped temporary settings directories plus uniquely scoped

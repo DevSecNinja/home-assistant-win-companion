@@ -11,7 +11,7 @@
 Run the focused Core tests:
 
 ```powershell
-dotnet test tests\WindowsCompanion.Core.Tests\WindowsCompanion.Core.Tests.csproj -c Release --filter "FullyQualifiedName~HardwareSensorTests"
+dotnet test --project tests\WindowsCompanion.Core.Tests\WindowsCompanion.Core.Tests.csproj -c Release -- --filter-query "/*/*/HardwareSensorTests/*"
 ```
 
 Expected outcomes:

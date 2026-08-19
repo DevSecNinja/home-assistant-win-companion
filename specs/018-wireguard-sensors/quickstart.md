@@ -12,8 +12,8 @@
 Run the targeted tests:
 
 ```powershell
-dotnet test tests\WindowsCompanion.Core.Tests\WindowsCompanion.Core.Tests.csproj -c Release --filter "FullyQualifiedName~WireGuardStatusTests"
-dotnet test tests\WindowsCompanion.E2E.Tests\WindowsCompanion.E2E.Tests.csproj -c Release --filter "FullyQualifiedName~WireGuard|FullyQualifiedName=WindowsCompanion.E2E.Tests.CompositionContractTests.Production_composition_includes_one_opt_in_wireguard_source"
+dotnet test --project tests\WindowsCompanion.Core.Tests\WindowsCompanion.Core.Tests.csproj -c Release -- --filter-query "/*/*/WireGuardStatusTests/*"
+dotnet test --project tests\WindowsCompanion.E2E.Tests\WindowsCompanion.E2E.Tests.csproj -c Release -- --filter-query "/*/*/*WireGuard*/*" --filter-query "/*/*/CompositionContractTests/Production_composition_includes_one_opt_in_wireguard_source"
 ```
 
 Build the app without launching it:

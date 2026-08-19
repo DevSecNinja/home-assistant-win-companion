@@ -31,7 +31,7 @@ For a focused CI or trusted diagnostic run:
 
 ```powershell
 .\scripts\test.ps1 -EndToEnd `
-  -Filter "FullyQualifiedName~ConnectionJourneyTests"
+  -Filter "/*/*/ConnectionJourneyTests/*"
 ```
 
 ## Native UI validation
@@ -57,7 +57,7 @@ To select one rendered scenario on the trusted interactive runner:
 
 ```powershell
 .\scripts\test.ps1 -Ui `
-  -Filter "FullyQualifiedName~ConnectUiTests.Sign_in_reaches_connected_status"
+  -Filter "/*/*/ConnectUiTests/Sign_in_reaches_connected_status"
 ```
 
 This repository is public. Never allow unreviewed fork pull-request code to run on

@@ -47,5 +47,5 @@
 ## Unit Tests
 
 ```powershell
-dotnet test tests\WindowsCompanion.Core.Tests\WindowsCompanion.Core.Tests.csproj -c Release --filter "FullyQualifiedName~VersionSummary"
+dotnet test --project tests\WindowsCompanion.Core.Tests\WindowsCompanion.Core.Tests.csproj -c Release -- --filter-query "/*/*/*VersionSummary*/*"
 ```

@@ -22,7 +22,7 @@
 ## Unit tests (fast path, no Windows location hardware needed)
 
 ```powershell
-dotnet test tests\WindowsCompanion.Core.Tests\WindowsCompanion.Core.Tests.csproj -c Release --filter "FullyQualifiedName~LocationSensorSourceTests"
+dotnet test --project tests\WindowsCompanion.Core.Tests\WindowsCompanion.Core.Tests.csproj -c Release -- --filter-query "/*/*/LocationSensorSourceTests/*"
 ```
 
 Expected: all tests pass using a fake `ILocationProvider`, covering:
@@ -70,6 +70,6 @@ Expected: all tests pass using a fake `ILocationProvider`, covering:
 
 - All items in `specs/013-location-sensor/spec.md` Acceptance Scenarios pass
   per the manual steps above.
-- `dotnet test tests\WindowsCompanion.Core.Tests\WindowsCompanion.Core.Tests.csproj -c Release` passes in full (regression check).
+- `dotnet test --project tests\WindowsCompanion.Core.Tests\WindowsCompanion.Core.Tests.csproj -c Release` passes in full (regression check).
 - `dotnet build` succeeds for both `win-x64` and `win-arm64` per the repo's
   standard build commands.

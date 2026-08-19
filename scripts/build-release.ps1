@@ -34,10 +34,10 @@ if (Test-Path $OutputDirectory) {
 [void](New-Item $OutputDirectory -ItemType Directory -Force)
 
 Write-Host 'Running Core tests...' -ForegroundColor Cyan
-& $dotnet test $tests -c Release --nologo
+& $dotnet test --project $tests -c Release
 if ($LASTEXITCODE -ne 0) { throw 'Tests failed.' }
 Write-Host 'Running App-boundary tests...' -ForegroundColor Cyan
-& $dotnet test $appTests -c Release --nologo
+& $dotnet test --project $appTests -c Release
 if ($LASTEXITCODE -ne 0) { throw 'App-boundary tests failed.' }
 
 $targets = @(

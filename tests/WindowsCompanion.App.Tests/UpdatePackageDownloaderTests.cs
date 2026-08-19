@@ -17,7 +17,7 @@ public class UpdatePackageDownloaderTests
         var asset = MakeAsset("WindowsCompanion-1.2.3-win-x64-setup.zip");
         var version = ParseVersion("1.2.3");
         var reports = new List<double>();
-        var progress = new Progress<double>(reports.Add);
+        var progress = new InlineProgress<double>(reports.Add);
 
         try
         {
@@ -82,5 +82,10 @@ public class UpdatePackageDownloaderTests
             HttpRequestMessage request,
             CancellationToken cancellationToken) =>
             responder(request, cancellationToken);
+    }
+
+    private sealed class InlineProgress<T>(Action<T> report) : IProgress<T>
+    {
+        public void Report(T value) => report(value);
     }
 }

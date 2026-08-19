@@ -394,7 +394,7 @@ public class ConnectionManagerTests
         await firstSync;
         Assert.True(manager.IsHealthy);
 
-        clock.AdvanceBy(TimeSpan.FromMinutes(3));
+        clock.AdjustUtcBy(TimeSpan.FromMinutes(3));
         Assert.False(manager.IsHealthy);
 
         homeAssistant.FailUpdates = 1;

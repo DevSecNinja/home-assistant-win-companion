@@ -8,7 +8,7 @@
 ## Automated validation
 
 ```powershell
-dotnet test tests\WindowsCompanion.App.Tests\WindowsCompanion.App.Tests.csproj -c Release --filter "FullyQualifiedName~SensorPreview"
+dotnet test --project tests\WindowsCompanion.App.Tests\WindowsCompanion.App.Tests.csproj -c Release -- --filter-query "/*/*/*SensorPreview*/*"
 ```
 
 Run any targeted UI scenario added for the Sensors page through the repository's existing UI test command.

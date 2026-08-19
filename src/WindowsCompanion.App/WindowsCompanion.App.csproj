@@ -106,9 +106,9 @@
       This must match the Windows App Runtime users install. Updating it changes
       deployment prerequisites for the unpackaged app, so Renovate review is manual.
     -->
-    <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.3.1" />
-    <PackageReference Include="Microsoft.Windows.SDK.BuildTools.WinApp" Version="0.5.0" />
-    <PackageReference Include="Sigstore" Version="0.5.0" />
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.4.0" />
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools.WinApp" Version="0.6.0" />
+    <PackageReference Include="Sigstore" Version="1.0.0" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\WindowsCompanion.Core\WindowsCompanion.Core.csproj" />

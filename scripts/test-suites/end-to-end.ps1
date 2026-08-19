@@ -11,11 +11,13 @@ Register-TestSuite -Name 'end-to-end' -Aliases @('e2e') -Run {
                 '-p:PublishReadyToRun=false'
                 '-r'
                 $runtimeIdentifier
-                '--blame-hang'
-                '--blame-hang-timeout'
+            ) `
+            -TestArguments @(
+                '--hangdump'
+                '--hangdump-timeout'
                 '2m'
-                '--blame-hang-dump-type'
-                'none'
+                '--hangdump-type'
+                'None'
             )
     }
 }

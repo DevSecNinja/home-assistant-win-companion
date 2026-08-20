@@ -92,6 +92,41 @@ public class UpdatePackageDownloaderTests
         }
     }
 
+    [Fact]
+    public async Task Local_processing_does_not_consume_the_next_chunk_timeout()
+    {
+        var payload = Encoding.UTF8.GetBytes(new string('a', 10_000));
+        var handler = new DelegateHandler((_, _) => Task.FromResult(
+            new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StreamContent(new DelayedChunkStream(
+                    payload,
+                    TimeSpan.FromMilliseconds(100)))
+            }));
+        var root = Path.Combine(Path.GetTempPath(), $"wc-dl-{Guid.NewGuid():N}");
+        var downloader = new UpdatePackageDownloader(
+            new HttpClient(handler),
+            root,
+            TimeSpan.FromMilliseconds(250));
+        var asset = MakeAsset("WindowsCompanion-1.2.3-win-x64-setup.zip");
+        var progress = new InlineProgress<double>(_ => Thread.Sleep(200));
+
+        try
+        {
+            var path = await downloader.DownloadAsync(
+                asset,
+                ParseVersion("1.2.3"),
+                progress,
+                CancellationToken.None);
+
+            Assert.Equal(payload, await File.ReadAllBytesAsync(path));
+        }
+        finally
+        {
+            if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+        }
+    }
+
     private static SelectedUpdateAsset MakeAsset(string packageName) => new(
         new ReleaseAsset(packageName, $"https://example.invalid/{packageName}"),
         new ReleaseAsset(packageName + ".sha256", $"https://example.invalid/{packageName}.sha256"));
@@ -118,5 +153,56 @@ public class UpdatePackageDownloaderTests
     private sealed class InlineProgress<T>(Action<T> report) : IProgress<T>
     {
         public void Report(T value) => report(value);
+    }
+
+    private sealed class DelayedChunkStream(byte[] content, TimeSpan secondChunkDelay) : Stream
+    {
+        private int _position;
+        private bool _delayed;
+
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => content.Length;
+        public override long Position
+        {
+            get => _position;
+            set => throw new NotSupportedException();
+        }
+
+        public override async ValueTask<int> ReadAsync(
+            Memory<byte> buffer,
+            CancellationToken cancellationToken = default)
+        {
+            if (_position >= content.Length) return 0;
+
+            var chunkLength = Math.Min(content.Length / 2, buffer.Length);
+            if (_position > 0 && !_delayed)
+            {
+                _delayed = true;
+                await Task.Delay(secondChunkDelay, cancellationToken);
+            }
+
+            chunkLength = Math.Min(chunkLength, content.Length - _position);
+            content.AsMemory(_position, chunkLength).CopyTo(buffer);
+            _position += chunkLength;
+            return chunkLength;
+        }
+
+        public override int Read(byte[] buffer, int offset, int count) =>
+            throw new NotSupportedException();
+
+        public override void Flush()
+        {
+        }
+
+        public override long Seek(long offset, SeekOrigin origin) =>
+            throw new NotSupportedException();
+
+        public override void SetLength(long value) =>
+            throw new NotSupportedException();
+
+        public override void Write(byte[] buffer, int offset, int count) =>
+            throw new NotSupportedException();
     }
 }

@@ -14,15 +14,23 @@ internal sealed class UpdatePackageDownloader : IUpdatePackageDownloader
     // for both the downloaded ZIP and its extracted contents.
     private const double FreeSpaceHeadroomFactor = 3.0;
     private const int BufferSize = 81_920;
+    private static readonly TimeSpan DefaultStallTimeout = TimeSpan.FromSeconds(30);
 
     private readonly HttpClient _http;
     private readonly string _updatesRoot;
+    private readonly TimeSpan _stallTimeout;
 
-    internal UpdatePackageDownloader(HttpClient http, string? updatesRootOverride = null)
+    internal UpdatePackageDownloader(
+        HttpClient http,
+        string? updatesRootOverride = null,
+        TimeSpan? stallTimeout = null)
     {
         _http = http ?? throw new ArgumentNullException(nameof(http));
         _updatesRoot = updatesRootOverride
             ?? Path.Combine(AppDataPaths.Resolve(), "Updates");
+        _stallTimeout = stallTimeout ?? DefaultStallTimeout;
+        if (_stallTimeout <= TimeSpan.Zero)
+            throw new ArgumentOutOfRangeException(nameof(stallTimeout));
     }
 
     public async Task<string> DownloadAsync(
@@ -42,18 +50,23 @@ internal sealed class UpdatePackageDownloader : IUpdatePackageDownloader
         var partialDestination = destination + ".partial";
 
         using var request = new HttpRequestMessage(HttpMethod.Get, asset.Package.DownloadUrl);
-        using var response = await _http
-            .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
-            .ConfigureAwait(false);
-        response.EnsureSuccessStatusCode();
-
-        var contentLength = response.Content.Headers.ContentLength;
-        EnsureFreeSpace(directory, contentLength);
-
         try
         {
-            await using (var source = await response.Content
-                    .ReadAsStreamAsync(cancellationToken)
+            using var response = await AwaitNetworkProgressAsync(
+                    token => _http.SendAsync(
+                        request,
+                        HttpCompletionOption.ResponseHeadersRead,
+                        token),
+                    cancellationToken)
+                .ConfigureAwait(false);
+            response.EnsureSuccessStatusCode();
+
+            var contentLength = response.Content.Headers.ContentLength;
+            EnsureFreeSpace(directory, contentLength);
+
+            await using (var source = await AwaitNetworkProgressAsync(
+                    response.Content.ReadAsStreamAsync,
+                    cancellationToken)
                     .ConfigureAwait(false))
             await using (var target = new FileStream(
                 partialDestination,
@@ -66,10 +79,14 @@ internal sealed class UpdatePackageDownloader : IUpdatePackageDownloader
                 var buffer = new byte[BufferSize];
                 long readTotal = 0;
                 int read;
-                while ((read = await source
-                        .ReadAsync(buffer, cancellationToken)
-                        .ConfigureAwait(false)) > 0)
+                while (true)
                 {
+                    read = await AwaitNetworkProgressAsync(
+                            token => source.ReadAsync(buffer, token).AsTask(),
+                            cancellationToken)
+                        .ConfigureAwait(false);
+                    if (read == 0) break;
+
                     await target
                         .WriteAsync(buffer.AsMemory(0, read), cancellationToken)
                         .ConfigureAwait(false);
@@ -86,6 +103,25 @@ internal sealed class UpdatePackageDownloader : IUpdatePackageDownloader
         finally
         {
             TryDelete(partialDestination);
+        }
+    }
+
+    private async Task<T> AwaitNetworkProgressAsync<T>(
+        Func<CancellationToken, Task<T>> operation,
+        CancellationToken cancellationToken)
+    {
+        using var stalled = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        stalled.CancelAfter(_stallTimeout);
+        try
+        {
+            return await operation(stalled.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException ex)
+            when (!cancellationToken.IsCancellationRequested && stalled.IsCancellationRequested)
+        {
+            throw new TimeoutException(
+                $"The update download made no progress for {_stallTimeout.TotalSeconds:0.#} seconds.",
+                ex);
         }
     }
 

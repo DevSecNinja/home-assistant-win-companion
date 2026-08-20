@@ -14,15 +14,23 @@ internal sealed class UpdatePackageDownloader : IUpdatePackageDownloader
     // for both the downloaded ZIP and its extracted contents.
     private const double FreeSpaceHeadroomFactor = 3.0;
     private const int BufferSize = 81_920;
+    private static readonly TimeSpan DefaultStallTimeout = TimeSpan.FromSeconds(30);
 
     private readonly HttpClient _http;
     private readonly string _updatesRoot;
+    private readonly TimeSpan _stallTimeout;
 
-    internal UpdatePackageDownloader(HttpClient http, string? updatesRootOverride = null)
+    internal UpdatePackageDownloader(
+        HttpClient http,
+        string? updatesRootOverride = null,
+        TimeSpan? stallTimeout = null)
     {
         _http = http ?? throw new ArgumentNullException(nameof(http));
         _updatesRoot = updatesRootOverride
             ?? Path.Combine(AppDataPaths.Resolve(), "Updates");
+        _stallTimeout = stallTimeout ?? DefaultStallTimeout;
+        if (_stallTimeout <= TimeSpan.Zero)
+            throw new ArgumentOutOfRangeException(nameof(stallTimeout));
     }
 
     public async Task<string> DownloadAsync(
@@ -42,18 +50,20 @@ internal sealed class UpdatePackageDownloader : IUpdatePackageDownloader
         var partialDestination = destination + ".partial";
 
         using var request = new HttpRequestMessage(HttpMethod.Get, asset.Package.DownloadUrl);
-        using var response = await _http
-            .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
-            .ConfigureAwait(false);
-        response.EnsureSuccessStatusCode();
-
-        var contentLength = response.Content.Headers.ContentLength;
-        EnsureFreeSpace(directory, contentLength);
-
+        using var stalled = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         try
         {
+            stalled.CancelAfter(_stallTimeout);
+            using var response = await _http
+                .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, stalled.Token)
+                .ConfigureAwait(false);
+            response.EnsureSuccessStatusCode();
+
+            var contentLength = response.Content.Headers.ContentLength;
+            EnsureFreeSpace(directory, contentLength);
+
             await using (var source = await response.Content
-                    .ReadAsStreamAsync(cancellationToken)
+                    .ReadAsStreamAsync(stalled.Token)
                     .ConfigureAwait(false))
             await using (var target = new FileStream(
                 partialDestination,
@@ -66,12 +76,16 @@ internal sealed class UpdatePackageDownloader : IUpdatePackageDownloader
                 var buffer = new byte[BufferSize];
                 long readTotal = 0;
                 int read;
-                while ((read = await source
-                        .ReadAsync(buffer, cancellationToken)
-                        .ConfigureAwait(false)) > 0)
+                while (true)
                 {
+                    stalled.CancelAfter(_stallTimeout);
+                    read = await source
+                        .ReadAsync(buffer, stalled.Token)
+                        .ConfigureAwait(false);
+                    if (read == 0) break;
+
                     await target
-                        .WriteAsync(buffer.AsMemory(0, read), cancellationToken)
+                        .WriteAsync(buffer.AsMemory(0, read), stalled.Token)
                         .ConfigureAwait(false);
                     readTotal += read;
                     if (contentLength is > 0)
@@ -82,6 +96,13 @@ internal sealed class UpdatePackageDownloader : IUpdatePackageDownloader
             File.Copy(partialDestination, destination, overwrite: true);
             progress.Report(1);
             return destination;
+        }
+        catch (OperationCanceledException ex)
+            when (!cancellationToken.IsCancellationRequested && stalled.IsCancellationRequested)
+        {
+            throw new TimeoutException(
+                $"The update download made no progress for {_stallTimeout.TotalSeconds:0.#} seconds.",
+                ex);
         }
         finally
         {

@@ -61,6 +61,37 @@ public class UpdatePackageDownloaderTests
         }
     }
 
+    [Fact]
+    public async Task A_download_that_stalls_before_response_headers_times_out()
+    {
+        var handler = new DelegateHandler(async (_, cancellationToken) =>
+        {
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            throw new InvalidOperationException("The cancellation token should stop the request.");
+        });
+        var root = Path.Combine(Path.GetTempPath(), $"wc-dl-{Guid.NewGuid():N}");
+        var downloader = new UpdatePackageDownloader(
+            new HttpClient(handler),
+            root,
+            TimeSpan.FromMilliseconds(25));
+        var asset = MakeAsset("WindowsCompanion-1.2.3-win-x64-setup.zip");
+
+        try
+        {
+            await Assert.ThrowsAsync<TimeoutException>(
+                () => downloader.DownloadAsync(
+                    asset,
+                    ParseVersion("1.2.3"),
+                    new Progress<double>(),
+                    CancellationToken.None));
+            Assert.Empty(Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories));
+        }
+        finally
+        {
+            if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+        }
+    }
+
     private static SelectedUpdateAsset MakeAsset(string packageName) => new(
         new ReleaseAsset(packageName, $"https://example.invalid/{packageName}"),
         new ReleaseAsset(packageName + ".sha256", $"https://example.invalid/{packageName}.sha256"));

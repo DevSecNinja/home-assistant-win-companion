@@ -127,6 +127,71 @@ public class UpdatePackageDownloaderTests
         }
     }
 
+    [Fact]
+    public async Task A_download_that_stalls_between_chunks_times_out_and_removes_the_partial_file()
+    {
+        var payload = Encoding.UTF8.GetBytes(new string('a', 10_000));
+        var handler = new DelegateHandler((_, _) => Task.FromResult(
+            new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StreamContent(new StalledSecondChunkStream(payload))
+            }));
+        var root = Path.Combine(Path.GetTempPath(), $"wc-dl-{Guid.NewGuid():N}");
+        var downloader = new UpdatePackageDownloader(
+            new HttpClient(handler),
+            root,
+            TimeSpan.FromMilliseconds(50));
+        var asset = MakeAsset("WindowsCompanion-1.2.3-win-x64-setup.zip");
+
+        try
+        {
+            await Assert.ThrowsAsync<TimeoutException>(
+                () => downloader.DownloadAsync(
+                    asset,
+                    ParseVersion("1.2.3"),
+                    new Progress<double>(),
+                    CancellationToken.None));
+            Assert.Empty(Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories));
+        }
+        finally
+        {
+            if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Caller_cancellation_during_a_stalled_chunk_remains_cancellation()
+    {
+        var payload = Encoding.UTF8.GetBytes(new string('a', 10_000));
+        var handler = new DelegateHandler((_, _) => Task.FromResult(
+            new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StreamContent(new StalledSecondChunkStream(payload))
+            }));
+        var root = Path.Combine(Path.GetTempPath(), $"wc-dl-{Guid.NewGuid():N}");
+        var downloader = new UpdatePackageDownloader(
+            new HttpClient(handler),
+            root,
+            TimeSpan.FromSeconds(5));
+        var asset = MakeAsset("WindowsCompanion-1.2.3-win-x64-setup.zip");
+        using var cancellation = new CancellationTokenSource(TimeSpan.FromMilliseconds(50));
+
+        try
+        {
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(
+                () => downloader.DownloadAsync(
+                    asset,
+                    ParseVersion("1.2.3"),
+                    new Progress<double>(),
+                    cancellation.Token));
+            Assert.Empty(Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories));
+        }
+        finally
+        {
+            if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+        }
+    }
+
     private static SelectedUpdateAsset MakeAsset(string packageName) => new(
         new ReleaseAsset(packageName, $"https://example.invalid/{packageName}"),
         new ReleaseAsset(packageName + ".sha256", $"https://example.invalid/{packageName}.sha256"));
@@ -186,6 +251,53 @@ public class UpdatePackageDownloaderTests
             chunkLength = Math.Min(chunkLength, content.Length - _position);
             content.AsMemory(_position, chunkLength).CopyTo(buffer);
             _position += chunkLength;
+            return chunkLength;
+        }
+
+        public override int Read(byte[] buffer, int offset, int count) =>
+            throw new NotSupportedException();
+
+        public override void Flush()
+        {
+        }
+
+        public override long Seek(long offset, SeekOrigin origin) =>
+            throw new NotSupportedException();
+
+        public override void SetLength(long value) =>
+            throw new NotSupportedException();
+
+        public override void Write(byte[] buffer, int offset, int count) =>
+            throw new NotSupportedException();
+    }
+
+    private sealed class StalledSecondChunkStream(byte[] content) : Stream
+    {
+        private int _position;
+
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => content.Length;
+        public override long Position
+        {
+            get => _position;
+            set => throw new NotSupportedException();
+        }
+
+        public override async ValueTask<int> ReadAsync(
+            Memory<byte> buffer,
+            CancellationToken cancellationToken = default)
+        {
+            if (_position > 0)
+            {
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+                throw new InvalidOperationException("The cancellation token should stop the read.");
+            }
+
+            var chunkLength = Math.Min(content.Length / 2, buffer.Length);
+            content.AsMemory(0, chunkLength).CopyTo(buffer);
+            _position = chunkLength;
             return chunkLength;
         }
 

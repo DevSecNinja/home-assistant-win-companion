@@ -8,6 +8,6 @@
     "check": "node build-assets.mjs --check"
   },
   "dependencies": {
-    "sharp": "0.35.3"
+    "sharp": "0.35.4"
   }
 }

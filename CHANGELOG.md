@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.10.1](https://github.com/DevSecNinja/home-assistant-win-companion/compare/v0.10.0...v0.10.1) (2026-09-04)
+
+
+### Bug Fixes
+
+* **deps:** update dependency sharp to v0.35.4 [automerge] ([#232](https://github.com/DevSecNinja/home-assistant-win-companion/issues/232)) ([02e5756](https://github.com/DevSecNinja/home-assistant-win-companion/commit/02e575622685ad7444d37c0886b70b50736faec2))
+* **updates:** time out stalled downloads ([#224](https://github.com/DevSecNinja/home-assistant-win-companion/issues/224)) ([ed24c01](https://github.com/DevSecNinja/home-assistant-win-companion/commit/ed24c01bb5096f3020ed1ed973137a77e503f6f4))
+
 ## [0.10.0](https://github.com/DevSecNinja/home-assistant-win-companion/compare/v0.9.0...v0.10.0) (2026-08-19)
 
 

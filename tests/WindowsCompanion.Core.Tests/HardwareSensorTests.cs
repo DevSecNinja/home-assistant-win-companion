@@ -178,6 +178,182 @@ public class HardwareSensorTests
     }
 
     [Fact]
+    public void Monitor_identity_normalizes_windows_values_and_decodes_edid_ids()
+    {
+        var monitor = MonitorIdentity.Create(
+            "MONITOR\\DEL1234\\INSTANCE",
+            "  DELL \0  U2723QE  ",
+            modelIsTrusted: true,
+            edidManufacturerId: 0xAC10,
+            edidProductCode: 0xA1B2,
+            edidIdsValid: true,
+            DisplayConnection.External,
+            isPrimary: true);
+
+        Assert.NotNull(monitor);
+        Assert.Equal("DELL U2723QE", monitor.Model);
+        Assert.Equal("DEL", monitor.Manufacturer);
+        Assert.Equal("A1B2", monitor.ProductCode);
+        Assert.Equal(DisplayConnection.External, monitor.Connection);
+        Assert.True(monitor.IsPrimary);
+    }
+
+    [Fact]
+    public void Attached_monitor_without_readable_identity_remains_counted()
+    {
+        var monitor = MonitorIdentity.Create(
+            "attached-target",
+            "Generic monitor",
+            modelIsTrusted: false,
+            edidManufacturerId: 0,
+            edidProductCode: 0,
+            edidIdsValid: false,
+            DisplayConnection.External,
+            isPrimary: false);
+
+        Assert.NotNull(monitor);
+        Assert.Null(monitor.Model);
+        Assert.Null(monitor.Manufacturer);
+        Assert.Null(monitor.ProductCode);
+        Assert.Equal(
+            "Unknown monitor",
+            MonitorIdentitySummary.Describe(MonitorCaptureResult.Available([monitor])));
+    }
+
+    [Fact]
+    public void One_monitor_uses_its_model_and_never_exposes_the_internal_key()
+    {
+        var monitor = Monitor(
+            "MONITOR\\DEL1234\\INSTANCE",
+            "DELL U2723QE",
+            manufacturer: "DEL",
+            productCode: "A1B2",
+            primary: true);
+        var result = MonitorCaptureResult.Available([monitor]);
+
+        Assert.Equal("DELL U2723QE", MonitorIdentitySummary.Describe(result));
+
+        var attributes = MonitorIdentitySummary.BuildAttributes(result);
+        Assert.NotNull(attributes);
+        Assert.Equal(1, attributes["count"]);
+
+        var details = Assert.IsType<Dictionary<string, object>[]>(attributes["monitors"]);
+        var detail = Assert.Single(details);
+        Assert.Equal("DELL U2723QE", detail["model"]);
+        Assert.Equal("DEL", detail["manufacturer"]);
+        Assert.Equal("A1B2", detail["product_code"]);
+        Assert.Equal("external", detail["connection"]);
+        Assert.Equal(true, detail["primary"]);
+        Assert.DoesNotContain(detail.Keys, key => key.Contains("key", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(detail.Values, value =>
+            string.Equals(value?.ToString(), monitor.InternalKey, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Multiple_monitors_are_deduplicated_ordered_and_bounded()
+    {
+        var monitors = Enumerable.Range(0, 10)
+            .Select(index => Monitor(
+                $"path-{index}",
+                $"Model {index:D2}",
+                manufacturer: "DEL",
+                productCode: index.ToString("X4"),
+                primary: index == 9,
+                connection: index == 8 ? DisplayConnection.Internal : DisplayConnection.External))
+            .Append(Monitor(
+                "path-0",
+                "Duplicate record",
+                manufacturer: "DUP",
+                productCode: "FFFF",
+                primary: false))
+            .ToArray();
+
+        var result = MonitorCaptureResult.Available(monitors.Reverse());
+        var ordered = MonitorIdentitySummary.Order(result.Monitors);
+        var attributes = MonitorIdentitySummary.BuildAttributes(result);
+
+        Assert.Equal(10, ordered.Count);
+        Assert.Equal("Model 09", ordered[0].Model);
+        Assert.Equal("Model 08", ordered[1].Model);
+        Assert.Equal("10 monitors", MonitorIdentitySummary.Describe(result));
+        Assert.Equal(10, attributes!["count"]);
+        Assert.Equal(
+            MonitorIdentitySummary.MaxDetailed,
+            Assert.IsType<Dictionary<string, object>[]>(attributes["monitors"]).Length);
+    }
+
+    [Fact]
+    public void Identical_monitor_models_remain_separate_when_their_keys_differ()
+    {
+        var left = Monitor("left-path", "DELL U2723QE", "DEL", "A1B2", primary: true);
+        var right = Monitor("right-path", "DELL U2723QE", "DEL", "A1B2", primary: false);
+
+        var result = MonitorCaptureResult.Available([right, left]);
+
+        Assert.Equal(2, MonitorIdentitySummary.Order(result.Monitors).Count);
+        Assert.Equal("2 monitors", MonitorIdentitySummary.Describe(result));
+    }
+
+    [Fact]
+    public void Monitor_output_is_stable_when_windows_enumeration_order_changes()
+    {
+        var primary = Monitor("primary", "DELL U2723QE", "DEL", "A1B2", primary: true);
+        var secondary = Monitor("secondary", "LG ULTRAGEAR", "GSM", "5B09", primary: false);
+        var first = MonitorCaptureResult.Available([secondary, primary]);
+        var second = MonitorCaptureResult.Available([primary, secondary]);
+
+        Assert.Equal(
+            MonitorIdentitySummary.Signature(first),
+            MonitorIdentitySummary.Signature(second));
+    }
+
+    [Fact]
+    public void Monitor_public_identity_change_changes_the_signature()
+    {
+        var before = MonitorCaptureResult.Available(
+            [Monitor("same-path", "DELL U2723QE", "DEL", "A1B2", primary: true)]);
+        var after = MonitorCaptureResult.Available(
+            [Monitor("same-path", "DELL U3223QE", "DEL", "B2C3", primary: true)]);
+
+        Assert.NotEqual(
+            MonitorIdentitySummary.Signature(before),
+            MonitorIdentitySummary.Signature(after));
+    }
+
+    [Fact]
+    public void Headless_and_unavailable_monitor_capture_are_distinct()
+    {
+        var headless = MonitorCaptureResult.Available([]);
+        var unavailable = MonitorCaptureResult.Unavailable;
+
+        Assert.Equal("No monitors", MonitorIdentitySummary.Describe(headless));
+        var attributes = MonitorIdentitySummary.BuildAttributes(headless);
+        Assert.Equal(0, attributes!["count"]);
+        Assert.Empty(Assert.IsType<Dictionary<string, object>[]>(attributes["monitors"]));
+
+        Assert.Equal("Unavailable", MonitorIdentitySummary.Describe(unavailable));
+        Assert.Null(MonitorIdentitySummary.BuildAttributes(unavailable));
+        Assert.NotEqual(
+            MonitorIdentitySummary.Signature(headless),
+            MonitorIdentitySummary.Signature(unavailable));
+    }
+
+    [Fact]
+    public void Monitor_identity_scope_is_separate_from_count_and_resolution_details()
+    {
+        var enabled = new HashSet<string>(StringComparer.Ordinal)
+        {
+            DisplayCapturePolicy.MonitorIdentityId
+        };
+
+        Assert.Equal(DisplayCaptureScope.Identity, DisplayCapturePolicy.For(enabled));
+
+        enabled.Add(DisplayCapturePolicy.DisplayResolutionId);
+        enabled.Add(DisplayCapturePolicy.DisplayCountId);
+        Assert.Equal(DisplayCaptureScope.Identity, DisplayCapturePolicy.For(enabled));
+    }
+
+    [Fact]
     public void Disk_usage_rounds_to_values_worth_reporting()
     {
         var usage = new DiskUsage(1_000_000_000_000, 250_000_000_000);
@@ -458,4 +634,13 @@ public class HardwareSensorTests
         bool primary,
         DisplayConnection connection = DisplayConnection.External) =>
         new(width, height, 60, 100, connection, primary);
+
+    private static MonitorIdentity Monitor(
+        string key,
+        string model,
+        string manufacturer,
+        string productCode,
+        bool primary,
+        DisplayConnection connection = DisplayConnection.External) =>
+        new(key, model, manufacturer, productCode, connection, primary);
 }

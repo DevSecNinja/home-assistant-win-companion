@@ -14,6 +14,7 @@ inventory agent.
 | `host_model` | sensor | on | benign | SMBIOS manufacturer/product in the registry |
 | `displays_count` | sensor | on | benign | `EnumDisplayMonitors` |
 | `display_resolution` | sensor | off | sensitive | `EnumDisplaySettings`, `GetDpiForMonitor`, CCD paths |
+| `monitor_identity` | sensor | off | sensitive | Active CCD target names and valid EDID manufacturer/product IDs |
 | `windows_dark_mode` | binary_sensor | on | benign | `Themes\Personalize`, `SPI_GETHIGHCONTRAST` |
 | `locale` | sensor | on | benign | `Control Panel\International\LocaleName` |
 | `time_zone` | sensor | on | benign | `TimeZoneInfo.Local`, mapped to IANA |
@@ -29,14 +30,22 @@ inventory agent.
   placeholder strings ("System manufacturer", "To Be Filled By O.E.M.") report
   `Unknown` rather than noise. The same values populate Home Assistant device
   registration, so the sensor discloses nothing new.
-- Enumerate displays once per read and serve both display sensors from it. Report
-  mode information only: never an EDID serial, monitor name or device path.
+- Enumerate displays once per read and serve all enabled display sensors from the
+  same topology capture. `display_resolution` continues to report mode
+  information only.
+- `monitor_identity` reports the Windows-friendly monitor model plus available
+  three-letter EDID manufacturer and product-code values. Its state reports one
+  model, `N monitors`, `No monitors`, or `Unavailable`; attributes report the
+  full count and at most the first eight monitor details in deterministic order.
+- Monitor device paths may be read only as in-memory deduplication keys for
+  `monitor_identity`. They and EDID serial numbers are never sent to Home
+  Assistant, shown in previews, or written to logs.
 - Classify built-in versus external displays through the CCD path table's output
   technology, degrading to unclassified rather than guessing.
 - Update display sensors from `DisplaySettingsChanged`, comparing the reading so a
   dock settling does not produce a burst of pushes.
-- `display_resolution` is off by default because resolution, refresh rate and
-  scaling together increase fingerprintability.
+- `display_resolution` and `monitor_identity` are off by default because display
+  modes and monitor models increase fingerprintability.
 - Bound display output: at most four resolutions in the state (then "+N more") and
   eight in the attributes, so a many-output dock cannot approach Home Assistant's
   255-character limit.

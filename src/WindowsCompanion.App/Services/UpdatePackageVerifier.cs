@@ -151,7 +151,8 @@ internal sealed class UpdatePackageVerifier : IUpdatePackageVerifier
                 or InvalidDataException)
             {
                 failureReasons.Add(
-                    $"Bundle download from {bundleUrl.Host} failed: {ex.Message}");
+                    $"Bundle download from {bundleUrl.Host} failed: "
+                    + DescribeBundleDownloadFailure(ex));
             }
         }
 
@@ -369,7 +370,7 @@ internal sealed class UpdatePackageVerifier : IUpdatePackageVerifier
                 throw new InvalidDataException("The response was too large.");
             var decompressed = new byte[decompressedLength];
             Snappy.Decompress(compressed, decompressed);
-            return System.Text.Encoding.UTF8.GetString(decompressed);
+            return DecodeText(decompressed);
         }
 
         return await ReadBoundedStringAsync(stream, maxBytes, cancellationToken)
@@ -383,7 +384,7 @@ internal sealed class UpdatePackageVerifier : IUpdatePackageVerifier
     {
         var bytes = await ReadBoundedBytesAsync(stream, maxBytes, cancellationToken)
             .ConfigureAwait(false);
-        return System.Text.Encoding.UTF8.GetString(bytes);
+        return DecodeText(bytes);
     }
 
     private static async Task<byte[]> ReadBoundedBytesAsync(
@@ -403,4 +404,24 @@ internal sealed class UpdatePackageVerifier : IUpdatePackageVerifier
 
         return bytes.ToArray();
     }
+
+    private static string DecodeText(byte[] bytes)
+    {
+        using var stream = new MemoryStream(bytes, writable: false);
+        using var reader = new StreamReader(
+            stream,
+            detectEncodingFromByteOrderMarks: true);
+        return reader.ReadToEnd();
+    }
+
+    private static string DescribeBundleDownloadFailure(Exception exception) =>
+        exception switch
+        {
+            HttpRequestException { StatusCode: { } statusCode } =>
+                $"HTTP {(int)statusCode} ({statusCode})",
+            HttpRequestException => "HTTP request failed",
+            InvalidDataException => "response data was invalid",
+            IOException => "response could not be read",
+            _ => exception.GetType().Name
+        };
 }

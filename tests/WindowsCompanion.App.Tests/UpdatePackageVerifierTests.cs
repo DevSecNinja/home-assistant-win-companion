@@ -118,6 +118,28 @@ public class UpdatePackageVerifierTests
                 CancellationToken.None));
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Bounded_text_reader_preserves_bom_aware_decoding(bool utf8)
+    {
+        const string text =
+            "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789  package.zip";
+        Encoding encoding = utf8
+            ? new UTF8Encoding(encoderShouldEmitUTF8Identifier: true)
+            : new UnicodeEncoding(bigEndian: false, byteOrderMark: true);
+        var preamble = encoding.GetPreamble();
+        var body = encoding.GetBytes(text);
+        using var content = new ByteArrayContent([.. preamble, .. body]);
+
+        var decoded = await UpdatePackageVerifier.ReadResponseAsync(
+            content,
+            maxBytes: 4096,
+            CancellationToken.None);
+
+        Assert.Equal(text, decoded);
+    }
+
     [Fact]
     public async Task A_checksum_mismatch_fails_closed_before_any_attestation_lookup()
     {
@@ -220,6 +242,65 @@ public class UpdatePackageVerifierTests
             var ex = await Assert.ThrowsAsync<UpdatePackageVerificationException>(
                 () => verifier.VerifyAsync(packagePath, asset, CancellationToken.None));
             Assert.Contains("attestation", ex.Message, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            File.Delete(packagePath);
+        }
+    }
+
+    [Fact]
+    public async Task Bundle_download_failures_do_not_expose_signed_url_credentials()
+    {
+        var packagePath = Path.Combine(Path.GetTempPath(), $"wc-verify-{Guid.NewGuid():N}.zip");
+        var bytes = "package-bytes"u8.ToArray();
+        await File.WriteAllBytesAsync(packagePath, bytes);
+        try
+        {
+            var actualHash = Convert.ToHexStringLower(
+                System.Security.Cryptography.SHA256.HashData(bytes));
+            var handler = new DelegateHandler((request, _) =>
+            {
+                var url = request.RequestUri!.AbsoluteUri;
+                if (url.EndsWith(".sha256", StringComparison.Ordinal))
+                {
+                    return Task.FromResult(TextResponse(
+                        $"{actualHash}  WindowsCompanion-1.2.3-win-x64-setup.zip"));
+                }
+
+                if (request.RequestUri.Host == "api.github.com")
+                {
+                    return Task.FromResult(TextResponse(
+                        """
+                        {"attestations":[{"bundle_url":"https://tmaproduction.blob.core.windows.net/attestations/bundle.json.sn?sig=secret-value"}]}
+                        """));
+                }
+
+                var oversized = TextResponse("{}");
+                oversized.Content.Headers.ContentLength = 4_194_305;
+                return Task.FromResult(oversized);
+            });
+            var verifier = new UpdatePackageVerifier(
+                new HttpClient(handler),
+                "1.2.3",
+                NullLogger<UpdatePackageVerifier>.Instance);
+            var asset = new SelectedUpdateAsset(
+                new ReleaseAsset(
+                    "WindowsCompanion-1.2.3-win-x64-setup.zip",
+                    "https://example.invalid/package.zip"),
+                new ReleaseAsset(
+                    "WindowsCompanion-1.2.3-win-x64-setup.zip.sha256",
+                    "https://example.invalid/package.zip.sha256"));
+
+            var exception = await Assert.ThrowsAsync<UpdatePackageVerificationException>(
+                () => verifier.VerifyAsync(packagePath, asset, CancellationToken.None));
+
+            Assert.DoesNotContain("secret-value", exception.Message, StringComparison.Ordinal);
+            Assert.DoesNotContain("sig=", exception.Message, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains(
+                UpdatePackageVerifier.AttestationBundleHost,
+                exception.Message,
+                StringComparison.Ordinal);
         }
         finally
         {

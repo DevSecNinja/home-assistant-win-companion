@@ -34,12 +34,14 @@ internal sealed class UpdatePackageVerifier : IUpdatePackageVerifier
     private readonly string _productVersion;
     private readonly SigstoreVerifier _sigstore;
     private readonly ILogger<UpdatePackageVerifier> _log;
+    private readonly long _maxTotalAttestationBundleBytes;
 
     internal UpdatePackageVerifier(
         HttpClient http,
         string productVersion,
         ILogger<UpdatePackageVerifier> log,
-        HttpClient? assetHttp = null)
+        HttpClient? assetHttp = null,
+        long maxTotalAttestationBundleBytes = MaxTotalAttestationBundleBytes)
     {
         _http = http ?? throw new ArgumentNullException(nameof(http));
         // The checksum sidecar is fetched from its published
@@ -50,6 +52,9 @@ internal sealed class UpdatePackageVerifier : IUpdatePackageVerifier
         _assetHttp = assetHttp ?? http;
         _productVersion = productVersion;
         _log = log ?? throw new ArgumentNullException(nameof(log));
+        if (maxTotalAttestationBundleBytes <= 0)
+            throw new ArgumentOutOfRangeException(nameof(maxTotalAttestationBundleBytes));
+        _maxTotalAttestationBundleBytes = maxTotalAttestationBundleBytes;
         // The default constructor fetches the Sigstore public-good trust root
         // on first use; this requires network access, which update checks
         // already assume.
@@ -148,7 +153,7 @@ internal sealed class UpdatePackageVerifier : IUpdatePackageVerifier
         {
             processedBundleBytes = checked(
                 processedBundleBytes + System.Text.Encoding.UTF8.GetByteCount(bundleJson));
-            if (processedBundleBytes > MaxTotalAttestationBundleBytes)
+            if (processedBundleBytes > _maxTotalAttestationBundleBytes)
             {
                 throw new UpdatePackageVerificationException(
                     $"The attestation candidates for {asset.Package.Name} exceeded the verification size limit.");
@@ -201,12 +206,20 @@ internal sealed class UpdatePackageVerifier : IUpdatePackageVerifier
         foreach (var bundleUrl in bundleUrls)
         {
             string bundleJson;
+            var remainingBundleBytes =
+                _maxTotalAttestationBundleBytes - processedBundleBytes;
+            if (remainingBundleBytes <= 0)
+            {
+                throw new UpdatePackageVerificationException(
+                    $"The attestation candidates for {asset.Package.Name} exceeded the verification size limit.");
+            }
+
             try
             {
                 bundleJson = await GetStringAsync(
                         _http,
                         bundleUrl.AbsoluteUri,
-                        MaxAttestationResponseBytes,
+                        Math.Min(MaxAttestationResponseBytes, remainingBundleBytes),
                         cancellationToken)
                     .ConfigureAwait(false);
             }

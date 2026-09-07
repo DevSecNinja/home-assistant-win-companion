@@ -1,6 +1,8 @@
 using System.Net;
 using System.Text;
+using System.Text.Json;
 using Microsoft.Extensions.Logging.Abstractions;
+using Snappier;
 using WindowsCompanion.Core.Updates;
 using WindowsCompanion_App.Services;
 
@@ -47,6 +49,73 @@ public class UpdatePackageVerifierTests
         Assert.Null(UpdatePackageVerifier.ParseChecksumSidecar(
             "not a checksum",
             "WindowsCompanion-1.2.3-win-x64-setup.zip"));
+    }
+
+    [Fact]
+    public void Public_attestation_bundle_urls_are_accepted_from_the_github_storage_host()
+    {
+        var (bundles, bundleUrls) = UpdatePackageVerifier.ParseAttestationResponse(
+            """
+            {
+              "attestations": [
+                {
+                  "bundle_url": "https://tmaproduction.blob.core.windows.net/attestations/123/bundle.json.sn?sig=fake"
+                },
+                {
+                  "bundle": {
+                    "mediaType": "application/vnd.dev.sigstore.bundle.v0.3+json"
+                  }
+                }
+              ]
+            }
+            """);
+
+        Assert.Single(bundles);
+        Assert.Equal("application/vnd.dev.sigstore.bundle.v0.3+json",
+            JsonDocument.Parse(bundles[0]).RootElement.GetProperty("mediaType").GetString());
+        Assert.Equal(
+            "tmaproduction.blob.core.windows.net",
+            Assert.Single(bundleUrls).Host);
+    }
+
+    [Fact]
+    public void Attestation_bundle_urls_from_untrusted_hosts_are_rejected()
+    {
+        var (bundles, bundleUrls) = UpdatePackageVerifier.ParseAttestationResponse(
+            """{"attestations":[{"bundle_url":"https://example.invalid/bundle.json.sn"}]}""");
+
+        Assert.Empty(bundles);
+        Assert.Empty(bundleUrls);
+    }
+
+    [Fact]
+    public async Task Snappy_compressed_attestation_bundles_are_decoded()
+    {
+        const string json =
+            """{"mediaType":"application/vnd.dev.sigstore.bundle.v0.3+json"}""";
+        var compressed = Snappy.CompressToArray(Encoding.UTF8.GetBytes(json));
+        using var content = new ByteArrayContent(compressed);
+        content.Headers.ContentType = new("application/x-snappy");
+
+        var decoded = await UpdatePackageVerifier.ReadResponseAsync(
+            content,
+            maxBytes: 4096,
+            CancellationToken.None);
+
+        Assert.Equal(json, decoded);
+    }
+
+    [Fact]
+    public async Task Oversized_snappy_output_is_rejected_before_decompression()
+    {
+        using var content = new ByteArrayContent([0x81, 0x20]);
+        content.Headers.ContentType = new("application/x-snappy");
+
+        await Assert.ThrowsAsync<InvalidDataException>(() =>
+            UpdatePackageVerifier.ReadResponseAsync(
+                content,
+                maxBytes: 4096,
+                CancellationToken.None));
     }
 
     [Fact]

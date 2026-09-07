@@ -75,9 +75,13 @@ ever installed unverified.
    downloaded ZIP.
 2. **Build provenance attestation** — the GitHub attestations API
    (`GET /repos/DevSecNinja/home-assistant-win-companion/attestations/sha256:<digest>`)
-   is queried for the exact file digest, and the returned Sigstore bundle is
-   verified, including that the signing certificate's OIDC issuer,
-   repository, and workflow claims match this repository's release workflow.
+   is queried for the exact file digest. Authenticated responses may contain
+   the Sigstore bundle inline; public unauthenticated responses return a signed
+   `bundle_url` whose payload is Snappy-compressed. The updater supports both
+   response shapes, accepts bundle downloads only from GitHub's attestation
+   storage host over HTTPS, and verifies that the signing certificate's OIDC
+   issuer, repository, and workflow claims match this repository's release
+   workflow.
 
 ## Install and relaunch
 

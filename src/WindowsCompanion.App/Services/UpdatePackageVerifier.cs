@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Sigstore;
+using Snappier;
 using WindowsCompanion.Core.Updates;
 
 namespace WindowsCompanion_App.Services;
@@ -21,6 +22,7 @@ internal sealed class UpdatePackageVerifier : IUpdatePackageVerifier
     internal const string Repository = "home-assistant-win-companion";
     internal const string WorkflowFileName = ".github/workflows/release.yml";
     internal const string DefaultBranch = "main";
+    internal const string AttestationBundleHost = "tmaproduction.blob.core.windows.net";
 
     private const long MaxChecksumSidecarBytes = 4_096;
     private const long MaxAttestationResponseBytes = 4_194_304;
@@ -124,8 +126,8 @@ internal sealed class UpdatePackageVerifier : IUpdatePackageVerifier
                 cancellationToken)
             .ConfigureAwait(false);
 
-        var bundles = ParseBundles(attestationsJson);
-        if (bundles.Count == 0)
+        var (bundles, bundleUrls) = ParseAttestationResponse(attestationsJson);
+        if (bundles.Count == 0 && bundleUrls.Count == 0)
         {
             throw new UpdatePackageVerificationException(
                 $"No GitHub build-provenance attestation is published for {asset.Package.Name}.");
@@ -133,6 +135,25 @@ internal sealed class UpdatePackageVerifier : IUpdatePackageVerifier
 
         var policies = CreatePolicies(asset);
         var failureReasons = new List<string>();
+        foreach (var bundleUrl in bundleUrls)
+        {
+            try
+            {
+                bundles.Add(await GetStringAsync(
+                        _http,
+                        bundleUrl.AbsoluteUri,
+                        MaxAttestationResponseBytes,
+                        cancellationToken)
+                    .ConfigureAwait(false));
+            }
+            catch (Exception ex) when (ex is HttpRequestException
+                or IOException
+                or InvalidDataException)
+            {
+                failureReasons.Add(
+                    $"Bundle download from {bundleUrl.Host} failed: {ex.Message}");
+            }
+        }
 
         foreach (var bundleJson in bundles)
         {
@@ -263,14 +284,16 @@ internal sealed class UpdatePackageVerifier : IUpdatePackageVerifier
         return true;
     }
 
-    private static List<string> ParseBundles(string attestationsJson)
+    internal static (List<string> Bundles, List<Uri> BundleUrls)
+        ParseAttestationResponse(string attestationsJson)
     {
         var bundles = new List<string>();
+        var bundleUrls = new List<Uri>();
         using var document = JsonDocument.Parse(attestationsJson);
         if (!document.RootElement.TryGetProperty("attestations", out var attestations)
             || attestations.ValueKind != JsonValueKind.Array)
         {
-            return bundles;
+            return (bundles, bundleUrls);
         }
 
         foreach (var attestation in attestations.EnumerateArray())
@@ -279,10 +302,23 @@ internal sealed class UpdatePackageVerifier : IUpdatePackageVerifier
                 && bundle.ValueKind == JsonValueKind.Object)
             {
                 bundles.Add(bundle.GetRawText());
+                continue;
+            }
+
+            if (attestation.TryGetProperty("bundle_url", out var bundleUrl)
+                && bundleUrl.ValueKind == JsonValueKind.String
+                && Uri.TryCreate(bundleUrl.GetString(), UriKind.Absolute, out var parsedUrl)
+                && parsedUrl.Scheme == Uri.UriSchemeHttps
+                && string.Equals(
+                    parsedUrl.Host,
+                    AttestationBundleHost,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                bundleUrls.Add(parsedUrl);
             }
         }
 
-        return bundles;
+        return (bundles, bundleUrls);
     }
 
     private async Task<string> GetStringAsync(
@@ -306,21 +342,65 @@ internal sealed class UpdatePackageVerifier : IUpdatePackageVerifier
         if (response.Content.Headers.ContentLength > maxBytes)
             throw new InvalidDataException($"The response from {url} was too large.");
 
-        await using var stream = await response.Content
+        return await ReadResponseAsync(response.Content, maxBytes, cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    internal static async Task<string> ReadResponseAsync(
+        HttpContent content,
+        long maxBytes,
+        CancellationToken cancellationToken)
+    {
+        if (content.Headers.ContentLength > maxBytes)
+            throw new InvalidDataException("The response was too large.");
+
+        await using var stream = await content
             .ReadAsStreamAsync(cancellationToken)
             .ConfigureAwait(false);
+        if (string.Equals(
+                content.Headers.ContentType?.MediaType,
+                "application/x-snappy",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            var compressed = await ReadBoundedBytesAsync(stream, maxBytes, cancellationToken)
+                .ConfigureAwait(false);
+            var decompressedLength = Snappy.GetUncompressedLength(compressed);
+            if (decompressedLength > maxBytes)
+                throw new InvalidDataException("The response was too large.");
+            var decompressed = new byte[decompressedLength];
+            Snappy.Decompress(compressed, decompressed);
+            return System.Text.Encoding.UTF8.GetString(decompressed);
+        }
+
+        return await ReadBoundedStringAsync(stream, maxBytes, cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    private static async Task<string> ReadBoundedStringAsync(
+        Stream stream,
+        long maxBytes,
+        CancellationToken cancellationToken)
+    {
+        var bytes = await ReadBoundedBytesAsync(stream, maxBytes, cancellationToken)
+            .ConfigureAwait(false);
+        return System.Text.Encoding.UTF8.GetString(bytes);
+    }
+
+    private static async Task<byte[]> ReadBoundedBytesAsync(
+        Stream stream,
+        long maxBytes,
+        CancellationToken cancellationToken)
+    {
         using var bytes = new MemoryStream();
         var buffer = new byte[8192];
         int read;
         while ((read = await stream.ReadAsync(buffer, cancellationToken).ConfigureAwait(false)) > 0)
         {
             if (bytes.Length + read > maxBytes)
-                throw new InvalidDataException($"The response from {url} was too large.");
+                throw new InvalidDataException("The response was too large.");
             await bytes.WriteAsync(buffer.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
         }
 
-        bytes.Position = 0;
-        using var reader = new StreamReader(bytes, detectEncodingFromByteOrderMarks: true);
-        return await reader.ReadToEndAsync(cancellationToken).ConfigureAwait(false);
+        return bytes.ToArray();
     }
 }

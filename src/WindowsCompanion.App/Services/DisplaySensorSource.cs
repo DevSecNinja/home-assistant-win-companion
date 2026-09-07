@@ -6,15 +6,13 @@ using Microsoft.Win32;
 namespace WindowsCompanion_App.Services;
 
 /// <summary>
-/// Reports how many displays are active and what modes they are running, using
-/// the supported Windows monitor and Connecting-and-Configuring-Displays (CCD)
-/// APIs. No external process, no WMI, no EDID parsing.
+/// Reports active display count, modes and opt-in monitor identity using the
+/// supported Windows monitor and Connecting-and-Configuring-Displays (CCD) APIs.
+/// No external process, WMI or raw EDID parsing is used.
 /// </summary>
 /// <remarks>
-/// Both sensors are served by a single enumeration, so enabling the second one
-/// costs nothing extra. Nothing that identifies a specific monitor - EDID serial,
-/// friendly name, device path or monitor id - is collected: only mode
-/// information and whether the panel is built in.
+/// All enabled display sensors are served by one capture. Monitor device paths
+/// are used only as in-memory deduplication keys and are never sent or logged.
 ///
 /// Topology changes (dock, undock, resolution, scaling, refresh rate) raise
 /// <see cref="SystemEvents.DisplaySettingsChanged"/>, so there is no polling at
@@ -24,16 +22,20 @@ public sealed class DisplaySensorSource : ISensorSource
 {
     public const string DisplayCountId = DisplayCapturePolicy.DisplayCountId;
     public const string DisplayResolutionId = DisplayCapturePolicy.DisplayResolutionId;
+    public const string MonitorIdentityId = DisplayCapturePolicy.MonitorIdentityId;
 
     private readonly SensorPreferences _preferences;
     private readonly DisplayObservationGate _observations;
+    private readonly ChangeGate<string> _identity = new(string.Empty);
     private Action? _onChanged;
     private bool _observing;
 
     public DisplaySensorSource(SensorPreferences preferences)
     {
         _preferences = preferences ?? throw new ArgumentNullException(nameof(preferences));
-        _observations = new DisplayObservationGate(CountDisplays, Enumerate);
+        _observations = new DisplayObservationGate(
+            CountDisplays,
+            () => Enumerate(includeModeDetails: true, includeIdentity: false).Displays);
     }
 
     public IReadOnlyList<SensorDefinition> Definitions { get; } =
@@ -54,66 +56,111 @@ public sealed class DisplaySensorSource : ISensorSource
             + "Reveals more about this PC's hardware, so it is off by default.",
             SensorPrivacy.Sensitive,
             EnabledByDefault: false,
-            ResourceUsage: "Low. Shares the display check above. It does not use the internet.")
+            ResourceUsage: "Low. Shares the display check above. It does not use the internet."),
+        new(
+            MonitorIdentityId,
+            "Monitors",
+            "The brand and model/type of active physical monitors. The count always includes "
+            + "every monitor, while attributes list at most the first 8 in stable order. "
+            + "Reveals hardware identity, so it is off by default.",
+            SensorPrivacy.Sensitive,
+            EnabledByDefault: false,
+            ResourceUsage: "Low. Shares the display-change check above and reads monitor names "
+                           + "only while enabled. It does not use the internet.",
+            AutomationIdea: "When a known monitor is attached, activate the matching workspace.")
     ];
 
     public IReadOnlyList<Sensor> Read(IReadOnlySet<string> enabled, SensorReadContext context)
     {
-        if (!enabled.Contains(DisplayCountId) && !enabled.Contains(DisplayResolutionId))
+        var wantsCount = enabled.Contains(DisplayCountId);
+        var wantsResolution = enabled.Contains(DisplayResolutionId);
+        var wantsIdentity = enabled.Contains(MonitorIdentityId);
+
+        if (!wantsCount && !wantsResolution && !wantsIdentity)
             return [];
 
         var readings = new List<Sensor>();
 
+        if (wantsIdentity)
+        {
+            var snapshot = Enumerate(wantsResolution, includeIdentity: true);
+            var count = snapshot.DisplayCount;
+            _identity.Seed(MonitorIdentitySummary.Signature(snapshot.Monitors));
+
+            if (wantsResolution)
+                _observations.SeedDetails(snapshot.Displays);
+            else if (wantsCount)
+                _observations.SeedCount(count);
+
+            if (wantsCount)
+                readings.Add(BuildCountSensor(count));
+
+            if (wantsResolution)
+                readings.Add(BuildResolutionSensor(snapshot.Displays));
+
+            var monitorCount = snapshot.Monitors.Status == MonitorCaptureStatus.Available
+                ? MonitorIdentitySummary.Order(snapshot.Monitors.Monitors).Count
+                : 0;
+            readings.Add(new Sensor
+            {
+                UniqueId = MonitorIdentityId,
+                Type = "sensor",
+                Name = "Monitors",
+                State = MonitorIdentitySummary.Describe(snapshot.Monitors),
+                EntityCategory = "diagnostic",
+                Icon = DisplaySummary.IconFor(monitorCount),
+                Attributes = MonitorIdentitySummary.BuildAttributes(snapshot.Monitors)
+            });
+
+            return readings;
+        }
+
         // The sensitive resolution details are only gathered once that sensor is
         // itself enabled/permitted, so a count-only caller (including a preview
         // where the resolution sensor is off) never collects them at all.
-        if (enabled.Contains(DisplayResolutionId))
+        if (wantsResolution)
         {
             var displays = _observations.CaptureDetails();
-            var summary = DisplaySummary.Describe(displays);
             var count = DisplaySummary.Count(displays);
 
-            if (enabled.Contains(DisplayCountId))
-            {
-                readings.Add(new Sensor
-                {
-                    UniqueId = DisplayCountId,
-                    Type = "sensor",
-                    Name = "Displays",
-                    State = count,
-                    StateClass = "measurement",
-                    EntityCategory = "diagnostic",
-                    Icon = DisplaySummary.IconFor(count)
-                });
-            }
+            if (wantsCount)
+                readings.Add(BuildCountSensor(count));
 
-            readings.Add(new Sensor
-            {
-                UniqueId = DisplayResolutionId,
-                Type = "sensor",
-                Name = "Display Resolution",
-                State = summary,
-                EntityCategory = "diagnostic",
-                Icon = DisplaySummary.IconFor(count),
-                Attributes = DisplaySummary.BuildAttributes(displays)
-            });
+            readings.Add(BuildResolutionSensor(displays));
         }
-        else if (enabled.Contains(DisplayCountId))
+        else if (wantsCount)
         {
             var count = _observations.CaptureCount();
-            readings.Add(new Sensor
-            {
-                UniqueId = DisplayCountId,
-                Type = "sensor",
-                Name = "Displays",
-                State = count,
-                StateClass = "measurement",
-                EntityCategory = "diagnostic",
-                Icon = DisplaySummary.IconFor(count)
-            });
+            readings.Add(BuildCountSensor(count));
         }
 
         return readings;
+    }
+
+    private static Sensor BuildCountSensor(int count) => new()
+    {
+        UniqueId = DisplayCountId,
+        Type = "sensor",
+        Name = "Displays",
+        State = count,
+        StateClass = "measurement",
+        EntityCategory = "diagnostic",
+        Icon = DisplaySummary.IconFor(count)
+    };
+
+    private static Sensor BuildResolutionSensor(IReadOnlyList<DisplayInfo> displays)
+    {
+        var count = DisplaySummary.Count(displays);
+        return new Sensor
+        {
+            UniqueId = DisplayResolutionId,
+            Type = "sensor",
+            Name = "Display Resolution",
+            State = DisplaySummary.Describe(displays),
+            EntityCategory = "diagnostic",
+            Icon = DisplaySummary.IconFor(count),
+            Attributes = DisplaySummary.BuildAttributes(displays)
+        };
     }
 
     /// <summary>
@@ -147,7 +194,15 @@ public sealed class DisplaySensorSource : ISensorSource
         _onChanged = onChanged;
         if (_observing) return;
 
-        _observations.Seed(DisplayCapturePolicy.For(EnabledIds()));
+        var enabled = EnabledIds();
+        var scope = DisplayCapturePolicy.For(enabled);
+        if (scope == DisplayCaptureScope.Identity)
+            SeedIdentityObservation(
+                enabled,
+                Enumerate(enabled.Contains(DisplayResolutionId), includeIdentity: true));
+        else
+            _observations.Seed(scope);
+
         SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;
         _observing = true;
     }
@@ -166,8 +221,39 @@ public sealed class DisplaySensorSource : ISensorSource
     /// </summary>
     private void OnDisplaySettingsChanged(object? sender, EventArgs e)
     {
-        if (_observations.TryUpdate(DisplayCapturePolicy.For(EnabledIds())))
+        var enabled = EnabledIds();
+        var scope = DisplayCapturePolicy.For(enabled);
+        var changed = scope == DisplayCaptureScope.Identity
+            ? TryUpdateIdentityObservation(
+                enabled,
+                Enumerate(enabled.Contains(DisplayResolutionId), includeIdentity: true))
+            : _observations.TryUpdate(scope);
+
+        if (changed)
             _onChanged?.Invoke();
+    }
+
+    private void SeedIdentityObservation(
+        IReadOnlySet<string> enabled,
+        DisplayCaptureSnapshot snapshot)
+    {
+        _identity.Seed(MonitorIdentitySummary.Signature(snapshot.Monitors));
+        if (enabled.Contains(DisplayResolutionId))
+            _observations.SeedDetails(snapshot.Displays);
+        else if (enabled.Contains(DisplayCountId))
+            _observations.SeedCount(snapshot.DisplayCount);
+    }
+
+    private bool TryUpdateIdentityObservation(
+        IReadOnlySet<string> enabled,
+        DisplayCaptureSnapshot snapshot)
+    {
+        var changed = _identity.TryUpdate(MonitorIdentitySummary.Signature(snapshot.Monitors));
+        if (enabled.Contains(DisplayResolutionId))
+            changed |= _observations.TryUpdateDetails(snapshot.Displays);
+        else if (enabled.Contains(DisplayCountId))
+            changed |= _observations.TryUpdateCount(snapshot.DisplayCount);
+        return changed;
     }
 
     private IReadOnlySet<string> EnabledIds() =>
@@ -177,60 +263,113 @@ public sealed class DisplaySensorSource : ISensorSource
             .ToHashSet(StringComparer.Ordinal);
 
     /// <summary>
-    /// One pass over the active monitors: mode and DPI from the monitor APIs,
-    /// built-in/external classification from the CCD path table.
+    /// Captures logical display modes once and enriches them from the same active
+    /// CCD path table used for opt-in monitor identity.
     /// </summary>
-    private static IReadOnlyList<DisplayInfo> Enumerate()
+    private static DisplayCaptureSnapshot Enumerate(
+        bool includeModeDetails,
+        bool includeIdentity)
     {
-        var displays = new List<DisplayInfo>();
-
         try
         {
-            var connections = ReadConnections();
+            var logicalDisplays = includeModeDetails ? ReadLogicalDisplays() : [];
+            var primaryDevices = includeModeDetails
+                ? logicalDisplays
+                    .Where(display => display.IsPrimary)
+                    .Select(display => display.DeviceName)
+                    .ToHashSet(StringComparer.OrdinalIgnoreCase)
+                : ReadPrimaryDisplayDevices();
+            var topology = ReadTopology(includeIdentity, primaryDevices);
 
-            EnumDisplayMonitors(IntPtr.Zero, IntPtr.Zero, (monitor, _, _, _) =>
-            {
-                var info = new MONITORINFOEXW { cbSize = Marshal.SizeOf<MONITORINFOEXW>() };
-                if (!GetMonitorInfoW(monitor, ref info)) return true;
-
-                var device = info.szDevice ?? string.Empty;
-                var scale = ReadScalePercent(monitor);
-                var width = info.rcMonitor.Width;
-                var height = info.rcMonitor.Height;
-                var refresh = 0;
-
-                var mode = new DEVMODEW { dmSize = (ushort)Marshal.SizeOf<DEVMODEW>() };
-                if (device.Length > 0 && EnumDisplaySettingsW(device, ENUM_CURRENT_SETTINGS, ref mode))
-                {
-                    // The monitor rectangle is in scaled coordinates; DEVMODE reports
-                    // the physical pixels the user recognises as "the resolution".
-                    if (mode.dmPelsWidth > 0) width = (int)mode.dmPelsWidth;
-                    if (mode.dmPelsHeight > 0) height = (int)mode.dmPelsHeight;
-
-                    // 0 and 1 are the documented "hardware default" placeholders.
-                    if (mode.dmDisplayFrequency > 1) refresh = (int)mode.dmDisplayFrequency;
-                }
-
-                displays.Add(new DisplayInfo(
-                    width,
-                    height,
-                    refresh,
-                    scale,
-                    connections.TryGetValue(device, out var connection)
+            var displays = logicalDisplays
+                .Select(display => new DisplayInfo(
+                    display.Width,
+                    display.Height,
+                    display.RefreshRateHz,
+                    display.ScalePercent,
+                    topology.Connections.TryGetValue(display.DeviceName, out var connection)
                         ? connection
                         : DisplayConnection.Unknown,
-                    (info.dwFlags & MONITORINFOF_PRIMARY) != 0));
+                    display.IsPrimary))
+                .ToArray();
 
-                return true;
-            }, IntPtr.Zero);
+            var monitors = includeIdentity
+                ? topology.IdentityAvailable
+                    ? MonitorCaptureResult.Available(topology.Monitors)
+                    : MonitorCaptureResult.Unavailable
+                : MonitorCaptureResult.Available([]);
+            var displayCount = includeModeDetails
+                ? DisplaySummary.Count(displays)
+                : CountDisplays();
+
+            return new DisplayCaptureSnapshot(displays, displayCount, monitors);
         }
         catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException)
         {
-            // Nothing to report rather than a crash on a stripped-down Windows SKU.
-            return [];
+            return new DisplayCaptureSnapshot(
+                [],
+                0,
+                includeIdentity
+                    ? MonitorCaptureResult.Unavailable
+                    : MonitorCaptureResult.Available([]));
         }
+    }
+
+    private static IReadOnlyList<LogicalDisplay> ReadLogicalDisplays()
+    {
+        var displays = new List<LogicalDisplay>();
+
+        EnumDisplayMonitors(IntPtr.Zero, IntPtr.Zero, (monitor, _, _, _) =>
+        {
+            var info = new MONITORINFOEXW { cbSize = Marshal.SizeOf<MONITORINFOEXW>() };
+            if (!GetMonitorInfoW(monitor, ref info)) return true;
+
+            var device = info.szDevice ?? string.Empty;
+            var scale = ReadScalePercent(monitor);
+            var width = info.rcMonitor.Width;
+            var height = info.rcMonitor.Height;
+            var refresh = 0;
+
+            var mode = new DEVMODEW { dmSize = (ushort)Marshal.SizeOf<DEVMODEW>() };
+            if (device.Length > 0 && EnumDisplaySettingsW(device, ENUM_CURRENT_SETTINGS, ref mode))
+            {
+                // The monitor rectangle is in scaled coordinates; DEVMODE reports
+                // the physical pixels the user recognises as "the resolution".
+                if (mode.dmPelsWidth > 0) width = (int)mode.dmPelsWidth;
+                if (mode.dmPelsHeight > 0) height = (int)mode.dmPelsHeight;
+
+                // 0 and 1 are the documented "hardware default" placeholders.
+                if (mode.dmDisplayFrequency > 1) refresh = (int)mode.dmDisplayFrequency;
+            }
+
+            displays.Add(new LogicalDisplay(
+                device,
+                width,
+                height,
+                refresh,
+                scale,
+                (info.dwFlags & MONITORINFOF_PRIMARY) != 0));
+            return true;
+        }, IntPtr.Zero);
 
         return displays;
+    }
+
+    private static IReadOnlySet<string> ReadPrimaryDisplayDevices()
+    {
+        var primary = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        for (uint index = 0; ; index++)
+        {
+            var device = new DISPLAY_DEVICEW { cb = Marshal.SizeOf<DISPLAY_DEVICEW>() };
+            if (!EnumDisplayDevicesW(null, index, ref device, 0)) break;
+            if ((device.StateFlags & DISPLAY_DEVICE_ATTACHED_TO_DESKTOP) == 0) continue;
+            if ((device.StateFlags & DISPLAY_DEVICE_PRIMARY_DEVICE) == 0) continue;
+            if (!string.IsNullOrEmpty(device.DeviceName))
+                primary.Add(device.DeviceName);
+        }
+
+        return primary;
     }
 
     private static int ReadScalePercent(IntPtr monitor)
@@ -247,57 +386,128 @@ public sealed class DisplaySensorSource : ISensorSource
         }
     }
 
-    /// <summary>
-    /// Maps each GDI display device ("\\.\DISPLAY1") to whether its output is an
-    /// internal panel, using the CCD path table. Failures degrade to
-    /// <see cref="DisplayConnection.Unknown"/> rather than guessing.
-    /// </summary>
-    private static Dictionary<string, DisplayConnection> ReadConnections()
+    private static TopologyCapture ReadTopology(
+        bool includeIdentity,
+        IReadOnlySet<string> primaryDevices)
     {
         var connections = new Dictionary<string, DisplayConnection>(StringComparer.OrdinalIgnoreCase);
+        var monitors = new List<MonitorIdentity>();
 
-        try
+        if (!TryReadActivePaths(out var paths))
+            return new TopologyCapture(connections, monitors, IdentityAvailable: !includeIdentity);
+
+        var identityAvailable = true;
+        foreach (var path in paths)
         {
-            if (GetDisplayConfigBufferSizes(QDC_ONLY_ACTIVE_PATHS, out var pathCount, out var modeCount) != 0)
-                return connections;
+            var sourceRequest = new DISPLAYCONFIG_SOURCE_DEVICE_NAME
+            {
+                header = new DISPLAYCONFIG_DEVICE_INFO_HEADER
+                {
+                    type = DISPLAYCONFIG_DEVICE_INFO_GET_SOURCE_NAME,
+                    size = Marshal.SizeOf<DISPLAYCONFIG_SOURCE_DEVICE_NAME>(),
+                    adapterId = path.sourceInfo.adapterId,
+                    id = path.sourceInfo.id
+                }
+            };
+
+            var sourceResult = DisplayConfigGetDeviceInfo(ref sourceRequest);
+            var sourceName = sourceResult == ERROR_SUCCESS
+                ? sourceRequest.viewGdiDeviceName ?? string.Empty
+                : string.Empty;
+            var connection = IsInternal(path.targetInfo.outputTechnology)
+                ? DisplayConnection.Internal
+                : DisplayConnection.External;
+
+            if (sourceName.Length > 0)
+                connections[sourceName] = MergeConnection(
+                    connections.GetValueOrDefault(sourceName, DisplayConnection.Unknown),
+                    connection);
+
+            if (!includeIdentity
+                || path.targetInfo.targetAvailable == 0
+                || !IsPhysical(path.targetInfo.outputTechnology))
+            {
+                continue;
+            }
+
+            if (sourceName.Length == 0)
+                identityAvailable = false;
+
+            var targetRequest = new DISPLAYCONFIG_TARGET_DEVICE_NAME
+            {
+                header = new DISPLAYCONFIG_DEVICE_INFO_HEADER
+                {
+                    type = DISPLAYCONFIG_DEVICE_INFO_GET_TARGET_NAME,
+                    size = Marshal.SizeOf<DISPLAYCONFIG_TARGET_DEVICE_NAME>(),
+                    adapterId = path.targetInfo.adapterId,
+                    id = path.targetInfo.id
+                }
+            };
+
+            if (DisplayConfigGetDeviceInfo(ref targetRequest) != ERROR_SUCCESS)
+            {
+                identityAvailable = false;
+                continue;
+            }
+
+            if ((targetRequest.flags & DISPLAYCONFIG_TARGET_FRIENDLY_NAME_FORCED) != 0)
+                continue;
+
+            var edidIdsValid = (targetRequest.flags & DISPLAYCONFIG_TARGET_EDID_IDS_VALID) != 0;
+            var trustedName = (targetRequest.flags & DISPLAYCONFIG_TARGET_FRIENDLY_NAME_FROM_EDID) != 0
+                              || edidIdsValid;
+            var internalKey = string.IsNullOrWhiteSpace(targetRequest.monitorDevicePath)
+                ? BuildTargetKey(path.targetInfo.adapterId, path.targetInfo.id)
+                : targetRequest.monitorDevicePath;
+            monitors.Add(MonitorIdentity.Create(
+                internalKey,
+                targetRequest.monitorFriendlyDeviceName,
+                trustedName,
+                targetRequest.edidManufactureId,
+                targetRequest.edidProductCodeId,
+                edidIdsValid,
+                connection,
+                primaryDevices.Contains(sourceName)));
+        }
+
+        return new TopologyCapture(connections, monitors, identityAvailable);
+    }
+
+    private static bool TryReadActivePaths(out IReadOnlyList<DISPLAYCONFIG_PATH_INFO> activePaths)
+    {
+        for (var attempt = 0; attempt < DisplayConfigBufferAttempts; attempt++)
+        {
+            if (GetDisplayConfigBufferSizes(
+                    QDC_ONLY_ACTIVE_PATHS, out var pathCount, out var modeCount) != ERROR_SUCCESS)
+            {
+                activePaths = [];
+                return false;
+            }
 
             var paths = new DISPLAYCONFIG_PATH_INFO[pathCount];
             var modes = new DISPLAYCONFIG_MODE_INFO[modeCount];
-
-            if (QueryDisplayConfig(
-                    QDC_ONLY_ACTIVE_PATHS, ref pathCount, paths, ref modeCount, modes, IntPtr.Zero) != 0)
+            var result = QueryDisplayConfig(
+                QDC_ONLY_ACTIVE_PATHS,
+                ref pathCount,
+                paths,
+                ref modeCount,
+                modes,
+                IntPtr.Zero);
+            if (result == ERROR_SUCCESS)
             {
-                return connections;
+                activePaths = paths.Take((int)pathCount).ToArray();
+                return true;
             }
 
-            for (var i = 0; i < pathCount; i++)
+            if (result != ERROR_INSUFFICIENT_BUFFER)
             {
-                var path = paths[i];
-                var request = new DISPLAYCONFIG_SOURCE_DEVICE_NAME
-                {
-                    header = new DISPLAYCONFIG_DEVICE_INFO_HEADER
-                    {
-                        type = DISPLAYCONFIG_DEVICE_INFO_GET_SOURCE_NAME,
-                        size = Marshal.SizeOf<DISPLAYCONFIG_SOURCE_DEVICE_NAME>(),
-                        adapterId = path.sourceInfo.adapterId,
-                        id = path.sourceInfo.id
-                    }
-                };
-
-                if (DisplayConfigGetDeviceInfo(ref request) != 0) continue;
-                if (string.IsNullOrEmpty(request.viewGdiDeviceName)) continue;
-
-                connections[request.viewGdiDeviceName] = IsInternal(path.targetInfo.outputTechnology)
-                    ? DisplayConnection.Internal
-                    : DisplayConnection.External;
+                activePaths = [];
+                return false;
             }
         }
-        catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException)
-        {
-            return connections;
-        }
 
-        return connections;
+        activePaths = [];
+        return false;
     }
 
     private static bool IsInternal(uint outputTechnology) => outputTechnology
@@ -306,14 +516,57 @@ public sealed class DisplaySensorSource : ISensorSource
         or DISPLAYCONFIG_OUTPUT_TECHNOLOGY_DISPLAYPORT_EMBEDDED
         or DISPLAYCONFIG_OUTPUT_TECHNOLOGY_UDI_EMBEDDED;
 
+    private static bool IsPhysical(uint outputTechnology) => outputTechnology
+        is not DISPLAYCONFIG_OUTPUT_TECHNOLOGY_INDIRECT_WIRED
+        and not DISPLAYCONFIG_OUTPUT_TECHNOLOGY_INDIRECT_VIRTUAL;
+
+    private static DisplayConnection MergeConnection(
+        DisplayConnection current,
+        DisplayConnection candidate) =>
+        current == DisplayConnection.Internal || candidate == DisplayConnection.Internal
+            ? DisplayConnection.Internal
+            : candidate;
+
+    private static string BuildTargetKey(LUID adapterId, uint targetId) =>
+        $"{adapterId.HighPart:X8}:{adapterId.LowPart:X8}:{targetId:X8}";
+
+    private sealed record LogicalDisplay(
+        string DeviceName,
+        int Width,
+        int Height,
+        int RefreshRateHz,
+        int ScalePercent,
+        bool IsPrimary);
+
+    private sealed record DisplayCaptureSnapshot(
+        IReadOnlyList<DisplayInfo> Displays,
+        int DisplayCount,
+        MonitorCaptureResult Monitors);
+
+    private sealed record TopologyCapture(
+        IReadOnlyDictionary<string, DisplayConnection> Connections,
+        IReadOnlyList<MonitorIdentity> Monitors,
+        bool IdentityAvailable);
+
+    private const int DisplayConfigBufferAttempts = 3;
+    private const int ERROR_SUCCESS = 0;
+    private const int ERROR_INSUFFICIENT_BUFFER = 122;
     private const uint MONITORINFOF_PRIMARY = 1;
+    private const uint DISPLAY_DEVICE_ATTACHED_TO_DESKTOP = 1;
+    private const uint DISPLAY_DEVICE_PRIMARY_DEVICE = 4;
     private const int ENUM_CURRENT_SETTINGS = -1;
     private const int MDT_EFFECTIVE_DPI = 0;
     private const uint QDC_ONLY_ACTIVE_PATHS = 2;
     private const uint DISPLAYCONFIG_DEVICE_INFO_GET_SOURCE_NAME = 1;
+    private const uint DISPLAYCONFIG_DEVICE_INFO_GET_TARGET_NAME = 2;
+    private const uint DISPLAYCONFIG_TARGET_FRIENDLY_NAME_FROM_EDID = 1;
+    private const uint DISPLAYCONFIG_TARGET_FRIENDLY_NAME_FORCED = 2;
+    private const uint DISPLAYCONFIG_TARGET_EDID_IDS_VALID = 4;
     private const uint DISPLAYCONFIG_OUTPUT_TECHNOLOGY_LVDS = 6;
     private const uint DISPLAYCONFIG_OUTPUT_TECHNOLOGY_DISPLAYPORT_EMBEDDED = 11;
     private const uint DISPLAYCONFIG_OUTPUT_TECHNOLOGY_UDI_EMBEDDED = 13;
+    private const uint DISPLAYCONFIG_OUTPUT_TECHNOLOGY_INDIRECT_WIRED = 16;
+    private const uint DISPLAYCONFIG_OUTPUT_TECHNOLOGY_INDIRECT_VIRTUAL = 17;
     private const uint DISPLAYCONFIG_OUTPUT_TECHNOLOGY_INTERNAL = 0x80000000;
 
     private delegate bool MonitorEnumProc(IntPtr monitor, IntPtr hdc, IntPtr clip, IntPtr data);
@@ -340,6 +593,26 @@ public sealed class DisplaySensorSource : ISensorSource
 
         [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)]
         public string szDevice;
+    }
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    private struct DISPLAY_DEVICEW
+    {
+        public int cb;
+
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)]
+        public string DeviceName;
+
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)]
+        public string DeviceString;
+
+        public uint StateFlags;
+
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)]
+        public string DeviceId;
+
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)]
+        public string DeviceKey;
     }
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
@@ -455,10 +728,35 @@ public sealed class DisplaySensorSource : ISensorSource
         public string viewGdiDeviceName;
     }
 
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    private struct DISPLAYCONFIG_TARGET_DEVICE_NAME
+    {
+        public DISPLAYCONFIG_DEVICE_INFO_HEADER header;
+        public uint flags;
+        public uint outputTechnology;
+        public ushort edidManufactureId;
+        public ushort edidProductCodeId;
+        public uint connectorInstance;
+
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 64)]
+        public string monitorFriendlyDeviceName;
+
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)]
+        public string monitorDevicePath;
+    }
+
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool EnumDisplayMonitors(
         IntPtr hdc, IntPtr clip, MonitorEnumProc callback, IntPtr data);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool EnumDisplayDevicesW(
+        string? device,
+        uint deviceNumber,
+        ref DISPLAY_DEVICEW displayDevice,
+        uint flags);
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     [return: MarshalAs(UnmanagedType.Bool)]
@@ -486,4 +784,7 @@ public sealed class DisplaySensorSource : ISensorSource
 
     [DllImport("user32.dll")]
     private static extern int DisplayConfigGetDeviceInfo(ref DISPLAYCONFIG_SOURCE_DEVICE_NAME request);
+
+    [DllImport("user32.dll")]
+    private static extern int DisplayConfigGetDeviceInfo(ref DISPLAYCONFIG_TARGET_DEVICE_NAME request);
 }

@@ -8,9 +8,12 @@ public static class DisplayCapturePolicy
 {
     public const string DisplayCountId = "displays_count";
     public const string DisplayResolutionId = "display_resolution";
+    public const string MonitorIdentityId = "monitor_identity";
 
     public static DisplayCaptureScope For(IReadOnlySet<string> enabled) =>
-        enabled.Contains(DisplayResolutionId)
+        enabled.Contains(MonitorIdentityId)
+            ? DisplayCaptureScope.Identity
+            : enabled.Contains(DisplayResolutionId)
             ? DisplayCaptureScope.Details
             : enabled.Contains(DisplayCountId)
                 ? DisplayCaptureScope.CountOnly
@@ -46,9 +49,19 @@ public sealed class DisplayObservationGate
     public IReadOnlyList<DisplayInfo> CaptureDetails()
     {
         var displays = _captureDetails();
-        _summary.Seed(DisplaySummary.Describe(displays));
+        SeedDetails(displays);
         return displays;
     }
+
+    public void SeedCount(int count) => _count.Seed(count);
+
+    public void SeedDetails(IReadOnlyList<DisplayInfo> displays) =>
+        _summary.Seed(DisplaySummary.Describe(displays));
+
+    public bool TryUpdateCount(int count) => _count.TryUpdate(count);
+
+    public bool TryUpdateDetails(IReadOnlyList<DisplayInfo> displays) =>
+        _summary.TryUpdate(DisplaySummary.Describe(displays));
 
     public void Seed(DisplayCaptureScope scope)
     {
@@ -60,8 +73,7 @@ public sealed class DisplayObservationGate
 
     public bool TryUpdate(DisplayCaptureScope scope) => scope switch
     {
-        DisplayCaptureScope.Details =>
-            _summary.TryUpdate(DisplaySummary.Describe(_captureDetails())),
+        DisplayCaptureScope.Details => TryUpdateDetails(_captureDetails()),
         DisplayCaptureScope.CountOnly => _count.TryUpdate(_captureCount()),
         _ => false
     };
@@ -71,5 +83,6 @@ public enum DisplayCaptureScope
 {
     None,
     CountOnly,
-    Details
+    Details,
+    Identity
 }

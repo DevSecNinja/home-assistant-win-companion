@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.11.2](https://github.com/DevSecNinja/home-assistant-win-companion/compare/v0.11.1...v0.11.2) (2026-09-07)
+
+
+### Bug Fixes
+
+* **updates:** bound attestation candidates ([#241](https://github.com/DevSecNinja/home-assistant-win-companion/issues/241)) ([317ffbf](https://github.com/DevSecNinja/home-assistant-win-companion/commit/317ffbff790bb724b7ca1a269b13475b50388176))
+
 ## [0.11.1](https://github.com/DevSecNinja/home-assistant-win-companion/compare/v0.11.0...v0.11.1) (2026-09-07)
 
 

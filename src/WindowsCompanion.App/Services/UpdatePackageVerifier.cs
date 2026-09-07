@@ -23,9 +23,11 @@ internal sealed class UpdatePackageVerifier : IUpdatePackageVerifier
     internal const string WorkflowFileName = ".github/workflows/release.yml";
     internal const string DefaultBranch = "main";
     internal const string AttestationBundleHost = "tmaproduction.blob.core.windows.net";
+    internal const int MaximumAttestationCandidates = 16;
 
     private const long MaxChecksumSidecarBytes = 4_096;
     private const long MaxAttestationResponseBytes = 4_194_304;
+    private const long MaxTotalAttestationBundleBytes = 16_777_216;
 
     private readonly HttpClient _http;
     private readonly HttpClient _assetHttp;
@@ -132,32 +134,26 @@ internal sealed class UpdatePackageVerifier : IUpdatePackageVerifier
             throw new UpdatePackageVerificationException(
                 $"No GitHub build-provenance attestation is published for {asset.Package.Name}.");
         }
+        if (bundles.Count + bundleUrls.Count > MaximumAttestationCandidates)
+        {
+            throw new UpdatePackageVerificationException(
+                $"GitHub returned more than {MaximumAttestationCandidates} attestation candidates for {asset.Package.Name}.");
+        }
 
         var policies = CreatePolicies(asset);
         var failureReasons = new List<string>();
-        foreach (var bundleUrl in bundleUrls)
-        {
-            try
-            {
-                bundles.Add(await GetStringAsync(
-                        _http,
-                        bundleUrl.AbsoluteUri,
-                        MaxAttestationResponseBytes,
-                        cancellationToken)
-                    .ConfigureAwait(false));
-            }
-            catch (Exception ex) when (ex is HttpRequestException
-                or IOException
-                or InvalidDataException)
-            {
-                failureReasons.Add(
-                    $"Bundle download from {bundleUrl.Host} failed: "
-                    + DescribeBundleDownloadFailure(ex));
-            }
-        }
+        long processedBundleBytes = 0;
 
-        foreach (var bundleJson in bundles)
+        async Task<bool> TryVerifyCandidateAsync(string bundleJson)
         {
+            processedBundleBytes = checked(
+                processedBundleBytes + System.Text.Encoding.UTF8.GetByteCount(bundleJson));
+            if (processedBundleBytes > MaxTotalAttestationBundleBytes)
+            {
+                throw new UpdatePackageVerificationException(
+                    $"The attestation candidates for {asset.Package.Name} exceeded the verification size limit.");
+            }
+
             SigstoreBundle bundle;
             try
             {
@@ -166,7 +162,7 @@ internal sealed class UpdatePackageVerifier : IUpdatePackageVerifier
             catch (Exception ex) when (ex is JsonException or FormatException)
             {
                 failureReasons.Add($"Bundle deserialization failed: {ex.Message}");
-                continue;
+                return false;
             }
 
             await using var artifact = File.OpenRead(packagePath);
@@ -182,7 +178,7 @@ internal sealed class UpdatePackageVerifier : IUpdatePackageVerifier
                         "Verified the build-provenance attestation for {Package} ({Version}).",
                         asset.Package.Name,
                         _productVersion);
-                    return;
+                    return true;
                 }
 
                 var reason = result?.FailureReason ?? "unknown";
@@ -192,6 +188,40 @@ internal sealed class UpdatePackageVerifier : IUpdatePackageVerifier
                     asset.Package.Name,
                     reason);
             }
+
+            return false;
+        }
+
+        foreach (var bundleJson in bundles)
+        {
+            if (await TryVerifyCandidateAsync(bundleJson).ConfigureAwait(false))
+                return;
+        }
+
+        foreach (var bundleUrl in bundleUrls)
+        {
+            string bundleJson;
+            try
+            {
+                bundleJson = await GetStringAsync(
+                        _http,
+                        bundleUrl.AbsoluteUri,
+                        MaxAttestationResponseBytes,
+                        cancellationToken)
+                    .ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is HttpRequestException
+                or IOException
+                or InvalidDataException)
+            {
+                failureReasons.Add(
+                    $"Bundle download from {bundleUrl.Host} failed: "
+                    + DescribeBundleDownloadFailure(ex));
+                continue;
+            }
+
+            if (await TryVerifyCandidateAsync(bundleJson).ConfigureAwait(false))
+                return;
         }
 
         var collected = string.Join("; ", failureReasons);

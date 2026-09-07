@@ -308,6 +308,67 @@ public class UpdatePackageVerifierTests
         }
     }
 
+    [Fact]
+    public async Task Excessive_attestation_candidates_are_rejected_before_bundle_downloads()
+    {
+        var packagePath = Path.Combine(Path.GetTempPath(), $"wc-verify-{Guid.NewGuid():N}.zip");
+        var bytes = "package-bytes"u8.ToArray();
+        await File.WriteAllBytesAsync(packagePath, bytes);
+        try
+        {
+            var actualHash = Convert.ToHexStringLower(
+                System.Security.Cryptography.SHA256.HashData(bytes));
+            var bundleRequests = 0;
+            var candidates = string.Join(
+                ",",
+                Enumerable.Range(0, UpdatePackageVerifier.MaximumAttestationCandidates + 1)
+                    .Select(index =>
+                        $$"""{"bundle_url":"https://tmaproduction.blob.core.windows.net/attestations/{{index}}.json.sn"}"""));
+            var handler = new DelegateHandler((request, _) =>
+            {
+                var url = request.RequestUri!.AbsoluteUri;
+                if (url.EndsWith(".sha256", StringComparison.Ordinal))
+                {
+                    return Task.FromResult(TextResponse(
+                        $"{actualHash}  WindowsCompanion-1.2.3-win-x64-setup.zip"));
+                }
+
+                if (request.RequestUri.Host == "api.github.com")
+                {
+                    return Task.FromResult(TextResponse(
+                        $$"""{"attestations":[{{candidates}}]}"""));
+                }
+
+                Interlocked.Increment(ref bundleRequests);
+                return Task.FromResult(TextResponse("{}"));
+            });
+            var verifier = new UpdatePackageVerifier(
+                new HttpClient(handler),
+                "1.2.3",
+                NullLogger<UpdatePackageVerifier>.Instance);
+            var asset = new SelectedUpdateAsset(
+                new ReleaseAsset(
+                    "WindowsCompanion-1.2.3-win-x64-setup.zip",
+                    "https://example.invalid/package.zip"),
+                new ReleaseAsset(
+                    "WindowsCompanion-1.2.3-win-x64-setup.zip.sha256",
+                    "https://example.invalid/package.zip.sha256"));
+
+            var exception = await Assert.ThrowsAsync<UpdatePackageVerificationException>(
+                () => verifier.VerifyAsync(packagePath, asset, CancellationToken.None));
+
+            Assert.Contains(
+                $"more than {UpdatePackageVerifier.MaximumAttestationCandidates}",
+                exception.Message,
+                StringComparison.Ordinal);
+            Assert.Equal(0, bundleRequests);
+        }
+        finally
+        {
+            File.Delete(packagePath);
+        }
+    }
+
     private static HttpResponseMessage TextResponse(string body) =>
         new(HttpStatusCode.OK) { Content = new StringContent(body, Encoding.UTF8, "text/plain") };
 

@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.11.1](https://github.com/DevSecNinja/home-assistant-win-companion/compare/v0.11.0...v0.11.1) (2026-09-07)
+
+
+### Bug Fixes
+
+* **updates:** load public attestation bundles ([#239](https://github.com/DevSecNinja/home-assistant-win-companion/issues/239)) ([6e1e6df](https://github.com/DevSecNinja/home-assistant-win-companion/commit/6e1e6df72f03a909bf062b08b12147e2740dc2cb))
+
 ## [0.11.0](https://github.com/DevSecNinja/home-assistant-win-companion/compare/v0.10.1...v0.11.0) (2026-09-07)
 
 

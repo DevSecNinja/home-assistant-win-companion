@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.12.0](https://github.com/DevSecNinja/home-assistant-win-companion/compare/v0.11.2...v0.12.0) (2026-09-08)
+
+
+### ⚠ BREAKING CHANGES
+
+* **sensors:** standardize display identity terminology ([#243](https://github.com/DevSecNinja/home-assistant-win-companion/issues/243))
+
+### Features
+
+* **sensors:** standardize display identity terminology ([#243](https://github.com/DevSecNinja/home-assistant-win-companion/issues/243)) ([e03b037](https://github.com/DevSecNinja/home-assistant-win-companion/commit/e03b037a6b30b95e5348987c672bc4cf5ad7a977))
+
 ## [0.11.2](https://github.com/DevSecNinja/home-assistant-win-companion/compare/v0.11.1...v0.11.2) (2026-09-07)
 
 

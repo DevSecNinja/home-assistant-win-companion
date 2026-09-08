@@ -58,12 +58,15 @@ protocol endpoint, or background behavior is introduced.
 
 ```text
 specs/025-display-monitor-aliases/
-├── plan.md
-├── research.md
-├── data-model.md
-├── quickstart.md
+├── checklists/
+│   └── requirements.md
 ├── contracts/
 │   └── sensor-search.md
+├── data-model.md
+├── plan.md
+├── quickstart.md
+├── research.md
+├── spec.md
 └── tasks.md
 ```
 
@@ -72,13 +75,23 @@ specs/025-display-monitor-aliases/
 ```text
 src/
 ├── WindowsCompanion.Core/
-│   └── Sensors/SensorDefinition.cs
+│   └── Sensors/
+│       ├── DisplayCapturePolicy.cs
+│       ├── MonitorIdentity.cs
+│       └── SensorDefinition.cs
 └── WindowsCompanion.App/
     ├── MainWindow.Sensors.cs
     └── Services/DisplaySensorSource.cs
 
 tests/
+├── WindowsCompanion.Core.Tests/
+│   ├── HardwareSensorTests.cs
+│   ├── SensorDefinitionTests.cs
+│   └── SensorSyncServiceTests.cs
+├── WindowsCompanion.E2E.Tests/
+│   └── CompositionContractTests.cs
 └── WindowsCompanion.UI.Tests/
+    ├── Pages/SensorsPage.cs
     └── SensorFilterUiTests.cs
 ```
 

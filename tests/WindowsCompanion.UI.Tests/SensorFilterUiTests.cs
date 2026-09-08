@@ -41,8 +41,8 @@ public sealed class SensorFilterUiTests
 
                 sensors.SetFilter("display");
                 AutomationWait.Until(
-                    () => !sensors.IsEmptyStateVisible(),
-                    "Display search should return display-related sensors.");
+                    () => sensors.IsSensorVisible("display_identity"),
+                    "Display Identity should match the canonical display term.");
 
                 // Filter with non-matching term shows empty state
                 sensors.SetFilter("zzz_no_match_zzz");

@@ -129,7 +129,7 @@ public sealed record MonitorCaptureResult(
 
 public static class MonitorIdentitySummary
 {
-    public const string NoMonitors = "No monitors";
+    public const string NoDisplays = "No displays";
     public const string Unavailable = "Unavailable";
     public const int MaxDetailed = 8;
 
@@ -165,9 +165,9 @@ public static class MonitorIdentitySummary
         var ordered = Order(result.Monitors);
         return ordered.Count switch
         {
-            0 => NoMonitors,
+            0 => NoDisplays,
             1 => DisplayLabel(ordered[0]),
-            _ => $"{ordered.Count} monitors"
+            _ => $"{ordered.Count} displays"
         };
     }
 
@@ -180,7 +180,7 @@ public static class MonitorIdentitySummary
         return new Dictionary<string, object>(StringComparer.Ordinal)
         {
             ["count"] = ordered.Count,
-            ["monitors"] = ordered
+            ["displays"] = ordered
                 .Take(MaxDetailed)
                 .Select(BuildMonitorAttributes)
                 .ToArray()
@@ -222,7 +222,7 @@ public static class MonitorIdentitySummary
             ' ',
             new[] { monitor.Manufacturer, monitor.ProductCode }
                 .Where(value => value is not null));
-        return label.Length > 0 ? label : "Unknown monitor";
+        return label.Length > 0 ? label : "Unknown display";
     }
 
     private static int Completeness(MonitorIdentity monitor) =>

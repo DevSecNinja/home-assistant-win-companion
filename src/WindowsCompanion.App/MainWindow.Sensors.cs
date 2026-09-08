@@ -292,7 +292,7 @@ public sealed partial class MainWindow
             row.Children.Add(text);
             row.Children.Add(toggle);
 
-            var searchText = definition.Name + "\n" + definition.Description;
+            var searchText = definition.SearchText;
             if (definition.Privacy == SensorPrivacy.Sensitive)
                 searchText += "\nsensitive";
             if (LifecycleSensorAdvisory.IsAdvisedSensor(definition.UniqueId))

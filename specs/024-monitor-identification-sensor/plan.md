@@ -6,7 +6,7 @@
 
 ## Summary
 
-Add one opt-in `monitor_identity` sensor to the existing display sensor source.
+Add one opt-in `display_identity` sensor to the existing display sensor source.
 The source will enrich the current active-display CCD query with target device
 names and valid EDID manufacturer/product identifiers, then delegate
 deduplication, ordering, fallback formatting, and Home Assistant attributes to

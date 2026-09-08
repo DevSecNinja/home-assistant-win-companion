@@ -33,6 +33,17 @@ public sealed class SensorFilterUiTests
                     () => sensors.IsSensorVisible("battery_level"),
                     "Battery sensor should remain visible with matching filter.");
 
+                sensors.SetFilter("MONITOR");
+                AutomationWait.Until(
+                    () => sensors.IsSensorVisible("display_identity"),
+                    "Display Identity should match its monitor alias.");
+                Assert.Equal("Display Identity enabled", sensors.SensorName("display_identity"));
+
+                sensors.SetFilter("display");
+                AutomationWait.Until(
+                    () => sensors.IsSensorVisible("display_identity"),
+                    "Display Identity should match the canonical display term.");
+
                 // Filter with non-matching term shows empty state
                 sensors.SetFilter("zzz_no_match_zzz");
                 AutomationWait.Until(

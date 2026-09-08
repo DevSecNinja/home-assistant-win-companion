@@ -187,6 +187,24 @@ public class SensorSyncServiceTests
     }
 
     [Fact]
+    public async Task Legacy_monitor_identity_registration_is_retired_after_display_rename()
+    {
+        var registered = new Dictionary<string, RegisteredSensor>(StringComparer.Ordinal)
+        {
+            ["monitor_identity"] = new() { Type = "sensor", Name = "Monitors" }
+        };
+
+        var client = new FakeClient();
+        var svc = new SensorSyncService(client, BatteryCatalog(), registered);
+
+        await svc.SyncAsync("wh", SensorReadContext.Periodic);
+
+        var retire = Assert.Single(client.RegisterCalls, c => c.Id == "monitor_identity");
+        Assert.True(retire.Disabled);
+        Assert.False(registered.ContainsKey("monitor_identity"));
+    }
+
+    [Fact]
     public async Task Registered_sensors_are_persisted_so_they_survive_a_restart()
     {
         var registered = new Dictionary<string, RegisteredSensor>(StringComparer.Ordinal);

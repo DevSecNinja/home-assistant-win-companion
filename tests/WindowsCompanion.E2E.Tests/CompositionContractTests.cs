@@ -35,6 +35,27 @@ public sealed class CompositionContractTests
     }
 
     [Fact]
+    public void Production_composition_uses_the_display_identity_contract()
+    {
+        var sources = ProductionSensorComposition.CreateSources(
+            new ServerConfig(),
+            new LifecycleCoordinator(new MemoryLifecycleJournal()),
+            new NoOpLifecycleSignals(),
+            new FixedSystemStatus(),
+            new NoOpWinGetProvider(),
+            new NoOpLocationProvider());
+        var source = Assert.Single(sources.OfType<DisplaySensorSource>());
+        var definition = Assert.Single(
+            source.Definitions,
+            item => item.UniqueId == DisplaySensorSource.DisplayIdentityId);
+
+        Assert.Equal("display_identity", definition.UniqueId);
+        Assert.Equal("Display Identity", definition.Name);
+        Assert.Equal(["Monitor", "Monitors"], definition.SearchAliases);
+        Assert.False(definition.EnabledByDefault);
+    }
+
+    [Fact]
     public void Production_composition_keeps_platform_defaults()
     {
         var dependencies = AppControllerDependencies.CreateProduction();

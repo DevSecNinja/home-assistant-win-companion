@@ -216,7 +216,7 @@ public class HardwareSensorTests
         Assert.Null(monitor.Manufacturer);
         Assert.Null(monitor.ProductCode);
         Assert.Equal(
-            "Unknown monitor",
+            "Unknown display",
             MonitorIdentitySummary.Describe(MonitorCaptureResult.Available([monitor])));
     }
 
@@ -237,7 +237,7 @@ public class HardwareSensorTests
         Assert.NotNull(attributes);
         Assert.Equal(1, attributes["count"]);
 
-        var details = Assert.IsType<Dictionary<string, object>[]>(attributes["monitors"]);
+        var details = Assert.IsType<Dictionary<string, object>[]>(attributes["displays"]);
         var detail = Assert.Single(details);
         Assert.Equal("DELL U2723QE", detail["model"]);
         Assert.Equal("DEL", detail["manufacturer"]);
@@ -275,11 +275,11 @@ public class HardwareSensorTests
         Assert.Equal(10, ordered.Count);
         Assert.Equal("Model 09", ordered[0].Model);
         Assert.Equal("Model 08", ordered[1].Model);
-        Assert.Equal("10 monitors", MonitorIdentitySummary.Describe(result));
+        Assert.Equal("10 displays", MonitorIdentitySummary.Describe(result));
         Assert.Equal(10, attributes!["count"]);
         Assert.Equal(
             MonitorIdentitySummary.MaxDetailed,
-            Assert.IsType<Dictionary<string, object>[]>(attributes["monitors"]).Length);
+            Assert.IsType<Dictionary<string, object>[]>(attributes["displays"]).Length);
     }
 
     [Fact]
@@ -291,7 +291,7 @@ public class HardwareSensorTests
         var result = MonitorCaptureResult.Available([right, left]);
 
         Assert.Equal(2, MonitorIdentitySummary.Order(result.Monitors).Count);
-        Assert.Equal("2 monitors", MonitorIdentitySummary.Describe(result));
+        Assert.Equal("2 displays", MonitorIdentitySummary.Describe(result));
     }
 
     [Fact]
@@ -326,10 +326,10 @@ public class HardwareSensorTests
         var headless = MonitorCaptureResult.Available([]);
         var unavailable = MonitorCaptureResult.Unavailable;
 
-        Assert.Equal("No monitors", MonitorIdentitySummary.Describe(headless));
+        Assert.Equal("No displays", MonitorIdentitySummary.Describe(headless));
         var attributes = MonitorIdentitySummary.BuildAttributes(headless);
         Assert.Equal(0, attributes!["count"]);
-        Assert.Empty(Assert.IsType<Dictionary<string, object>[]>(attributes["monitors"]));
+        Assert.Empty(Assert.IsType<Dictionary<string, object>[]>(attributes["displays"]));
 
         Assert.Equal("Unavailable", MonitorIdentitySummary.Describe(unavailable));
         Assert.Null(MonitorIdentitySummary.BuildAttributes(unavailable));
@@ -339,13 +339,14 @@ public class HardwareSensorTests
     }
 
     [Fact]
-    public void Monitor_identity_scope_is_separate_from_count_and_resolution_details()
+    public void Display_identity_scope_is_separate_from_count_and_resolution_details()
     {
         var enabled = new HashSet<string>(StringComparer.Ordinal)
         {
-            DisplayCapturePolicy.MonitorIdentityId
+            DisplayCapturePolicy.DisplayIdentityId
         };
 
+        Assert.Equal("display_identity", DisplayCapturePolicy.DisplayIdentityId);
         Assert.Equal(DisplayCaptureScope.Identity, DisplayCapturePolicy.For(enabled));
 
         enabled.Add(DisplayCapturePolicy.DisplayResolutionId);

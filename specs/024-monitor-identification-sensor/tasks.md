@@ -16,8 +16,8 @@ verifiable.
 **Purpose**: Establish the new sensor contract without changing collection
 behavior.
 
-- [x] T001 Add the `monitor_identity` sensor ID and identity-aware capture scope contract in `src/WindowsCompanion.Core/Sensors/DisplayCapturePolicy.cs`
-- [x] T002 [P] Add the disabled-by-default sensitive Monitors definition and resource/privacy text in `src/WindowsCompanion.App/Services/DisplaySensorSource.cs`
+- [x] T001 Add the `display_identity` sensor ID and identity-aware capture scope contract in `src/WindowsCompanion.Core/Sensors/DisplayCapturePolicy.cs`
+- [x] T002 [P] Add the disabled-by-default sensitive Display Identity definition and resource/privacy text in `src/WindowsCompanion.App/Services/DisplaySensorSource.cs`
 
 ---
 
@@ -84,7 +84,7 @@ enumeration order changes.
 
 ## Phase 5: User Story 3 - Represent a headless computer (Priority: P3)
 
-**Goal**: Report a successful empty topology as `No monitors` while keeping
+**Goal**: Report a successful empty topology as `No displays` while keeping
 Windows discovery failures distinguishable as `Unavailable`.
 
 **Independent Test**: Compare successful-empty and unavailable capture results
@@ -92,7 +92,7 @@ and verify they produce different states and attribute shapes.
 
 ### Tests for User Story 3
 
-- [x] T012 [US3] Add failing tests for `No monitors`, zero/empty attributes, unavailable output, unknown attached targets, and unavailable-to-available change detection in `tests/WindowsCompanion.Core.Tests/HardwareSensorTests.cs`
+- [x] T012 [US3] Add failing tests for `No displays`, zero/empty attributes, unavailable output, unknown attached targets, and unavailable-to-available change detection in `tests/WindowsCompanion.Core.Tests/HardwareSensorTests.cs`
 
 ### Implementation for User Story 3
 

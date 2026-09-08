@@ -28,6 +28,15 @@ public sealed record SensorDefinition(
     string? AutomationIdea = null,
     string? OptInPlaceholder = null)
 {
+    /// <summary>Additional local terms that can find this sensor in the catalog.</summary>
+    public IReadOnlyList<string> SearchAliases { get; init; } = [];
+
+    /// <summary>Text fields included in local sensor catalog searches.</summary>
+    public IReadOnlyList<string> SearchTerms => [Name, Description, .. SearchAliases];
+
+    /// <summary>Combined local search index for this sensor.</summary>
+    public string SearchText => string.Join("\n", SearchTerms);
+
     /// <summary>Privacy-sensitive values must never be written to logs.</summary>
     public bool Loggable => Privacy == SensorPrivacy.Benign;
 

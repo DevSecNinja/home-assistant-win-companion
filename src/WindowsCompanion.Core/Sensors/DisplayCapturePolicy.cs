@@ -8,10 +8,10 @@ public static class DisplayCapturePolicy
 {
     public const string DisplayCountId = "displays_count";
     public const string DisplayResolutionId = "display_resolution";
-    public const string MonitorIdentityId = "monitor_identity";
+    public const string DisplayIdentityId = "display_identity";
 
     public static DisplayCaptureScope For(IReadOnlySet<string> enabled) =>
-        enabled.Contains(MonitorIdentityId)
+        enabled.Contains(DisplayIdentityId)
             ? DisplayCaptureScope.Identity
             : enabled.Contains(DisplayResolutionId)
             ? DisplayCaptureScope.Details

@@ -37,6 +37,8 @@ internal sealed class SensorsPage(Window window)
         return element is { IsOffscreen: false };
     }
 
+    internal string SensorName(string sensorId) => Toggle(sensorId).Name;
+
     internal bool IsEnabled(string sensorId)
     {
         var element = Toggle(sensorId);

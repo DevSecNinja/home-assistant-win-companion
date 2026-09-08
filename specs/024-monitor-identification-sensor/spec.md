@@ -75,7 +75,7 @@ verify it reports zero monitors with an empty monitor list.
 **Acceptance Scenarios**:
 
 1. **Given** no active physical monitor is attached, **When** the sensor reports,
-   **Then** its state is `No monitors` and its monitor count is zero.
+   **Then** its state is `No displays` and its display count is zero.
 2. **Given** monitor discovery completes successfully with no results, **When**
    the sensor reports, **Then** the result is treated as a valid state rather
    than an unavailable or error state.
@@ -84,7 +84,7 @@ verify it reports zero monitors with an empty monitor list.
 
 - A monitor exposes a manufacturer but no model, or a model but no manufacturer.
 - A connected physical monitor exposes no readable identity fields and is shown
-  as `Unknown monitor` rather than being omitted.
+  as `Unknown display` rather than being omitted.
 - Windows exposes duplicate records for the same physical monitor.
 - Two attached monitors have the same brand and model.
 - A monitor is connected or disconnected while discovery is in progress.
@@ -109,13 +109,13 @@ verify it reports zero monitors with an empty monitor list.
   as such.
 - **FR-005**: For exactly one monitor, the sensor state MUST use the best
   available human-readable brand and model combination, falling back to
-  `Unknown monitor` when Windows confirms the physical target but exposes no
+  `Unknown display` when Windows confirms the physical target but exposes no
   identity fields.
 - **FR-006**: For multiple monitors, the sensor state MUST report the number of
   attached monitors and attributes MUST contain one structured entry per monitor
   up to a maximum of eight entries.
-- **FR-007**: For no monitors, the sensor state MUST be `No monitors`, the
-  monitor count MUST be zero, and the structured monitor list MUST be empty.
+- **FR-007**: For no monitors, the sensor state MUST be `No displays`, the
+  display count MUST be zero, and the structured display list MUST be empty.
 - **FR-008**: Each monitor entry MUST expose the available manufacturer/brand,
   model/type, product code, connection classification, and primary-display flag
   without substituting invented values for unavailable fields.
@@ -163,7 +163,7 @@ verify it reports zero monitors with an empty monitor list.
   state and attribute ordering in 100% of test runs.
 - **SC-005**: With the sensor disabled, monitor discovery, polling, and
   transmission occur zero times.
-- **SC-006**: A headless computer reports `No monitors` without being presented
+- **SC-006**: A headless computer reports `No displays` without being presented
   to the user as a sensor failure.
 
 ## Assumptions

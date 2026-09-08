@@ -4,9 +4,9 @@
 
 | Property | Value |
 | --- | --- |
-| `unique_id` | `monitor_identity` |
+| `unique_id` | `display_identity` |
 | `type` | `sensor` |
-| `name` | `Monitors` |
+| `name` | `Display Identity` |
 | `entity_category` | `diagnostic` |
 | `icon` | `mdi:monitor-off`, `mdi:monitor`, or `mdi:monitor-multiple` based on count |
 | Default | Disabled |
@@ -16,9 +16,9 @@
 
 | Capture result | State |
 | --- | --- |
-| Successful, zero monitors | `No monitors` |
-| Successful, one monitor | Normalized model label, otherwise manufacturer and product code, otherwise `Unknown monitor` |
-| Successful, multiple monitors | `{count} monitors` |
+| Successful, zero monitors | `No displays` |
+| Successful, one monitor | Normalized model label, otherwise manufacturer and product code, otherwise `Unknown display` |
+| Successful, multiple monitors | `{count} displays` |
 | Capture unavailable | `Unavailable` |
 
 ## Attributes
@@ -28,7 +28,7 @@ Successful captures include:
 ```json
 {
   "count": 2,
-  "monitors": [
+  "displays": [
     {
       "model": "DELL U2723QE",
       "manufacturer": "DEL",
@@ -48,9 +48,9 @@ Successful captures include:
 ```
 
 Properties whose source values are unavailable are omitted. A successful
-headless capture has `count: 0` and an empty `monitors` array. An unavailable
+headless capture has `count: 0` and an empty `displays` array. An unavailable
 capture has no attributes. The `count` is the full active-monitor total, while
-`monitors` contains at most the first eight entries in deterministic order.
+`displays` contains at most the first eight entries in deterministic order.
 
 ## Privacy Contract
 

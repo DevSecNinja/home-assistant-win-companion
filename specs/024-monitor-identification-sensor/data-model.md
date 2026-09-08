@@ -16,7 +16,7 @@ Represents identity information for one active physical display target.
 ### Validation
 
 - All public identity fields may be absent for an attached target Windows cannot
-  identify; that target remains present and displays as `Unknown monitor`.
+  identify; that target remains present and displays as `Unknown display`.
 - Virtual, indirect, remote-only, disconnected, and forced targets without
   identity are not represented.
 - Duplicate InternalKey values collapse to one identity.
@@ -45,9 +45,9 @@ The Home Assistant representation derived from `MonitorCaptureResult`.
 
 | Field | Shape |
 | --- | --- |
-| State | `No monitors`, one monitor's display label or `Unknown monitor`, `{N} monitors`, or `Unavailable` |
-| count | Number of public monitor entries; omitted when unavailable |
-| monitors | Ordered array of monitor detail objects; empty for a successful headless result |
+| State | `No displays`, one monitor's display label or `Unknown display`, `{N} displays`, or `Unavailable` |
+| count | Number of public display entries; omitted when unavailable |
+| displays | Ordered array of display detail objects; empty for a successful headless result |
 
 Each monitor detail object can contain:
 

@@ -22,7 +22,7 @@ public sealed class DisplaySensorSource : ISensorSource
 {
     public const string DisplayCountId = DisplayCapturePolicy.DisplayCountId;
     public const string DisplayResolutionId = DisplayCapturePolicy.DisplayResolutionId;
-    public const string MonitorIdentityId = DisplayCapturePolicy.MonitorIdentityId;
+    public const string DisplayIdentityId = DisplayCapturePolicy.DisplayIdentityId;
 
     private readonly SensorPreferences _preferences;
     private readonly DisplayObservationGate _observations;
@@ -58,23 +58,26 @@ public sealed class DisplaySensorSource : ISensorSource
             EnabledByDefault: false,
             ResourceUsage: "Low. Shares the display check above. It does not use the internet."),
         new(
-            MonitorIdentityId,
-            "Monitors",
-            "The brand and model/type of active physical monitors. The count always includes "
-            + "every monitor, while attributes list at most the first 8 in stable order. "
+            DisplayIdentityId,
+            "Display Identity",
+            "The brand and model/type of active physical displays. The count always includes "
+            + "every display, while attributes list at most the first 8 in stable order. "
             + "Reveals hardware identity, so it is off by default.",
             SensorPrivacy.Sensitive,
             EnabledByDefault: false,
-            ResourceUsage: "Low. Shares the display-change check above and reads monitor names "
+            ResourceUsage: "Low. Shares the display-change check above and reads display names "
                            + "only while enabled. It does not use the internet.",
-            AutomationIdea: "When a known monitor is attached, activate the matching workspace.")
+            AutomationIdea: "When a known display is attached, activate the matching workspace.")
+        {
+            SearchAliases = ["Monitor", "Monitors"]
+        }
     ];
 
     public IReadOnlyList<Sensor> Read(IReadOnlySet<string> enabled, SensorReadContext context)
     {
         var wantsCount = enabled.Contains(DisplayCountId);
         var wantsResolution = enabled.Contains(DisplayResolutionId);
-        var wantsIdentity = enabled.Contains(MonitorIdentityId);
+        var wantsIdentity = enabled.Contains(DisplayIdentityId);
 
         if (!wantsCount && !wantsResolution && !wantsIdentity)
             return [];
@@ -103,9 +106,9 @@ public sealed class DisplaySensorSource : ISensorSource
                 : 0;
             readings.Add(new Sensor
             {
-                UniqueId = MonitorIdentityId,
+                UniqueId = DisplayIdentityId,
                 Type = "sensor",
-                Name = "Monitors",
+                Name = "Display Identity",
                 State = MonitorIdentitySummary.Describe(snapshot.Monitors),
                 EntityCategory = "diagnostic",
                 Icon = DisplaySummary.IconFor(monitorCount),

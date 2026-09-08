@@ -2,7 +2,7 @@
 
 ## Decision 1: Extend the existing display source
 
-**Decision**: Add `monitor_identity` to `DisplaySensorSource` and extend its
+**Decision**: Add `display_identity` to `DisplaySensorSource` and extend its
 capture policy so monitor identity is gathered only when this sensor is enabled
 or explicitly previewed.
 
@@ -45,7 +45,7 @@ decoded three-letter EISA/PNP value as `manufacturer`, and the EDID product valu
 as a four-digit uppercase hexadecimal `product_code`. For one monitor, the
 friendly model label is the state. If it is absent, use manufacturer plus product
 code. If an active, available physical target has no readable identity fields,
-retain it as `Unknown monitor`; disconnected/forced targets are excluded by the
+retain it as `Unknown display`; disconnected/forced targets are excluded by the
 active-path availability signal.
 
 **Rationale**: Windows provides a user-facing monitor name but not a guaranteed
@@ -84,7 +84,7 @@ as far as this feature requires.
 list or unavailable. CCD failures such as access denied, unsupported driver, or
 repeated insufficient-buffer races, or an inability to correlate an active target
 to its desktop source report `Unavailable`; a successful active-path query with
-no available physical targets reports `No monitors`.
+no available physical targets reports `No displays`.
 
 **Rationale**: An empty successful result is meaningful for a headless desktop.
 Conflating API failure with that state would make automations unreliable.

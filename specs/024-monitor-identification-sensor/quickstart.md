@@ -34,9 +34,9 @@ Launch the app:
 .\scripts\run.ps1
 ```
 
-1. Open sensor settings and confirm **Monitors** is disabled by default.
+1. Open sensor settings and confirm **Display Identity** is disabled by default.
 2. Confirm the disabled preview does not reveal monitor identity.
-3. Enable **Monitors** and verify Home Assistant creates one diagnostic sensor.
+3. Enable **Display Identity** and verify Home Assistant creates one diagnostic sensor.
 4. With one monitor, verify the state shows its Windows model label and the
    attributes follow [the sensor contract](contracts/home-assistant-sensor.md).
 5. Attach a second monitor and verify the state becomes `2 monitors`, both
@@ -44,12 +44,12 @@ Launch the app:
 6. Disconnect and reconnect one monitor and verify the sensor changes promptly
    without duplicate entries.
 7. When a monitor exposes no readable name or EDID identity, verify it remains
-   counted and is shown as `Unknown monitor`.
+   counted and is shown as `Unknown display`.
 8. Repeat a read without changing topology and verify no extra change-driven
    update is sent.
-9. On a headless test system, verify `No monitors`, `count: 0`, and an empty list.
+9. On a headless test system, verify `No displays`, `count: 0`, and an empty list.
 10. In a remote session or display-API failure case, verify `Unavailable` rather
-   than a false `No monitors`.
+   than a false `No displays`.
 11. Disable the sensor and confirm monitor identity is no longer captured while
     the existing benign display count continues to work if enabled.
 

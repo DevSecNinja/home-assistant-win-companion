@@ -115,7 +115,7 @@ jobs:
           -ReleaseDirectory artifacts\release
           -InnoCompiler $env:INNO_COMPILER
       - name: Generate x64 SPDX SBOM
-        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
+        uses: anchore/sbom-action@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # v0.24.2
         env:
           SYFT_SOURCE_NAME: WindowsCompanion-win-x64
           SYFT_SOURCE_VERSION: ${{ steps.version.outputs.version }}
@@ -128,7 +128,7 @@ jobs:
           upload-artifact: false
           upload-release-assets: false
       - name: Generate ARM64 SPDX SBOM
-        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
+        uses: anchore/sbom-action@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # v0.24.2
         env:
           SYFT_SOURCE_NAME: WindowsCompanion-win-arm64
           SYFT_SOURCE_VERSION: ${{ steps.version.outputs.version }}

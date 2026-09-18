@@ -10,7 +10,7 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.9.0" />
-    <PackageReference Include="Microsoft.Testing.Extensions.TrxReport" Version="2.3.3" />
+    <PackageReference Include="Microsoft.Testing.Extensions.TrxReport" Version="2.4.0" />
     <PackageReference Include="Microsoft.Win32.SystemEvents" Version="10.0.11" />
       <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.11" />
       <PackageReference Include="Sigstore" Version="1.0.1" />

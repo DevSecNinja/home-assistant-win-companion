@@ -13,6 +13,12 @@
     "github>DevSecNinja/.github//.renovate/packageRules.json5",
     "github>DevSecNinja/.github//.renovate/semanticCommits.json5",
   ],
+  // The shared base preset only rebases conflicted branches. This repository's
+  // branch protection requires branches to be up to date before merging, so a
+  // Renovate PR that is merely behind main would never automerge. Keep
+  // Renovate branches current instead. This file is listed in
+  // .github/.config-sync-ignore so Config Sync does not drop the override.
+  rebaseWhen: "behind-base-branch",
   packageRules: [
     {
       // The shared customManagers preset already picks up the annotated

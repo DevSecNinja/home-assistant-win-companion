@@ -1,0 +1,6 @@
+# Paths Config Sync (DevSecNinja/.github) must not overwrite in this repository.
+# One repo-root-relative path per line.
+
+# Repository-specific Renovate overrides: rebaseWhen "behind-base-branch"
+# (branch protection requires up-to-date branches) and manual-review rules.
+renovate.json5

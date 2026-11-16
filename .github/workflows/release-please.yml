@@ -13,7 +13,7 @@ concurrency:
 jobs:
   release-please:
     # renovate: datasource=github-tags depName=DevSecNinja/.github
-    uses: DevSecNinja/.github/.github/workflows/release-please.yml@eadb4f166f27d0864147189741c7596560be39dd # v3.6.0
+    uses: DevSecNinja/.github/.github/workflows/release-please.yml@5eceec313066eefaa0fe9e3dbf4f9a5a49b55ebd # v4.2.0
     permissions:
       contents: write # Create the release branch/tag and update version/changelog files.
       pull-requests: write # Open and update the release pull request.

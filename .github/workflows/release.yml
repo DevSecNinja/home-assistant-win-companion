@@ -171,7 +171,7 @@ jobs:
     name: Attest and publish GitHub Release
     needs:
       - build
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     permissions:
       contents: write # Create the immutable GitHub Release and upload its assets.
       id-token: write # Mint the OIDC identity for provenance attestations.

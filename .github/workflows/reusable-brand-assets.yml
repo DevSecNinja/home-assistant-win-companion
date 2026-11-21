@@ -15,10 +15,10 @@ jobs:
         with:
           persist-credentials: false
       - name: Set up mise tools
-        uses: jdx/mise-action@82a612c5ab8bcda7cc5db6b7e81a8e7584c3dc6e # v5.2.3
+        uses: jdx/mise-action@b44d12e7d0d8ee7461bb893e1b1993500433185b # v5.2.7
         with:
           # renovate: datasource=github-releases depName=jdx/mise
-          version: "2026.10.19"
+          version: "2026.11.3"
           install_args: node
           cache: true
       - name: Install brand tooling

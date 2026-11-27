@@ -16,13 +16,13 @@ concurrency:
 jobs:
   lint:
     # renovate: datasource=github-tags depName=DevSecNinja/.github
-    uses: DevSecNinja/.github/.github/workflows/lint.yml@24acc67adf1be33089e73b2fdbdb4be8c12d145b # v3.2.0
+    uses: DevSecNinja/.github/.github/workflows/lint.yml@eadb4f166f27d0864147189741c7596560be39dd # v3.6.0
     permissions:
       contents: read
       security-events: write
     with:
       # renovate: datasource=github-releases depName=jdx/mise
-      mise-version: "2026.10.19"
+      mise-version: "2026.11.8"
       lint-config-dir: "."
       lint-fail-on-error: true
       upload-sarif: false
